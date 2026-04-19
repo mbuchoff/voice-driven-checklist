@@ -7,6 +7,7 @@ import { RunScreen } from '@/src/features/run/RunScreen';
 import { createSnapshot } from '@/src/features/run/snapshot';
 import type { ChecklistRunSnapshot } from '@/src/features/run/types';
 import { getChecklist } from '@/src/features/checklists/repository';
+import { CompletionSoundPlayer } from '@/src/services/audio/CompletionSoundPlayer';
 import { createSpeechAdapters } from '@/src/services/speech/createSpeechAdapters';
 
 type LoadState =
@@ -28,6 +29,11 @@ export default function RunRoute() {
   // returns either real expo-speech / expo-speech-recognition wrappers, or
   // the deterministic fakes when EXPO_PUBLIC_USE_TEST_SPEECH_ADAPTER=true.
   const adapters = useMemo(() => createSpeechAdapters(), []);
+  const completionSound = useMemo(() => new CompletionSoundPlayer(), []);
+
+  useEffect(() => {
+    return () => completionSound.release();
+  }, [completionSound]);
 
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
 
@@ -147,6 +153,7 @@ export default function RunRoute() {
       recognition={adapters.recognition}
       initialAvailability={loadState.initialAvailability}
       onExit={() => router.replace('/')}
+      onCompletion={() => completionSound.play()}
     />
   );
 }
