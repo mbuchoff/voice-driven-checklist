@@ -1,9 +1,14 @@
-import { View, Text } from 'react-native';
+import { useRouter } from 'expo-router';
 
-export default function NewChecklistScreen() {
+import { ChecklistEditor } from '@/src/features/checklists/ChecklistEditor';
+
+export default function NewChecklistRoute() {
+  const router = useRouter();
+
   return (
-    <View>
-      <Text>New Checklist (placeholder)</Text>
-    </View>
+    <ChecklistEditor
+      onSaved={() => router.back()}
+      onCancel={() => router.back()}
+    />
   );
 }
