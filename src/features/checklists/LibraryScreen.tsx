@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
+import { confirmAction } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
 
 import { deleteChecklist, listChecklists } from './repository';
@@ -33,18 +34,16 @@ export function LibraryScreen({ onCreate, onEdit, onStart, refreshKey }: Library
     refresh();
   }, [refresh, refreshKey]);
 
-  const confirmDelete = (id: string, title: string) => {
-    Alert.alert('Delete checklist?', `“${title}” will be permanently removed.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteChecklist(db, id);
-          refresh();
-        },
-      },
-    ]);
+  const confirmDelete = async (id: string, title: string) => {
+    const ok = await confirmAction({
+      title: 'Delete checklist?',
+      message: `“${title}” will be permanently removed.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    await deleteChecklist(db, id);
+    refresh();
   };
 
   return (
