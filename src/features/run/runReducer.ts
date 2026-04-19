@@ -28,6 +28,7 @@ export function initialRunState(
     voiceControlAvailable: options.voiceControlAvailable,
     spokenPlaybackAvailable: options.spokenPlaybackAvailable,
     latestRecognizedPhrase: '',
+    playbackTick: 1,
   };
   return { ...base, status: statusForActiveItem(base) };
 }
@@ -44,13 +45,19 @@ export function runReducer(state: ChecklistRunState, action: RunAction): Checkli
         ...state,
         currentItemIndex: state.currentItemIndex + 1,
         latestRecognizedPhrase: '',
+        playbackTick: state.playbackTick + 1,
         status: statusForActiveItem(state),
       };
     }
 
     case 'REPEAT': {
       if (!canAcceptCommand(state)) return state;
-      return { ...state, latestRecognizedPhrase: '', status: statusForActiveItem(state) };
+      return {
+        ...state,
+        latestRecognizedPhrase: '',
+        playbackTick: state.playbackTick + 1,
+        status: statusForActiveItem(state),
+      };
     }
 
     case 'PREVIOUS': {
@@ -59,6 +66,7 @@ export function runReducer(state: ChecklistRunState, action: RunAction): Checkli
         ...state,
         currentItemIndex: Math.max(0, state.currentItemIndex - 1),
         latestRecognizedPhrase: '',
+        playbackTick: state.playbackTick + 1,
         status: statusForActiveItem(state),
       };
     }
@@ -69,6 +77,7 @@ export function runReducer(state: ChecklistRunState, action: RunAction): Checkli
         ...state,
         currentItemIndex: 0,
         latestRecognizedPhrase: '',
+        playbackTick: state.playbackTick + 1,
         status: statusForActiveItem(state),
       };
     }
@@ -110,6 +119,7 @@ export function runReducer(state: ChecklistRunState, action: RunAction): Checkli
         voiceControlAvailable: state.voiceControlAvailable,
         spokenPlaybackAvailable: state.spokenPlaybackAvailable,
         latestRecognizedPhrase: '',
+        playbackTick: 0,
       };
     }
   }

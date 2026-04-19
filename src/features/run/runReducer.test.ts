@@ -243,6 +243,46 @@ describe('runReducer RESTART', () => {
   });
 });
 
+describe('runReducer playbackTick', () => {
+  it('bumps the tick on NEXT advance', () => {
+    const state = start();
+    expect(state.playbackTick).toBe(1);
+    expect(runReducer(state, { type: 'NEXT' }).playbackTick).toBe(2);
+  });
+
+  it('does not bump the tick when NEXT completes the run', () => {
+    let state = { ...start(), currentItemIndex: 2 };
+    const tickBefore = state.playbackTick;
+    state = runReducer(state, { type: 'NEXT' });
+    expect(state.status).toBe('completed');
+    expect(state.playbackTick).toBe(tickBefore);
+  });
+
+  it('bumps the tick on REPEAT, PREVIOUS, and RESTART', () => {
+    const state = start();
+    expect(runReducer(state, { type: 'REPEAT' }).playbackTick).toBe(state.playbackTick + 1);
+    expect(runReducer({ ...state, currentItemIndex: 1 }, { type: 'PREVIOUS' }).playbackTick).toBe(
+      state.playbackTick + 1,
+    );
+    const completed = { ...state, status: 'completed' as const, currentItemIndex: 2 };
+    expect(runReducer(completed, { type: 'RESTART' }).playbackTick).toBe(
+      completed.playbackTick + 1,
+    );
+  });
+
+  it('does not bump the tick for non-presentation actions', () => {
+    const listening = { ...start({ spokenPlaybackAvailable: false }), status: 'listening' as const };
+    const tick = listening.playbackTick;
+    expect(
+      runReducer(listening, { type: 'RECOGNIZED_PHRASE', phrase: 'hello' }).playbackTick,
+    ).toBe(tick);
+    const speaking = { ...start(), status: 'speaking' as const };
+    expect(runReducer(speaking, { type: 'PLAYBACK_FINISHED' }).playbackTick).toBe(speaking.playbackTick);
+    expect(runReducer(speaking, { type: 'VOICE_UNAVAILABLE' }).playbackTick).toBe(speaking.playbackTick);
+    expect(runReducer(speaking, { type: 'PLAYBACK_UNAVAILABLE' }).playbackTick).toBe(speaking.playbackTick);
+  });
+});
+
 describe('runReducer DISCARD_RUN', () => {
   it('clears the snapshot, transcript, and resets status to idle', () => {
     const listening = {
