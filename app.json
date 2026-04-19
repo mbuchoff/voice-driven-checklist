@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "Voice Checklist",
+    "slug": "voice-driven-checklist",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "voicechecklist",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.voicedrivenchecklist",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Voice Checklist listens for spoken commands to control checklist playback.",
+        "NSSpeechRecognitionUsageDescription": "Voice Checklist uses speech recognition to handle spoken commands such as next, repeat, and previous."
+      }
+    },
+    "android": {
+      "package": "com.example.voicedrivenchecklist",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["RECORD_AUDIO"]
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-audio",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Voice Checklist needs the microphone to hear spoken commands during checklist playback.",
+          "speechRecognitionPermission": "Voice Checklist needs speech recognition to handle spoken commands such as next, repeat, and previous.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
