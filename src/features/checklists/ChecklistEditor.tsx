@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { v4 as uuidv4 } from 'uuid';
 
 import { useDatabase } from '@/src/db/DatabaseProvider';
+import { useTheme } from '@/src/theme/useTheme';
 
 import { createChecklist, updateChecklist } from './repository';
 import type { Checklist } from './types';
@@ -32,6 +33,7 @@ function initialItems(checklist?: Checklist): EditorItem[] {
 
 export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: ChecklistEditorProps) {
   const db = useDatabase();
+  const theme = useTheme();
   const [title, setTitle] = useState(initialChecklist?.title ?? '');
   const [items, setItems] = useState<EditorItem[]>(() => initialItems(initialChecklist));
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -84,30 +86,35 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <ScrollView
+      style={{ backgroundColor: theme.background }}
+      contentContainerStyle={{ padding: 16, gap: 16 }}
+    >
       <View>
-        <Text style={{ fontWeight: '600', marginBottom: 4 }}>Title</Text>
+        <Text style={{ color: theme.text, fontWeight: '600', marginBottom: 4 }}>Title</Text>
         <TextInput
           testID="title-input"
           value={title}
           onChangeText={setTitle}
           placeholder="Checklist title"
+          placeholderTextColor={theme.textMuted}
           style={{
+            color: theme.text,
             borderWidth: 1,
-            borderColor: titleError ? '#a0431f' : '#ccc',
+            borderColor: titleError ? theme.danger : theme.inputBorder,
             borderRadius: 6,
             padding: 8,
           }}
         />
         {titleError && (
-          <Text testID="title-error" style={{ color: '#a0431f', marginTop: 4 }}>
+          <Text testID="title-error" style={{ color: theme.danger, marginTop: 4 }}>
             {titleError}
           </Text>
         )}
       </View>
 
       <View style={{ gap: 8 }}>
-        <Text style={{ fontWeight: '600' }}>Items</Text>
+        <Text style={{ color: theme.text, fontWeight: '600' }}>Items</Text>
         {items.map((item, index) => {
           const isFirst = index === 0;
           const isLast = index === items.length - 1;
@@ -117,7 +124,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
               key={item.localId}
               style={{
                 borderWidth: 1,
-                borderColor: error ? '#a0431f' : '#ddd',
+                borderColor: error ? theme.danger : theme.border,
                 borderRadius: 6,
                 padding: 8,
                 gap: 6,
@@ -128,10 +135,11 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
                 value={item.text}
                 onChangeText={(text) => updateItemText(item.localId, text)}
                 placeholder={`Item ${index + 1}`}
-                style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 6, padding: 6 }}
+                placeholderTextColor={theme.textMuted}
+                style={{ color: theme.text, borderWidth: 1, borderColor: theme.inputBorder, borderRadius: 6, padding: 6 }}
               />
               {error && (
-                <Text testID={`item-error-${index}`} style={{ color: '#a0431f' }}>
+                <Text testID={`item-error-${index}`} style={{ color: theme.danger }}>
                   {error}
                 </Text>
               )}
@@ -146,11 +154,12 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
                     paddingVertical: 6,
                     paddingHorizontal: 10,
                     borderWidth: 1,
+                    borderColor: theme.border,
                     borderRadius: 6,
                     opacity: isFirst ? 0.4 : 1,
                   }}
                 >
-                  <Text>Move up</Text>
+                  <Text style={{ color: theme.text }}>Move up</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -162,11 +171,12 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
                     paddingVertical: 6,
                     paddingHorizontal: 10,
                     borderWidth: 1,
+                    borderColor: theme.border,
                     borderRadius: 6,
                     opacity: isLast ? 0.4 : 1,
                   }}
                 >
-                  <Text>Move down</Text>
+                  <Text style={{ color: theme.text }}>Move down</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -176,10 +186,11 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
                     paddingVertical: 6,
                     paddingHorizontal: 10,
                     borderWidth: 1,
+                    borderColor: theme.border,
                     borderRadius: 6,
                   }}
                 >
-                  <Text style={{ color: '#a0431f' }}>Delete</Text>
+                  <Text style={{ color: theme.danger }}>Delete</Text>
                 </Pressable>
               </View>
             </View>
@@ -193,12 +204,13 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
             paddingVertical: 8,
             paddingHorizontal: 12,
             borderWidth: 1,
+            borderColor: theme.border,
             borderStyle: 'dashed',
             borderRadius: 6,
             alignSelf: 'flex-start',
           }}
         >
-          <Text>Add item</Text>
+          <Text style={{ color: theme.text }}>Add item</Text>
         </Pressable>
       </View>
 
@@ -210,19 +222,19 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
           style={{
             paddingVertical: 10,
             paddingHorizontal: 18,
-            backgroundColor: '#0a84ff',
+            backgroundColor: theme.primary,
             borderRadius: 6,
           }}
         >
-          <Text style={{ color: 'white', fontWeight: '600' }}>Save</Text>
+          <Text style={{ color: theme.onPrimary, fontWeight: '600' }}>Save</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
           testID="cancel"
           onPress={onCancel}
-          style={{ paddingVertical: 10, paddingHorizontal: 18, borderWidth: 1, borderRadius: 6 }}
+          style={{ paddingVertical: 10, paddingHorizontal: 18, borderWidth: 1, borderColor: theme.border, borderRadius: 6 }}
         >
-          <Text>Cancel</Text>
+          <Text style={{ color: theme.text }}>Cancel</Text>
         </Pressable>
       </View>
     </ScrollView>

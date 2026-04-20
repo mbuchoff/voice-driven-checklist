@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { confirmAction } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
+import { useTheme } from '@/src/theme/useTheme';
 
 import { deleteChecklist, listChecklists } from './repository';
 import type { ChecklistSummary } from './types';
@@ -24,6 +25,7 @@ function itemCountLabel(count: number): string {
 
 export function LibraryScreen({ onCreate, onEdit, onStart, refreshKey }: LibraryScreenProps) {
   const db = useDatabase();
+  const theme = useTheme();
   const [items, setItems] = useState<ChecklistSummary[]>([]);
 
   const refresh = useCallback(() => {
@@ -47,29 +49,32 @@ export function LibraryScreen({ onCreate, onEdit, onStart, refreshKey }: Library
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+    <ScrollView
+      style={{ backgroundColor: theme.background }}
+      contentContainerStyle={{ padding: 16, gap: 12 }}
+    >
       <Pressable
         accessibilityRole="button"
         onPress={onCreate}
-        style={{ paddingVertical: 12, paddingHorizontal: 16, backgroundColor: '#0a84ff', borderRadius: 8 }}
+        style={{ paddingVertical: 12, paddingHorizontal: 16, backgroundColor: theme.primary, borderRadius: 8 }}
       >
-        <Text style={{ color: 'white', fontWeight: '600', textAlign: 'center' }}>New checklist</Text>
+        <Text style={{ color: theme.onPrimary, fontWeight: '600', textAlign: 'center' }}>New checklist</Text>
       </Pressable>
 
       {items.length === 0 ? (
-        <Text>No checklists yet. Create one to get started.</Text>
+        <Text style={{ color: theme.text }}>No checklists yet. Create one to get started.</Text>
       ) : (
         items.map((item) => {
           const isEmpty = item.itemCount === 0;
           return (
             <View
               key={item.id}
-              style={{ padding: 12, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, gap: 6 }}
+              style={{ padding: 12, borderWidth: 1, borderColor: theme.border, borderRadius: 8, gap: 6 }}
             >
-              <Text style={{ fontWeight: '600' }}>{item.title}</Text>
-              <Text style={{ color: '#666' }}>{itemCountLabel(item.itemCount)}</Text>
+              <Text style={{ color: theme.text, fontWeight: '600' }}>{item.title}</Text>
+              <Text style={{ color: theme.textMuted }}>{itemCountLabel(item.itemCount)}</Text>
               {isEmpty && (
-                <Text style={{ color: '#a0431f' }}>
+                <Text style={{ color: theme.danger }}>
                   Add at least one item to start this checklist.
                 </Text>
               )}
@@ -82,27 +87,27 @@ export function LibraryScreen({ onCreate, onEdit, onStart, refreshKey }: Library
                   style={{
                     paddingVertical: 8,
                     paddingHorizontal: 12,
-                    backgroundColor: isEmpty ? '#bbb' : '#0a84ff',
+                    backgroundColor: isEmpty ? theme.disabled : theme.primary,
                     borderRadius: 6,
                   }}
                 >
-                  <Text style={{ color: 'white' }}>Start</Text>
+                  <Text style={{ color: theme.onPrimary }}>Start</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
                   testID={`edit-${item.id}`}
                   onPress={() => onEdit(item.id)}
-                  style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 6 }}
+                  style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: theme.border, borderRadius: 6 }}
                 >
-                  <Text>Edit</Text>
+                  <Text style={{ color: theme.text }}>Edit</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
                   testID={`delete-${item.id}`}
                   onPress={() => confirmDelete(item.id, item.title)}
-                  style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 6 }}
+                  style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: theme.border, borderRadius: 6 }}
                 >
-                  <Text style={{ color: '#a0431f' }}>Delete</Text>
+                  <Text style={{ color: theme.danger }}>Delete</Text>
                 </Pressable>
               </View>
             </View>

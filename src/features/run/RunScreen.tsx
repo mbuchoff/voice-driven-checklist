@@ -5,6 +5,7 @@ import type {
   SpeechPlaybackAdapter,
   SpeechRecognitionAdapter,
 } from '@/src/services/speech/adapters';
+import { useTheme } from '@/src/theme/useTheme';
 
 import { parseCommand } from './commandParser';
 import { initialRunState, runReducer } from './runReducer';
@@ -41,9 +42,18 @@ export function RunScreen({
   onExit,
   onCompletion,
 }: RunScreenProps) {
+  const theme = useTheme();
   const [state, dispatch] = useReducer(runReducer, undefined, () =>
     initialRunState(snapshot, initialAvailability),
   );
+
+  const controlStyle = {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 6,
+  } as const;
 
   // Drive spoken playback whenever the run is in the `speaking` state. Bumps
   // to `playbackTick` (e.g. REPEAT) cause the same item to be re-spoken.
@@ -132,9 +142,12 @@ export function RunScreen({
 
   if (state.status === 'completed') {
     return (
-      <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
-        <Text style={{ fontSize: 24, fontWeight: '700' }}>Checklist complete</Text>
-        <Text>You finished “{state.snapshot?.checklistTitle}”.</Text>
+      <ScrollView
+        style={{ backgroundColor: theme.background }}
+        contentContainerStyle={{ padding: 24, gap: 16 }}
+      >
+        <Text style={{ color: theme.text, fontSize: 24, fontWeight: '700' }}>Checklist complete</Text>
+        <Text style={{ color: theme.text }}>You finished “{state.snapshot?.checklistTitle}”.</Text>
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <Pressable
             accessibilityRole="button"
@@ -143,11 +156,11 @@ export function RunScreen({
             style={{
               paddingVertical: 10,
               paddingHorizontal: 18,
-              backgroundColor: '#0a84ff',
+              backgroundColor: theme.primary,
               borderRadius: 6,
             }}
           >
-            <Text style={{ color: 'white', fontWeight: '600' }}>Restart</Text>
+            <Text style={{ color: theme.onPrimary, fontWeight: '600' }}>Restart</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -157,10 +170,11 @@ export function RunScreen({
               paddingVertical: 10,
               paddingHorizontal: 18,
               borderWidth: 1,
+              borderColor: theme.border,
               borderRadius: 6,
             }}
           >
-            <Text>Return to library</Text>
+            <Text style={{ color: theme.text }}>Return to library</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -168,9 +182,12 @@ export function RunScreen({
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
-      <Text style={{ fontSize: 18, fontWeight: '600' }}>{state.snapshot?.checklistTitle}</Text>
-      <Text style={{ color: '#666' }}>
+    <ScrollView
+      style={{ backgroundColor: theme.background }}
+      contentContainerStyle={{ padding: 24, gap: 16 }}
+    >
+      <Text style={{ color: theme.text, fontSize: 18, fontWeight: '600' }}>{state.snapshot?.checklistTitle}</Text>
+      <Text style={{ color: theme.textMuted }}>
         Item {state.currentItemIndex + 1} of {totalItems}
       </Text>
 
@@ -178,28 +195,28 @@ export function RunScreen({
         style={{
           padding: 18,
           borderWidth: 1,
-          borderColor: '#ccc',
+          borderColor: theme.inputBorder,
           borderRadius: 8,
           minHeight: 80,
           justifyContent: 'center',
         }}
       >
-        <Text style={{ fontSize: 22 }}>{currentItem?.text}</Text>
+        <Text style={{ color: theme.text, fontSize: 22 }}>{currentItem?.text}</Text>
       </View>
 
-      <Text testID="status-banner" style={{ color: '#666' }}>
+      <Text testID="status-banner" style={{ color: theme.textMuted }}>
         {state.status === 'speaking' && 'Speaking…'}
         {state.status === 'listening' && 'Listening for "next", "repeat", or "previous"…'}
         {state.status === 'manual' && state.voiceControlAvailable && 'Use the buttons below to advance.'}
       </Text>
 
       {!state.voiceControlAvailable && (
-        <Text testID="voice-unavailable" style={{ color: '#a0431f' }}>
+        <Text testID="voice-unavailable" style={{ color: theme.danger }}>
           Voice control unavailable — use the buttons to control playback.
         </Text>
       )}
       {!state.spokenPlaybackAvailable && (
-        <Text testID="playback-unavailable" style={{ color: '#a0431f' }}>
+        <Text testID="playback-unavailable" style={{ color: theme.danger }}>
           Spoken playback unavailable — the item text remains visible above.
         </Text>
       )}
@@ -207,10 +224,10 @@ export function RunScreen({
       {state.latestRecognizedPhrase.length > 0 && (
         <View
           testID="transcript-panel"
-          style={{ padding: 12, backgroundColor: '#f1f1f1', borderRadius: 6 }}
+          style={{ padding: 12, backgroundColor: theme.surfaceAlt, borderRadius: 6 }}
         >
-          <Text style={{ color: '#444' }}>I heard:</Text>
-          <Text style={{ fontSize: 16 }}>{state.latestRecognizedPhrase}</Text>
+          <Text style={{ color: theme.textSubtle }}>I heard:</Text>
+          <Text style={{ color: theme.text, fontSize: 16 }}>{state.latestRecognizedPhrase}</Text>
         </View>
       )}
 
@@ -221,7 +238,7 @@ export function RunScreen({
           onPress={() => dispatch({ type: 'PREVIOUS' })}
           style={controlStyle}
         >
-          <Text>Previous</Text>
+          <Text style={{ color: theme.text }}>Previous</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -229,7 +246,7 @@ export function RunScreen({
           onPress={() => dispatch({ type: 'REPEAT' })}
           style={controlStyle}
         >
-          <Text>Repeat</Text>
+          <Text style={{ color: theme.text }}>Repeat</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -237,24 +254,17 @@ export function RunScreen({
           onPress={() => dispatch({ type: 'NEXT' })}
           style={controlStyle}
         >
-          <Text>Next</Text>
+          <Text style={{ color: theme.text }}>Next</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
           testID="manual-stop"
           onPress={onExit}
-          style={[controlStyle, { borderColor: '#a0431f' }]}
+          style={[controlStyle, { borderColor: theme.danger }]}
         >
-          <Text style={{ color: '#a0431f' }}>Stop</Text>
+          <Text style={{ color: theme.danger }}>Stop</Text>
         </Pressable>
       </View>
     </ScrollView>
   );
 }
-
-const controlStyle = {
-  paddingVertical: 10,
-  paddingHorizontal: 16,
-  borderWidth: 1,
-  borderRadius: 6,
-} as const;
