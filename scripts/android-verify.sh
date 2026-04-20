@@ -5,7 +5,7 @@ set -euo pipefail
 
 export ADB_SERVER_SOCKET="${ADB_SERVER_SOCKET:-tcp:host.docker.internal:5037}"
 
-PKG="com.example.voicedrivenchecklist"
+PKG="com.mbuchoff.voicechecklist"
 APK="android/app/build/outputs/apk/release/app-release.apk"
 SHOTS_DIR="verification/android"
 

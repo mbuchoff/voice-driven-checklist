@@ -53,7 +53,7 @@ by replacing the system services the app depends on:
 - `adb shell pm disable-user --user 0 com.google.android.tts` — remove the only TTS engine
 - `adb shell pm enable com.google.android.tts` — restore it
 
-After each toggle: `adb shell am force-stop com.example.voicedrivenchecklist`, relaunch via `monkey -p ...`, then drive Start with `adb shell input tap 147 688`.
+After each toggle: `adb shell am force-stop com.mbuchoff.voicechecklist`, relaunch via `monkey -p ...`, then drive Start with `adb shell input tap 147 688`.
 
 | #       | Screenshot                              | Demonstrates                                                                                                                          | Requirement(s)                |
 | ------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |

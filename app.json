@@ -10,14 +10,14 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.example.voicedrivenchecklist",
+      "bundleIdentifier": "com.mbuchoff.voicechecklist",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Voice Checklist listens for spoken commands to control checklist playback.",
         "NSSpeechRecognitionUsageDescription": "Voice Checklist uses speech recognition to handle spoken commands such as next, repeat, and previous."
       }
     },
     "android": {
-      "package": "com.example.voicedrivenchecklist",
+      "package": "com.mbuchoff.voicechecklist",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
