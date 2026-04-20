@@ -42,3 +42,7 @@ app-example
 /ios
 /android
 
+# Local-only tool state (Claude Code agent runtime, Playwright MCP traces)
+.claude/
+.playwright-mcp/
+
