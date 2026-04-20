@@ -35,6 +35,22 @@ describe('ExpoPlaybackAdapter.isAvailable', () => {
     Speech.getAvailableVoicesAsync.mockRejectedValue(new Error('no tts'));
     expect(await new ExpoPlaybackAdapter().isAvailable()).toBe(false);
   });
+
+  // Pixel verification 2026-04-19: when no TTS engine is installed/enabled,
+  // Speech.getAvailableVoicesAsync() never resolves on Android (no reject,
+  // no return). Without this timeout the run route hangs forever on its
+  // loading spinner and the playback-unavailable banner is unreachable.
+  it('returns false when getAvailableVoicesAsync never resolves (no TTS engine)', async () => {
+    jest.useFakeTimers();
+    try {
+      Speech.getAvailableVoicesAsync.mockReturnValue(new Promise(() => {}));
+      const result = new ExpoPlaybackAdapter().isAvailable();
+      await jest.advanceTimersByTimeAsync(3000);
+      expect(await result).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('ExpoPlaybackAdapter.speak', () => {
