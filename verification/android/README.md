@@ -22,12 +22,32 @@ Manual walk-through of the v1 requirements on a physical Pixel 7 (Android 16,
 | 14 | 14-permission-prompt-second-run.png       | After revoking RECORD_AUDIO, next Start re-prompts                                                          | AC#14                        |
 | 15 | 15-voice-unavailable-fallback.png         | Don't allow → "Voice control unavailable" banner; manual Previous / Repeat / Next / Stop remain functional | AC#14, AC#15, AC#17          |
 
+## Deeper mic-denied walkthrough
+
+A separate pass with `RECORD_AUDIO` revoked, exercising every manual control on
+the run screen so the no-voice fallback is proved end-to-end (not just the
+banner from shot 15):
+
+| #         | Screenshot                          | Demonstrates                                                                                                                | Requirement(s)            |
+| --------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| deny-01   | deny-01-library.png                 | Library after a prior session ended — "Pre-flight" still present, ready to Start                                            | persistence               |
+| deny-02   | deny-02-prompt.png                  | Permission prompt re-appears on Start because RECORD_AUDIO was revoked                                                      | AC#14                     |
+| deny-03   | deny-03-run-item1.png               | "Don't allow" → run begins on Item 1 with the orange unavailable banner; TTS still spoke "Check fuel" (verified via logcat) | AC#15, AC#16-inverse      |
+| deny-04   | deny-04-after-repeat.png            | Manual Repeat re-spoke Item 1 (still on "Check fuel", no item advance)                                                      | AC#11 (manual equivalent) |
+| deny-05   | deny-05-after-next-item2.png        | Manual Next advanced to Item 2 ("Check tires")                                                                              | AC#10 (manual equivalent) |
+| deny-06   | deny-06-after-previous.png          | Manual Previous returned to Item 1                                                                                          | AC#12 (manual equivalent) |
+| deny-07   | deny-07-previous-on-item1.png       | Manual Previous on Item 1 stays on Item 1 (no underflow). Also captures the **redundancy** the simplification fixes: both the gray "Use the buttons below to advance." helper line *and* the orange "Voice control unavailable — use the buttons" banner are showing | R-RUN-12                  |
+| deny-08   | deny-08-completion.png              | Manual Next on the final item shows the completed view in no-voice mode; completion sound played (verified via expo-audio focus logs) | AC#20, AC#21              |
+| deny-09   | deny-09-after-simplify.png          | After rebuild with the helper-line suppression: only the orange banner remains, gray helper line gone                       | (cleanup, no AC)          |
+
+The deny-07 → deny-09 pair documents the redundancy fix: when `voiceControlAvailable === false`, the gray manual-status helper duplicates what the orange banner already says, so it's now suppressed (`RunScreen.tsx:193`). New test: `RunScreen.test.tsx` → "hides the manual status helper line when voice is unavailable".
+
 ## Requirements not visually covered
 
 These were exercised via automated tests (`npm test`) rather than the manual walk-through:
 
 - **AC#3** (delete confirmation), **AC#4** (validation messages), **AC#5** (no-items block), **AC#8** (snapshot survives mid-run edits/deletes), **AC#16** (spoken-playback unavailable banner) — see `src/features/checklists/*.test.tsx`, `src/features/run/snapshotDeletionRegression.test.tsx`, `src/features/run/RunScreen.test.tsx`.
-- **AC#10–13** voice-driven branch — the Pixel can't be made to "speak" from `adb`, so spoken `next` / `repeat` / `previous` are covered by `RunScreen.test.tsx` against the fake recognition adapter; the live recognizer was confirmed wired (it surfaced ambient phrases as non-command transcripts in shots 09 and 10).
+- **AC#10–13** voice-driven branch — the Pixel can't be made to "speak" from `adb`, so spoken `next` / `repeat` / `previous` are covered by `RunScreen.test.tsx` against the fake recognition adapter; the live recognizer was confirmed wired (it surfaced ambient phrases as non-command transcripts in shots 09 and 10). The manual-button equivalents of those commands are visually exercised in the deny-04..deny-06 walkthrough above.
 
 ## Notes from this verification pass
 
