@@ -110,6 +110,19 @@ describe('RunScreen', () => {
       expect(screen.getByText(/voice control unavailable/i)).toBeOnTheScreen();
       expect(recognition.startCount).toBe(0);
     });
+
+    it('hides the manual status helper line when voice is unavailable (the orange banner already says use the buttons)', async () => {
+      const { playback } = setup({
+        initialAvailability: { spokenPlaybackAvailable: true, voiceControlAvailable: false },
+      });
+      await flush();
+      playback.completePlayback();
+      await flush();
+      // Now in the manual state — the orange unavailable banner already says
+      // "use the buttons", so the gray helper line is redundant.
+      expect(screen.getByText(/voice control unavailable/i)).toBeOnTheScreen();
+      expect(screen.queryByText(/use the buttons below to advance/i)).toBeNull();
+    });
   });
 
   describe('voice commands', () => {

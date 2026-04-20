@@ -190,7 +190,7 @@ export function RunScreen({
       <Text testID="status-banner" style={{ color: '#666' }}>
         {state.status === 'speaking' && 'Speaking…'}
         {state.status === 'listening' && 'Listening for "next", "repeat", or "previous"…'}
-        {state.status === 'manual' && 'Use the buttons below to advance.'}
+        {state.status === 'manual' && state.voiceControlAvailable && 'Use the buttons below to advance.'}
       </Text>
 
       {!state.voiceControlAvailable && (
