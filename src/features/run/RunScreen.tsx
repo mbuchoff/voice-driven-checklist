@@ -12,6 +12,18 @@ import type { ChecklistRunSnapshot } from './types';
 
 const LOCALE = 'en-US';
 
+// Recognizer codes that mean "didn't hear a command this window" rather than
+// "voice is broken." On Android the system recognizer fires `no-speech` after
+// every silent timeout (often <5s), so treating it as fatal kills voice for
+// the rest of the run.
+const TRANSIENT_RECOGNITION_ERRORS = new Set([
+  'no-speech',
+  'speech-timeout',
+  'aborted',
+  'network',
+  'busy',
+]);
+
 export type RunScreenProps = {
   snapshot: ChecklistRunSnapshot;
   playback: SpeechPlaybackAdapter;
@@ -79,8 +91,13 @@ export function RunScreen({
             else if (cmd === 'previous') dispatch({ type: 'PREVIOUS' });
             else recognition.stopListening().then(startCycle);
           },
-          onError: () => {
-            if (!cancelled) dispatch({ type: 'VOICE_UNAVAILABLE' });
+          onError: (error) => {
+            if (cancelled) return;
+            if (TRANSIENT_RECOGNITION_ERRORS.has(error)) {
+              recognition.stopListening().then(startCycle);
+            } else {
+              dispatch({ type: 'VOICE_UNAVAILABLE' });
+            }
           },
         })
         .catch(() => {

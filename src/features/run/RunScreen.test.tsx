@@ -347,16 +347,31 @@ describe('RunScreen', () => {
       expect(recognition.isListening()).toBe(true);
     });
 
-    it('marks voice unavailable when recognition errors', async () => {
+    it('marks voice unavailable when recognition errors with a fatal code', async () => {
       const { playback, recognition } = setup();
       await flush();
       playback.completePlayback();
       await flush();
 
-      act(() => recognition.emitError('mic-denied'));
+      act(() => recognition.emitError('not-allowed'));
       await flush();
 
       expect(screen.getByText(/voice control unavailable/i)).toBeOnTheScreen();
+    });
+
+    it('restarts the listening cycle when recognition emits "no-speech"', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+      const startsBefore = recognition.startCount;
+
+      act(() => recognition.emitError('no-speech'));
+      await flush();
+
+      expect(screen.queryByText(/voice control unavailable/i)).toBeNull();
+      expect(recognition.startCount).toBeGreaterThan(startsBefore);
+      expect(recognition.isListening()).toBe(true);
     });
   });
 
