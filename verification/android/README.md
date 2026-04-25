@@ -79,7 +79,7 @@ These were exercised via automated tests (`npm test`) rather than the manual wal
 
 Bug: in the editor, when the focused row was near the bottom of the screen, the on-screen keyboard hid the focused `TextInput` itself. The user could type without seeing the text being entered.
 
-Accepted fix: use Android's native panning behavior instead of JS keyboard geometry. The activity uses `android:windowSoftInputMode="adjustPan"`, and `ChecklistEditor` stays a plain `ScrollView` with `keyboardShouldPersistTaps="handled"`. When a low item field receives focus, Android pans the window so the focused `TextInput` is visible above Gboard's suggestion bar.
+Accepted fix: use Android's native panning behavior instead of JS keyboard geometry. `app.json` sets `android.softwareKeyboardLayoutMode` to `pan`, which generates `android:windowSoftInputMode="adjustPan"`, and `ChecklistEditor` stays a plain `ScrollView` with `keyboardShouldPersistTaps="handled"`. When a low item field receives focus, Android pans the window so the focused `TextInput` is visible above Gboard's suggestion bar.
 
 Accepted limitation: row controls below the focused field (`Move up / Move down / Delete`) may be covered by the keyboard while typing. Dismiss the keyboard before using those controls. This is preferable here to the previous JS `measureInWindow` workaround with a device-tuned margin.
 
