@@ -369,7 +369,7 @@ describe('RunScreen', () => {
       expect(playback.spoken).toEqual(['Item one', 'Item two', 'Item three']);
     });
 
-    it('keeps the listening notification up after completion so the chime can play', async () => {
+    it('does not stop the listening service on the completed transition', async () => {
       const onVoiceRunStop = jest.fn();
       setup({ onVoiceRunStart: jest.fn(), onVoiceRunStop });
       await flush();
@@ -381,9 +381,8 @@ describe('RunScreen', () => {
       fireEvent.press(screen.getByTestId('manual-next'));
       await flush();
 
-      // Stopping the foreground service synchronously with completion drops
-      // the chime when the screen is locked. The host route stops the service
-      // on its own when the user navigates away.
+      // Stopping the FG service synchronously with completion drops the
+      // chime on a locked screen. The host route stops it on navigate-away.
       expect(onVoiceRunStop).not.toHaveBeenCalled();
     });
 

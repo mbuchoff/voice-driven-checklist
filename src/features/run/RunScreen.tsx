@@ -158,10 +158,8 @@ export function RunScreen({
     state.voiceControlAvailable &&
     (state.status === 'speaking' || state.status === 'listening');
 
-  // Keep the foreground service alive across the completion transition so the
-  // chime can open its AudioTrack before the host route unmounts and the
-  // service is finally stopped. Without this, ExoPlayer's prepare/play races
-  // with FG teardown when the screen is locked and the chime drops.
+  // Suppress onVoiceRunStop on the completed transition — stopping the FG
+  // service synchronously drops the chime on a locked screen.
   const statusRef = useRef(state.status);
   statusRef.current = state.status;
 
@@ -189,10 +187,8 @@ export function RunScreen({
     };
   }, [voiceRunActive, onVoiceRunStart, onVoiceRunStop]);
 
-  // Stop recognition once the run completes and notify the host. The
-  // listening notification stays up until the route unmounts (handled by the
-  // host's stopRunResources) — chaining the FG-service stop onto the chime
-  // promise raced with locked-screen teardown and silently dropped audio.
+  // Stop recognition on completion. The FG service is left up so the chime
+  // can open its AudioTrack; the host route stops it on unmount.
   useEffect(() => {
     if (state.status !== 'completed') return;
     recognition.stopListening();

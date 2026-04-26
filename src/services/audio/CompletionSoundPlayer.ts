@@ -9,10 +9,9 @@ const SOURCE = require('../../../assets/audio/completion.wav');
 export class CompletionSoundPlayer {
   private player: AudioPlayer | null = null;
 
-  // Pre-create the player so ExoPlayer reaches STATE_READY before completion
-  // fires. Without this, the lazy createAudioPlayer in play() can race with
-  // foreground-service teardown on a locked screen — the main looper gets
-  // throttled mid-prepare and the chime is silently dropped.
+  // Pre-create so ExoPlayer reaches STATE_READY before completion. On a
+  // locked screen the main looper throttles during FG-service teardown, and
+  // an in-flight prepare() at completion time silently drops the chime.
   prepare(): void {
     if (this.player) return;
     try {
