@@ -6,6 +6,9 @@ import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
 
 import { AppDatabaseProvider } from '@/src/db/DatabaseProvider';
+import { registerListeningService } from '@/src/services/speech/foregroundService';
+
+registerListeningService();
 
 export default function RootLayout() {
   const scheme = useColorScheme();

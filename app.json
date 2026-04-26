@@ -12,6 +12,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.mbuchoff.voicechecklist",
       "infoPlist": {
+        "UIBackgroundModes": ["audio"],
         "NSMicrophoneUsageDescription": "Voice Checklist listens for spoken commands to control checklist playback.",
         "NSSpeechRecognitionUsageDescription": "Voice Checklist uses speech recognition to handle spoken commands such as next, repeat, and previous."
       }
@@ -25,7 +26,13 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["RECORD_AUDIO"]
+      "permissions": [
+        "RECORD_AUDIO",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MICROPHONE",
+        "WAKE_LOCK",
+        "POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "output": "static",
@@ -43,6 +50,7 @@
           "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
         }
       ],
+      "./plugins/withNotifeeMicrophoneForegroundService",
       [
         "expo-splash-screen",
         {

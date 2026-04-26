@@ -91,9 +91,22 @@ describe('ExpoRecognitionAdapter.startListening', () => {
 
     await adapter.startListening({ locale: 'en-US', onResult, onError });
 
-    expect(Module.start).toHaveBeenCalledWith(
-      expect.objectContaining({ lang: 'en-US', continuous: false, interimResults: false }),
-    );
+    expect(Module.start).toHaveBeenCalledWith({
+      lang: 'en-US',
+      continuous: false,
+      interimResults: true,
+      maxAlternatives: 1,
+      contextualStrings: ['next', 'repeat', 'previous'],
+      androidIntentOptions: {
+        EXTRA_LANGUAGE_MODEL: 'web_search',
+      },
+      iosTaskHint: 'confirmation',
+      iosCategory: {
+        category: 'playAndRecord',
+        categoryOptions: ['mixWithOthers', 'defaultToSpeaker', 'allowBluetooth'],
+        mode: 'spokenAudio',
+      },
+    });
 
     emit('result', {
       isFinal: true,
@@ -111,6 +124,50 @@ describe('ExpoRecognitionAdapter.startListening', () => {
     emit('error', { error: 'not-allowed', message: 'mic denied' });
 
     expect(onError).toHaveBeenCalledWith('not-allowed');
+  });
+
+  it('treats an unexpected end event as recoverable', async () => {
+    const adapter = new ExpoRecognitionAdapter();
+    const onError = jest.fn();
+    await adapter.startListening({ locale: 'en-US', onResult: jest.fn(), onError });
+
+    emit('end', null);
+
+    expect(onError).toHaveBeenCalledWith('aborted');
+  });
+
+  it('uses the last partial transcript when Android finalizes a segment as nomatch', async () => {
+    const adapter = new ExpoRecognitionAdapter();
+    const onResult = jest.fn();
+    await adapter.startListening({ locale: 'en-US', onResult, onError: jest.fn() });
+
+    emit('result', {
+      isFinal: false,
+      results: [{ transcript: 'next', confidence: 0, segments: [] }],
+    });
+    emit('nomatch', null);
+
+    expect(onResult).toHaveBeenCalledWith({ transcript: 'next', isFinal: false });
+    expect(onResult).toHaveBeenCalledWith({ transcript: 'next', isFinal: true });
+  });
+
+  it('does not reuse an old partial after a final result arrives', async () => {
+    const adapter = new ExpoRecognitionAdapter();
+    const onResult = jest.fn();
+    await adapter.startListening({ locale: 'en-US', onResult, onError: jest.fn() });
+
+    emit('result', {
+      isFinal: false,
+      results: [{ transcript: 'next', confidence: 0, segments: [] }],
+    });
+    emit('result', {
+      isFinal: true,
+      results: [{ transcript: 'hello', confidence: 0.9, segments: [] }],
+    });
+    emit('nomatch', null);
+
+    expect(onResult).toHaveBeenCalledTimes(2);
+    expect(onResult).toHaveBeenLastCalledWith({ transcript: 'hello', isFinal: true });
   });
 
   it('removes its listeners and stops the module on stopListening', async () => {

@@ -28,23 +28,44 @@ export class ExpoRecognitionAdapter implements SpeechRecognitionAdapter {
 
   async startListening(options: RecognitionListenOptions): Promise<void> {
     this.clearSubscriptions();
+    let lastPartialTranscript = '';
 
     this.subscriptions.push(
       ExpoSpeechRecognitionModule.addListener('result', (event) => {
         const first = event.results[0];
         if (!first) return;
+        if (event.isFinal) lastPartialTranscript = '';
+        else lastPartialTranscript = first.transcript.trim();
         options.onResult({ transcript: first.transcript, isFinal: event.isFinal });
+      }),
+      ExpoSpeechRecognitionModule.addListener('nomatch', () => {
+        if (!lastPartialTranscript) return;
+        options.onResult({ transcript: lastPartialTranscript, isFinal: true });
+        lastPartialTranscript = '';
       }),
       ExpoSpeechRecognitionModule.addListener('error', (event) => {
         options.onError(event.error);
+      }),
+      ExpoSpeechRecognitionModule.addListener('end', () => {
+        options.onError('aborted');
       }),
     );
 
     ExpoSpeechRecognitionModule.start({
       lang: options.locale,
       continuous: false,
-      interimResults: false,
+      interimResults: true,
       maxAlternatives: 1,
+      contextualStrings: ['next', 'repeat', 'previous'],
+      androidIntentOptions: {
+        EXTRA_LANGUAGE_MODEL: 'web_search',
+      },
+      iosTaskHint: 'confirmation',
+      iosCategory: {
+        category: 'playAndRecord',
+        categoryOptions: ['mixWithOthers', 'defaultToSpeaker', 'allowBluetooth'],
+        mode: 'spokenAudio',
+      },
     });
   }
 

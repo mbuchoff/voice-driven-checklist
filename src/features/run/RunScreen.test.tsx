@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { AppState } from 'react-native';
 
 import {
   FakeSpeechPlaybackAdapter,
@@ -186,7 +187,7 @@ describe('RunScreen', () => {
       expect(playback.spoken).toEqual(['Item one']);
     });
 
-    it('keeps listening for new utterances after non-command speech', async () => {
+    it('keeps the same continuous listening session after non-command speech', async () => {
       const { playback, recognition } = setup();
       await flush();
       playback.completePlayback();
@@ -196,7 +197,7 @@ describe('RunScreen', () => {
       act(() => recognition.emitResult({ transcript: 'gibberish', isFinal: true }));
       await flush();
 
-      expect(recognition.startCount).toBeGreaterThan(startsBefore);
+      expect(recognition.startCount).toBe(startsBefore);
       expect(recognition.isListening()).toBe(true);
     });
 
@@ -383,6 +384,84 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.queryByText(/voice control unavailable/i)).toBeNull();
+      expect(recognition.startCount).toBe(startsBefore);
+
+      await act(async () => {
+        await new Promise<void>((resolve) => setTimeout(resolve, 550));
+      });
+
+      expect(recognition.startCount).toBeGreaterThan(startsBefore);
+      expect(recognition.isListening()).toBe(true);
+    });
+
+    it('restarts the listening cycle when Android briefly reports audio capture as the recognizer turns over', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+      const startsBefore = recognition.startCount;
+
+      act(() => recognition.emitError('audio-capture'));
+      await flush();
+
+      expect(screen.queryByText(/voice control unavailable/i)).toBeNull();
+      expect(recognition.startCount).toBe(startsBefore);
+
+      await act(async () => {
+        await new Promise<void>((resolve) => setTimeout(resolve, 550));
+      });
+
+      expect(recognition.startCount).toBeGreaterThan(startsBefore);
+      expect(recognition.isListening()).toBe(true);
+    });
+  });
+
+  describe('app lifecycle', () => {
+    let appStateListeners: ((state: string) => void)[];
+    let appStateSpy: jest.SpiedFunction<typeof AppState.addEventListener>;
+
+    beforeEach(() => {
+      appStateListeners = [];
+      appStateSpy = jest
+        .spyOn(AppState, 'addEventListener')
+        .mockImplementation((_event, listener) => {
+          appStateListeners.push(listener as (state: string) => void);
+          return { remove: jest.fn() };
+        });
+    });
+
+    afterEach(() => {
+      appStateSpy.mockRestore();
+    });
+
+    it('does not stop recognition when the app is backgrounded', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+      const stopsBefore = recognition.stopCount;
+
+      act(() => {
+        appStateListeners.forEach((listener) => listener('background'));
+      });
+      await flush();
+
+      expect(recognition.stopCount).toBe(stopsBefore);
+      expect(recognition.isListening()).toBe(true);
+    });
+
+    it('re-arms recognition when the app becomes active during listening', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+      const startsBefore = recognition.startCount;
+
+      act(() => {
+        appStateListeners.forEach((listener) => listener('active'));
+      });
+      await flush();
+
       expect(recognition.startCount).toBeGreaterThan(startsBefore);
       expect(recognition.isListening()).toBe(true);
     });

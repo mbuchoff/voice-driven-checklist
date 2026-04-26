@@ -1,5 +1,5 @@
 import { useEffect, useReducer } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { AppState, Pressable, ScrollView, Text, View } from 'react-native';
 
 import type {
   SpeechPlaybackAdapter,
@@ -22,8 +22,11 @@ const TRANSIENT_RECOGNITION_ERRORS = new Set([
   'speech-timeout',
   'aborted',
   'network',
+  'audio-capture',
   'busy',
 ]);
+
+const RECOGNITION_RESTART_DELAY_MS = 500;
 
 export type RunScreenProps = {
   snapshot: ChecklistRunSnapshot;
@@ -32,6 +35,8 @@ export type RunScreenProps = {
   initialAvailability: { spokenPlaybackAvailable: boolean; voiceControlAvailable: boolean };
   onExit: () => void;
   onCompletion?: () => void;
+  onVoiceRunStart?: () => void;
+  onVoiceRunStop?: () => void;
 };
 
 export function RunScreen({
@@ -41,11 +46,14 @@ export function RunScreen({
   initialAvailability,
   onExit,
   onCompletion,
+  onVoiceRunStart,
+  onVoiceRunStop,
 }: RunScreenProps) {
   const theme = useTheme();
   const [state, dispatch] = useReducer(runReducer, undefined, () =>
     initialRunState(snapshot, initialAvailability),
   );
+  const [listeningEpoch, rearmListening] = useReducer((value: number) => value + 1, 0);
 
   const controlStyle = {
     paddingVertical: 10,
@@ -81,11 +89,19 @@ export function RunScreen({
     playback,
   ]);
 
-  // Run a one-shot recognition cycle while in `listening`. Restart the cycle
-  // for non-command speech so we keep listening for the same item.
+  // Run one continuous recognition session while in `listening`.
   useEffect(() => {
     if (state.status !== 'listening') return;
     let cancelled = false;
+    let restartTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleRestart = () => {
+      if (restartTimer) clearTimeout(restartTimer);
+      restartTimer = setTimeout(() => {
+        restartTimer = null;
+        startCycle();
+      }, RECOGNITION_RESTART_DELAY_MS);
+    };
 
     const startCycle = () => {
       if (cancelled) return;
@@ -99,12 +115,13 @@ export function RunScreen({
             if (cmd === 'next') dispatch({ type: 'NEXT' });
             else if (cmd === 'repeat') dispatch({ type: 'REPEAT' });
             else if (cmd === 'previous') dispatch({ type: 'PREVIOUS' });
-            else recognition.stopListening().then(startCycle);
           },
           onError: (error) => {
             if (cancelled) return;
             if (TRANSIENT_RECOGNITION_ERRORS.has(error)) {
-              recognition.stopListening().then(startCycle);
+              recognition.stopListening().then(() => {
+                if (!cancelled) scheduleRestart();
+              });
             } else {
               dispatch({ type: 'VOICE_UNAVAILABLE' });
             }
@@ -118,9 +135,29 @@ export function RunScreen({
     startCycle();
     return () => {
       cancelled = true;
+      if (restartTimer) clearTimeout(restartTimer);
       recognition.stopListening();
     };
-  }, [state.status, recognition]);
+  }, [state.status, recognition, listeningEpoch]);
+
+  // Returning to the foreground can leave native recognizers disconnected
+  // without delivering a usable error event, so re-arm the active session.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && state.status === 'listening') rearmListening();
+    });
+    return () => sub?.remove?.();
+  }, [state.status]);
+
+  const voiceRunActive =
+    state.voiceControlAvailable &&
+    (state.status === 'speaking' || state.status === 'listening');
+
+  useEffect(() => {
+    if (!voiceRunActive) return;
+    onVoiceRunStart?.();
+    return () => onVoiceRunStop?.();
+  }, [voiceRunActive, onVoiceRunStart, onVoiceRunStop]);
 
   // Stop recognition once the run completes and notify the host.
   useEffect(() => {
