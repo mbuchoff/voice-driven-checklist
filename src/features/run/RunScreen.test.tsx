@@ -19,7 +19,10 @@ const snapshot: ChecklistRunSnapshot = {
 };
 
 type RenderOptions = Partial<
-  Pick<RunScreenProps, 'onExit' | 'onCompletion' | 'initialAvailability'>
+  Pick<
+    RunScreenProps,
+    'onExit' | 'onCompletion' | 'onVoiceRunStart' | 'onVoiceRunStop' | 'initialAvailability'
+  >
 >;
 
 function setup(options: RenderOptions = {}) {
@@ -40,6 +43,8 @@ function setup(options: RenderOptions = {}) {
       initialAvailability={initialAvailability}
       onExit={onExit}
       onCompletion={onCompletion}
+      onVoiceRunStart={options.onVoiceRunStart}
+      onVoiceRunStop={options.onVoiceRunStop}
     />,
   );
 
@@ -140,6 +145,58 @@ describe('RunScreen', () => {
       expect(playback.spoken).toEqual(['Item one', 'Item two']);
     });
 
+    it('ignores extra finalized commands from the same listening cycle', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+
+      act(() => {
+        recognition.emitResult({ transcript: 'next', isFinal: true });
+        recognition.emitResult({ transcript: 'next', isFinal: true });
+      });
+      await flush();
+
+      expect(screen.getByText('Item two')).toBeOnTheScreen();
+      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.queryByText('Item three')).toBeNull();
+    });
+
+    it('does not reopen the mic when a command result is immediately followed by recognition end', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+      const startsBefore = recognition.startCount;
+
+      act(() => {
+        recognition.emitResult({ transcript: 'next', isFinal: true });
+        recognition.emitError('aborted');
+      });
+
+      expect(recognition.startCount).toBe(startsBefore);
+      await flush();
+      expect(screen.getByText('Item two')).toBeOnTheScreen();
+    });
+
+    it('rearms listening after a command when spoken playback is unavailable', async () => {
+      const { recognition } = setup({
+        initialAvailability: { spokenPlaybackAvailable: false, voiceControlAvailable: true },
+      });
+      await flush();
+      const startsBefore = recognition.startCount;
+
+      act(() => {
+        recognition.emitResult({ transcript: 'next', isFinal: true });
+        recognition.emitError('aborted');
+      });
+      await flush();
+
+      expect(screen.getByText('Item two')).toBeOnTheScreen();
+      expect(recognition.startCount).toBeGreaterThan(startsBefore);
+      expect(recognition.isListening()).toBe(true);
+    });
+
     it('repeats the current item on "repeat" without changing progress', async () => {
       const { playback, recognition } = setup();
       await flush();
@@ -186,7 +243,7 @@ describe('RunScreen', () => {
       expect(playback.spoken).toEqual(['Item one']);
     });
 
-    it('keeps listening for new utterances after non-command speech', async () => {
+    it('keeps the same continuous listening session after non-command speech', async () => {
       const { playback, recognition } = setup();
       await flush();
       playback.completePlayback();
@@ -194,6 +251,23 @@ describe('RunScreen', () => {
       const startsBefore = recognition.startCount;
 
       act(() => recognition.emitResult({ transcript: 'gibberish', isFinal: true }));
+      await flush();
+
+      expect(recognition.startCount).toBe(startsBefore);
+      expect(recognition.isListening()).toBe(true);
+    });
+
+    it('restarts after non-command speech when a non-continuous recognizer ends', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+      const startsBefore = recognition.startCount;
+
+      act(() => {
+        recognition.emitResult({ transcript: 'gibberish', isFinal: true });
+        recognition.emitError('aborted');
+      });
       await flush();
 
       expect(recognition.startCount).toBeGreaterThan(startsBefore);
@@ -295,6 +369,21 @@ describe('RunScreen', () => {
       expect(playback.spoken).toEqual(['Item one', 'Item two', 'Item three']);
     });
 
+    it('stops the Android listening notification when the checklist completes', async () => {
+      const onVoiceRunStop = jest.fn();
+      setup({ onVoiceRunStart: jest.fn(), onVoiceRunStop });
+      await flush();
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+
+      expect(onVoiceRunStop).toHaveBeenCalledTimes(1);
+    });
+
     it('Restart resets to the first item without reloading', async () => {
       const { playback } = setup();
       await flush();
@@ -360,16 +449,21 @@ describe('RunScreen', () => {
       expect(recognition.isListening()).toBe(true);
     });
 
-    it('marks voice unavailable when recognition errors with a fatal code', async () => {
+    it('marks voice unavailable without restarting after a fatal recognition error', async () => {
       const { playback, recognition } = setup();
       await flush();
       playback.completePlayback();
       await flush();
+      const startsBefore = recognition.startCount;
 
-      act(() => recognition.emitError('not-allowed'));
+      act(() => {
+        recognition.emitError('not-allowed');
+        recognition.emitError('aborted');
+      });
       await flush();
 
       expect(screen.getByText(/voice control unavailable/i)).toBeOnTheScreen();
+      expect(recognition.startCount).toBe(startsBefore);
     });
 
     it('restarts the listening cycle when recognition emits "no-speech"', async () => {
@@ -383,6 +477,47 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.queryByText(/voice control unavailable/i)).toBeNull();
+      expect(recognition.startCount).toBe(startsBefore);
+
+      await act(async () => {
+        await new Promise<void>((resolve) => setTimeout(resolve, 550));
+      });
+
+      expect(recognition.startCount).toBeGreaterThan(startsBefore);
+      expect(recognition.isListening()).toBe(true);
+    });
+
+    it('restarts promptly when the recognizer ends naturally', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+      const startsBefore = recognition.startCount;
+
+      act(() => recognition.emitError('aborted'));
+      await flush();
+
+      expect(recognition.startCount).toBeGreaterThan(startsBefore);
+      expect(recognition.isListening()).toBe(true);
+    });
+
+    it('restarts the listening cycle when Android reports no finalized speech match', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+      const startsBefore = recognition.startCount;
+
+      act(() => recognition.emitError('no-match'));
+      await flush();
+
+      expect(screen.queryByText(/voice control unavailable/i)).toBeNull();
+      expect(recognition.startCount).toBe(startsBefore);
+
+      await act(async () => {
+        await new Promise<void>((resolve) => setTimeout(resolve, 550));
+      });
+
       expect(recognition.startCount).toBeGreaterThan(startsBefore);
       expect(recognition.isListening()).toBe(true);
     });
@@ -429,6 +564,71 @@ describe('RunScreen', () => {
       await flush();
       expect(playback.spoken).toEqual(['Item one']);
       expect(screen.getByText('Item one')).toBeOnTheScreen();
+    });
+  });
+
+  describe('foreground listening notification', () => {
+    it('waits for the Android listening notification before opening the mic', async () => {
+      let resolveNotification!: () => void;
+      const notificationStarted = new Promise<void>((resolve) => {
+        resolveNotification = resolve;
+      });
+      const { recognition } = setup({
+        initialAvailability: { spokenPlaybackAvailable: false, voiceControlAvailable: true },
+        onVoiceRunStart: jest.fn(() => notificationStarted),
+      });
+      await flush();
+
+      expect(recognition.startCount).toBe(0);
+
+      await act(async () => {
+        resolveNotification();
+        await notificationStarted;
+      });
+      await flush();
+
+      expect(recognition.startCount).toBe(1);
+      expect(recognition.isListening()).toBe(true);
+    });
+
+    it('stops the Android listening notification if startup finishes after exit', async () => {
+      let resolveNotification!: () => void;
+      const notificationStarted = new Promise<void>((resolve) => {
+        resolveNotification = resolve;
+      });
+      const onVoiceRunStop = jest.fn();
+      const { unmount } = setup({
+        initialAvailability: { spokenPlaybackAvailable: false, voiceControlAvailable: true },
+        onVoiceRunStart: jest.fn(() => notificationStarted),
+        onVoiceRunStop,
+      });
+      await flush();
+
+      unmount();
+      await flush();
+      expect(onVoiceRunStop).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveNotification();
+        await notificationStarted;
+      });
+      await flush();
+
+      expect(onVoiceRunStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('marks voice unavailable when the Android listening notification cannot start', async () => {
+      const { playback, recognition } = setup({
+        onVoiceRunStart: jest.fn(async () => {
+          throw new Error('notification permission denied');
+        }),
+      });
+      await flush();
+      playback.completePlayback();
+      await flush();
+
+      expect(screen.getByText(/voice control unavailable/i)).toBeOnTheScreen();
+      expect(recognition.startCount).toBe(0);
     });
   });
 });

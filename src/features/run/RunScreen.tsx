@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type {
@@ -19,11 +19,14 @@ const LOCALE = 'en-US';
 // the rest of the run.
 const TRANSIENT_RECOGNITION_ERRORS = new Set([
   'no-speech',
+  'no-match',
   'speech-timeout',
-  'aborted',
   'network',
   'busy',
 ]);
+
+const RECOGNITION_RESTART_DELAY_MS = 500;
+const RECOGNITION_END_RESTART_DELAY_MS = 0;
 
 export type RunScreenProps = {
   snapshot: ChecklistRunSnapshot;
@@ -32,6 +35,8 @@ export type RunScreenProps = {
   initialAvailability: { spokenPlaybackAvailable: boolean; voiceControlAvailable: boolean };
   onExit: () => void;
   onCompletion?: () => void;
+  onVoiceRunStart?: () => void | Promise<void>;
+  onVoiceRunStop?: () => void;
 };
 
 export function RunScreen({
@@ -41,11 +46,14 @@ export function RunScreen({
   initialAvailability,
   onExit,
   onCompletion,
+  onVoiceRunStart,
+  onVoiceRunStop,
 }: RunScreenProps) {
   const theme = useTheme();
   const [state, dispatch] = useReducer(runReducer, undefined, () =>
     initialRunState(snapshot, initialAvailability),
   );
+  const [voiceServiceReady, setVoiceServiceReady] = useState(!onVoiceRunStart);
 
   const controlStyle = {
     paddingVertical: 10,
@@ -81,11 +89,21 @@ export function RunScreen({
     playback,
   ]);
 
-  // Run a one-shot recognition cycle while in `listening`. Restart the cycle
-  // for non-command speech so we keep listening for the same item.
+  // Run one continuous recognition session while in `listening`.
   useEffect(() => {
-    if (state.status !== 'listening') return;
+    if (state.status !== 'listening' || !voiceServiceReady) return;
     let cancelled = false;
+    let restartTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Give Android's RecognitionService a cleanup window between stop() and
+    // the next start() after a transient error.
+    const scheduleRestart = (delayMs: number) => {
+      if (restartTimer) return;
+      restartTimer = setTimeout(() => {
+        restartTimer = null;
+        startCycle();
+      }, delayMs);
+    };
 
     const startCycle = () => {
       if (cancelled) return;
@@ -96,16 +114,27 @@ export function RunScreen({
             if (cancelled || !result.isFinal) return;
             dispatch({ type: 'RECOGNIZED_PHRASE', phrase: result.transcript });
             const cmd = parseCommand(result.transcript);
+            if (!cmd) return;
+            cancelled = true;
+            void recognition.stopListening();
             if (cmd === 'next') dispatch({ type: 'NEXT' });
             else if (cmd === 'repeat') dispatch({ type: 'REPEAT' });
-            else if (cmd === 'previous') dispatch({ type: 'PREVIOUS' });
-            else recognition.stopListening().then(startCycle);
+            else dispatch({ type: 'PREVIOUS' });
           },
           onError: (error) => {
             if (cancelled) return;
+            if (error === 'aborted') {
+              recognition.stopListening().then(() => {
+                if (!cancelled) scheduleRestart(RECOGNITION_END_RESTART_DELAY_MS);
+              });
+              return;
+            }
             if (TRANSIENT_RECOGNITION_ERRORS.has(error)) {
-              recognition.stopListening().then(startCycle);
+              recognition.stopListening().then(() => {
+                if (!cancelled) scheduleRestart(RECOGNITION_RESTART_DELAY_MS);
+              });
             } else {
+              cancelled = true;
               dispatch({ type: 'VOICE_UNAVAILABLE' });
             }
           },
@@ -118,9 +147,40 @@ export function RunScreen({
     startCycle();
     return () => {
       cancelled = true;
+      if (restartTimer) clearTimeout(restartTimer);
       recognition.stopListening();
     };
-  }, [state.status, recognition]);
+  }, [state.status, state.playbackTick, recognition, voiceServiceReady]);
+
+  // Start before the first listening window so locking during spoken playback
+  // still leaves Android ready to open the mic under a foreground service.
+  const voiceRunActive =
+    state.voiceControlAvailable &&
+    (state.status === 'speaking' || state.status === 'listening');
+
+  useEffect(() => {
+    setVoiceServiceReady(!onVoiceRunStart);
+    if (!voiceRunActive) return;
+    let cancelled = false;
+    let started = false;
+    Promise.resolve(onVoiceRunStart?.()).then(
+      () => {
+        started = true;
+        if (cancelled) {
+          onVoiceRunStop?.();
+          return;
+        }
+        setVoiceServiceReady(true);
+      },
+      () => {
+        if (!cancelled) dispatch({ type: 'VOICE_UNAVAILABLE' });
+      },
+    );
+    return () => {
+      cancelled = true;
+      if (started) onVoiceRunStop?.();
+    };
+  }, [voiceRunActive, onVoiceRunStart, onVoiceRunStop]);
 
   // Stop recognition once the run completes and notify the host.
   useEffect(() => {

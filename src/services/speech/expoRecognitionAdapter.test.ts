@@ -1,4 +1,5 @@
 import { ExpoRecognitionAdapter } from './expoRecognitionAdapter';
+import { Platform } from 'react-native';
 
 type Listener = (event: unknown) => void;
 
@@ -40,7 +41,13 @@ const Module = jest.requireMock('expo-speech-recognition').ExpoSpeechRecognition
   addListener: jest.Mock;
 };
 
+function setPlatform(os: 'android' | 'ios', version: number = 35) {
+  Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
+  Object.defineProperty(Platform, 'Version', { configurable: true, get: () => version });
+}
+
 beforeEach(() => {
+  setPlatform('android');
   Module.isRecognitionAvailable.mockReset();
   Module.requestPermissionsAsync.mockReset();
   Module.start.mockReset();
@@ -91,9 +98,22 @@ describe('ExpoRecognitionAdapter.startListening', () => {
 
     await adapter.startListening({ locale: 'en-US', onResult, onError });
 
-    expect(Module.start).toHaveBeenCalledWith(
-      expect.objectContaining({ lang: 'en-US', continuous: false, interimResults: false }),
-    );
+    expect(Module.start).toHaveBeenCalledWith({
+      lang: 'en-US',
+      continuous: true,
+      interimResults: false,
+      maxAlternatives: 1,
+      contextualStrings: ['next', 'repeat', 'previous'],
+      androidIntentOptions: {
+        EXTRA_LANGUAGE_MODEL: 'web_search',
+      },
+      iosTaskHint: 'confirmation',
+      iosCategory: {
+        category: 'playAndRecord',
+        categoryOptions: ['mixWithOthers', 'defaultToSpeaker', 'allowBluetooth'],
+        mode: 'spokenAudio',
+      },
+    });
 
     emit('result', {
       isFinal: true,
@@ -101,6 +121,30 @@ describe('ExpoRecognitionAdapter.startListening', () => {
     });
 
     expect(onResult).toHaveBeenCalledWith({ transcript: 'next', isFinal: true });
+  });
+
+  it('uses non-continuous iOS sessions so final results arrive before restart', async () => {
+    setPlatform('ios');
+    const adapter = new ExpoRecognitionAdapter();
+
+    await adapter.startListening({ locale: 'en-US', onResult: jest.fn(), onError: jest.fn() });
+
+    expect(Module.start).toHaveBeenCalledWith(expect.objectContaining({
+      continuous: false,
+      interimResults: false,
+    }));
+  });
+
+  it('uses non-continuous sessions on Android versions without segmented recognition', async () => {
+    setPlatform('android', 32);
+    const adapter = new ExpoRecognitionAdapter();
+
+    await adapter.startListening({ locale: 'en-US', onResult: jest.fn(), onError: jest.fn() });
+
+    expect(Module.start).toHaveBeenCalledWith(expect.objectContaining({
+      continuous: false,
+      interimResults: false,
+    }));
   });
 
   it('forwards error events', async () => {
@@ -113,10 +157,31 @@ describe('ExpoRecognitionAdapter.startListening', () => {
     expect(onError).toHaveBeenCalledWith('not-allowed');
   });
 
+  it('treats an unexpected end event as recoverable', async () => {
+    const adapter = new ExpoRecognitionAdapter();
+    const onError = jest.fn();
+    await adapter.startListening({ locale: 'en-US', onResult: jest.fn(), onError });
+
+    emit('end', null);
+
+    expect(onError).toHaveBeenCalledWith('aborted');
+  });
+
+  it('treats Android nomatch events as recoverable recognition misses', async () => {
+    const adapter = new ExpoRecognitionAdapter();
+    const onError = jest.fn();
+    await adapter.startListening({ locale: 'en-US', onResult: jest.fn(), onError });
+
+    emit('nomatch', null);
+
+    expect(onError).toHaveBeenCalledWith('no-match');
+  });
+
   it('removes its listeners and stops the module on stopListening', async () => {
     const adapter = new ExpoRecognitionAdapter();
     const onResult = jest.fn();
-    await adapter.startListening({ locale: 'en-US', onResult, onError: jest.fn() });
+    const onError = jest.fn();
+    await adapter.startListening({ locale: 'en-US', onResult, onError });
 
     await adapter.stopListening();
 
@@ -125,6 +190,8 @@ describe('ExpoRecognitionAdapter.startListening', () => {
       isFinal: true,
       results: [{ transcript: 'next', confidence: 0.9, segments: [] }],
     });
+    emit('end', null);
     expect(onResult).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
   });
 });

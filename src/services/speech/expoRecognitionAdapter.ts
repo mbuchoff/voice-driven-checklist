@@ -1,5 +1,6 @@
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import type { EventSubscription } from 'expo-modules-core';
+import { Platform } from 'react-native';
 
 import type {
   RecognitionListenOptions,
@@ -35,24 +36,41 @@ export class ExpoRecognitionAdapter implements SpeechRecognitionAdapter {
         if (!first) return;
         options.onResult({ transcript: first.transcript, isFinal: event.isFinal });
       }),
+      ExpoSpeechRecognitionModule.addListener('nomatch', () => {
+        options.onError('no-match');
+      }),
       ExpoSpeechRecognitionModule.addListener('error', (event) => {
         options.onError(event.error);
+      }),
+      ExpoSpeechRecognitionModule.addListener('end', () => {
+        options.onError('aborted');
       }),
     );
 
     ExpoSpeechRecognitionModule.start({
       lang: options.locale,
-      continuous: false,
+      continuous: supportsSegmentedContinuousRecognition(),
       interimResults: false,
       maxAlternatives: 1,
+      contextualStrings: ['next', 'repeat', 'previous'],
+      androidIntentOptions: {
+        EXTRA_LANGUAGE_MODEL: 'web_search',
+      },
+      iosTaskHint: 'confirmation',
+      iosCategory: {
+        category: 'playAndRecord',
+        categoryOptions: ['mixWithOthers', 'defaultToSpeaker', 'allowBluetooth'],
+        mode: 'spokenAudio',
+      },
     });
   }
 
   async stopListening(): Promise<void> {
+    this.clearSubscriptions();
     try {
       ExpoSpeechRecognitionModule.stop();
-    } finally {
-      this.clearSubscriptions();
+    } catch {
+      // Stop can emit `end` synchronously or throw when no native session remains.
     }
   }
 
@@ -64,4 +82,8 @@ export class ExpoRecognitionAdapter implements SpeechRecognitionAdapter {
     for (const sub of this.subscriptions) sub.remove();
     this.subscriptions = [];
   }
+}
+
+function supportsSegmentedContinuousRecognition(): boolean {
+  return Platform.OS === 'android' && Number(Platform.Version) >= 33;
 }

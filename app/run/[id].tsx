@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, AppState, BackHandler, Platform, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Platform, Text, View } from 'react-native';
 
 import { useDatabase } from '@/src/db/DatabaseProvider';
 import { RunScreen } from '@/src/features/run/RunScreen';
@@ -9,6 +9,11 @@ import type { ChecklistRunSnapshot } from '@/src/features/run/types';
 import { getChecklist } from '@/src/features/checklists/repository';
 import { CompletionSoundPlayer } from '@/src/services/audio/CompletionSoundPlayer';
 import { createSpeechAdapters } from '@/src/services/speech/createSpeechAdapters';
+import {
+  setListeningNotificationStopHandler,
+  startListeningNotification,
+  stopListeningNotification,
+} from '@/src/services/speech/foregroundService';
 
 type LoadState =
   | { kind: 'loading' }
@@ -36,6 +41,23 @@ export default function RunRoute() {
   }, [completionSound]);
 
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
+
+  const stopRunResources = useCallback(async () => {
+    await Promise.allSettled([
+      adapters.playback.stop(),
+      adapters.recognition.stopListening(),
+      stopListeningNotification(),
+    ]);
+  }, [adapters]);
+
+  const exitRun = useCallback(async () => {
+    await stopRunResources();
+    router.replace('/');
+  }, [router, stopRunResources]);
+
+  const stopRunResourcesInBackground = useCallback(() => {
+    void stopRunResources();
+  }, [stopRunResources]);
 
   useEffect(() => {
     if (!id) return;
@@ -77,50 +99,38 @@ export default function RunRoute() {
   // unmount, but back-to-back navigations may dispose before unmount fires).
   useFocusEffect(
     useCallback(() => {
-      return () => {
-        adapters.playback.stop();
-        adapters.recognition.stopListening();
-      };
-    }, [adapters]),
+      return stopRunResourcesInBackground;
+    }, [stopRunResourcesInBackground]),
   );
-
-  // App-lifecycle: stop in-flight speech and recognition when backgrounded.
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (next) => {
-      if (next !== 'active') {
-        adapters.playback.stop();
-        adapters.recognition.stopListening();
-      }
-    });
-    return () => sub.remove();
-  }, [adapters]);
 
   // Web tab-close: best-effort stop on pagehide.
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    const handler = () => {
-      adapters.playback.stop();
-      adapters.recognition.stopListening();
-    };
-    window.addEventListener('pagehide', handler);
-    window.addEventListener('beforeunload', handler);
+    window.addEventListener('pagehide', stopRunResourcesInBackground);
+    window.addEventListener('beforeunload', stopRunResourcesInBackground);
     return () => {
-      window.removeEventListener('pagehide', handler);
-      window.removeEventListener('beforeunload', handler);
+      window.removeEventListener('pagehide', stopRunResourcesInBackground);
+      window.removeEventListener('beforeunload', stopRunResourcesInBackground);
     };
-  }, [adapters]);
+  }, [stopRunResourcesInBackground]);
 
   // Android hardware-back: discard the run by exiting the screen.
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      adapters.playback.stop();
-      adapters.recognition.stopListening();
-      router.replace('/');
+      void exitRun();
       return true;
     });
     return () => sub.remove();
-  }, [adapters, router]);
+  }, [exitRun]);
+
+  useEffect(() => setListeningNotificationStopHandler(exitRun), [exitRun]);
+
+  const checklistTitle = loadState.kind === 'ready' ? loadState.snapshot.checklistTitle : '';
+  const startVoiceRunNotification = useCallback(
+    () => startListeningNotification(checklistTitle),
+    [checklistTitle],
+  );
 
   if (loadState.kind === 'loading') {
     return (
@@ -152,8 +162,10 @@ export default function RunRoute() {
       playback={adapters.playback}
       recognition={adapters.recognition}
       initialAvailability={loadState.initialAvailability}
-      onExit={() => router.replace('/')}
+      onExit={exitRun}
       onCompletion={() => completionSound.play()}
+      onVoiceRunStart={startVoiceRunNotification}
+      onVoiceRunStop={stopListeningNotification}
     />
   );
 }
