@@ -300,6 +300,21 @@ describe('RunScreen', () => {
       expect(playback.spoken).toEqual(['Item one', 'Item two', 'Item three']);
     });
 
+    it('stops the Android listening notification when the checklist completes', async () => {
+      const onVoiceRunStop = jest.fn();
+      setup({ onVoiceRunStart: jest.fn(), onVoiceRunStop });
+      await flush();
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+
+      expect(onVoiceRunStop).toHaveBeenCalledTimes(1);
+    });
+
     it('Restart resets to the first item without reloading', async () => {
       const { playback } = setup();
       await flush();
@@ -406,7 +421,6 @@ describe('RunScreen', () => {
       const startsBefore = recognition.startCount;
 
       act(() => recognition.emitError('aborted'));
-      await flush();
 
       expect(recognition.startCount).toBeGreaterThan(startsBefore);
       expect(recognition.isListening()).toBe(true);

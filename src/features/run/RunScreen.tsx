@@ -21,7 +21,6 @@ const TRANSIENT_RECOGNITION_ERRORS = new Set([
   'no-speech',
   'no-match',
   'speech-timeout',
-  'aborted',
   'network',
   'busy',
 ]);
@@ -147,17 +146,16 @@ export function RunScreen({
     };
   }, [state.status, recognition, voiceServiceReady]);
 
+  // Start before the first listening window so locking during spoken playback
+  // still leaves Android ready to open the mic under a foreground service.
   const voiceRunActive =
     state.voiceControlAvailable &&
     (state.status === 'speaking' || state.status === 'listening');
 
   useEffect(() => {
-    if (!voiceRunActive) {
-      setVoiceServiceReady(!needsVoiceService);
-      return;
-    }
-    let cancelled = false;
     setVoiceServiceReady(!needsVoiceService);
+    if (!voiceRunActive) return;
+    let cancelled = false;
     Promise.resolve(onVoiceRunStart?.()).then(
       () => {
         if (!cancelled) setVoiceServiceReady(true);
