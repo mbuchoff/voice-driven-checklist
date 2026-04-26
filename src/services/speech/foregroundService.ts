@@ -37,7 +37,7 @@ export function registerListeningService(): void {
   });
 }
 
-export function setListeningNotificationStopHandler(handler: StopHandler | null): () => void {
+export function setListeningNotificationStopHandler(handler: StopHandler): () => void {
   stopHandler = handler;
   return () => {
     stopHandler = null;

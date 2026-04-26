@@ -124,11 +124,10 @@ export function RunScreen({
           onError: (error) => {
             if (cancelled) return;
             if (error === 'aborted') {
-              if (!handledCommand) {
-                recognition.stopListening().then(() => {
-                  if (!cancelled) scheduleRestart(RECOGNITION_END_RESTART_DELAY_MS);
-                });
-              }
+              if (handledCommand) return;
+              recognition.stopListening().then(() => {
+                if (!cancelled) scheduleRestart(RECOGNITION_END_RESTART_DELAY_MS);
+              });
               return;
             }
             if (TRANSIENT_RECOGNITION_ERRORS.has(error)) {
@@ -137,7 +136,6 @@ export function RunScreen({
               });
             } else {
               cancelled = true;
-              recognition.stopListening();
               dispatch({ type: 'VOICE_UNAVAILABLE' });
             }
           },
@@ -165,9 +163,15 @@ export function RunScreen({
     setVoiceServiceReady(!onVoiceRunStart);
     if (!voiceRunActive) return;
     let cancelled = false;
+    let started = false;
     Promise.resolve(onVoiceRunStart?.()).then(
       () => {
-        if (!cancelled) setVoiceServiceReady(true);
+        started = true;
+        if (cancelled) {
+          onVoiceRunStop?.();
+          return;
+        }
+        setVoiceServiceReady(true);
       },
       () => {
         if (!cancelled) dispatch({ type: 'VOICE_UNAVAILABLE' });
@@ -175,7 +179,7 @@ export function RunScreen({
     );
     return () => {
       cancelled = true;
-      onVoiceRunStop?.();
+      if (started) onVoiceRunStop?.();
     };
   }, [voiceRunActive, onVoiceRunStart, onVoiceRunStop]);
 

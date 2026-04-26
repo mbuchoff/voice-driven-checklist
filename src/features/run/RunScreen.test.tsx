@@ -574,6 +574,32 @@ describe('RunScreen', () => {
       expect(recognition.isListening()).toBe(true);
     });
 
+    it('stops the Android listening notification if startup finishes after exit', async () => {
+      let resolveNotification!: () => void;
+      const notificationStarted = new Promise<void>((resolve) => {
+        resolveNotification = resolve;
+      });
+      const onVoiceRunStop = jest.fn();
+      const { unmount } = setup({
+        initialAvailability: { spokenPlaybackAvailable: false, voiceControlAvailable: true },
+        onVoiceRunStart: jest.fn(() => notificationStarted),
+        onVoiceRunStop,
+      });
+      await flush();
+
+      unmount();
+      await flush();
+      expect(onVoiceRunStop).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveNotification();
+        await notificationStarted;
+      });
+      await flush();
+
+      expect(onVoiceRunStop).toHaveBeenCalledTimes(1);
+    });
+
     it('marks voice unavailable when the Android listening notification cannot start', async () => {
       const { playback, recognition } = setup({
         onVoiceRunStart: jest.fn(async () => {
