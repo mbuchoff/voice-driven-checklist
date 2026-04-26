@@ -40,7 +40,7 @@ export function registerListeningService(): void {
 export function setListeningNotificationStopHandler(handler: StopHandler | null): () => void {
   stopHandler = handler;
   return () => {
-    if (stopHandler === handler) stopHandler = null;
+    stopHandler = null;
   };
 }
 
@@ -81,6 +81,8 @@ export async function stopListeningNotification(): Promise<void> {
 
   try {
     if (Platform.OS === 'android') await notifee.stopForegroundService();
+  } catch {
+    // The notification may already be gone when several stop paths converge.
   } finally {
     resolve?.();
   }

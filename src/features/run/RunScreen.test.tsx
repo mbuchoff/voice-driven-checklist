@@ -145,6 +145,41 @@ describe('RunScreen', () => {
       expect(playback.spoken).toEqual(['Item one', 'Item two']);
     });
 
+    it('does not reopen the mic when a command result is immediately followed by recognition end', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+      const startsBefore = recognition.startCount;
+
+      act(() => {
+        recognition.emitResult({ transcript: 'next', isFinal: true });
+        recognition.emitError('aborted');
+      });
+
+      expect(recognition.startCount).toBe(startsBefore);
+      await flush();
+      expect(screen.getByText('Item two')).toBeOnTheScreen();
+    });
+
+    it('rearms listening after a command when spoken playback is unavailable', async () => {
+      const { recognition } = setup({
+        initialAvailability: { spokenPlaybackAvailable: false, voiceControlAvailable: true },
+      });
+      await flush();
+      const startsBefore = recognition.startCount;
+
+      act(() => {
+        recognition.emitResult({ transcript: 'next', isFinal: true });
+        recognition.emitError('aborted');
+      });
+      await flush();
+
+      expect(screen.getByText('Item two')).toBeOnTheScreen();
+      expect(recognition.startCount).toBeGreaterThan(startsBefore);
+      expect(recognition.isListening()).toBe(true);
+    });
+
     it('repeats the current item on "repeat" without changing progress', async () => {
       const { playback, recognition } = setup();
       await flush();
@@ -202,6 +237,23 @@ describe('RunScreen', () => {
       await flush();
 
       expect(recognition.startCount).toBe(startsBefore);
+      expect(recognition.isListening()).toBe(true);
+    });
+
+    it('restarts after non-command speech when a non-continuous recognizer ends', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+      const startsBefore = recognition.startCount;
+
+      act(() => {
+        recognition.emitResult({ transcript: 'gibberish', isFinal: true });
+        recognition.emitError('aborted');
+      });
+      await flush();
+
+      expect(recognition.startCount).toBeGreaterThan(startsBefore);
       expect(recognition.isListening()).toBe(true);
     });
 
@@ -418,7 +470,7 @@ describe('RunScreen', () => {
       expect(recognition.isListening()).toBe(true);
     });
 
-    it('restarts immediately when the continuous recognizer ends naturally', async () => {
+    it('restarts promptly when the recognizer ends naturally', async () => {
       const { playback, recognition } = setup();
       await flush();
       playback.completePlayback();
@@ -426,6 +478,7 @@ describe('RunScreen', () => {
       const startsBefore = recognition.startCount;
 
       act(() => recognition.emitError('aborted'));
+      await flush();
 
       expect(recognition.startCount).toBeGreaterThan(startsBefore);
       expect(recognition.isListening()).toBe(true);

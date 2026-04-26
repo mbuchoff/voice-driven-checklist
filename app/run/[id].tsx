@@ -42,20 +42,22 @@ export default function RunRoute() {
 
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
 
-  const stopListeningNotificationSafely = useCallback(() => {
-    void stopListeningNotification().catch(() => undefined);
-  }, []);
+  const stopRunResources = useCallback(async () => {
+    await Promise.allSettled([
+      adapters.playback.stop(),
+      adapters.recognition.stopListening(),
+      stopListeningNotification(),
+    ]);
+  }, [adapters]);
 
-  const stopRunResources = useCallback(() => {
-    adapters.playback.stop();
-    adapters.recognition.stopListening();
-    stopListeningNotificationSafely();
-  }, [adapters, stopListeningNotificationSafely]);
-
-  const exitRun = useCallback(() => {
-    stopRunResources();
+  const exitRun = useCallback(async () => {
+    await stopRunResources();
     router.replace('/');
   }, [router, stopRunResources]);
+
+  const stopRunResourcesInBackground = useCallback(() => {
+    void stopRunResources();
+  }, [stopRunResources]);
 
   useEffect(() => {
     if (!id) return;
@@ -97,26 +99,26 @@ export default function RunRoute() {
   // unmount, but back-to-back navigations may dispose before unmount fires).
   useFocusEffect(
     useCallback(() => {
-      return stopRunResources;
-    }, [stopRunResources]),
+      return stopRunResourcesInBackground;
+    }, [stopRunResourcesInBackground]),
   );
 
   // Web tab-close: best-effort stop on pagehide.
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    window.addEventListener('pagehide', stopRunResources);
-    window.addEventListener('beforeunload', stopRunResources);
+    window.addEventListener('pagehide', stopRunResourcesInBackground);
+    window.addEventListener('beforeunload', stopRunResourcesInBackground);
     return () => {
-      window.removeEventListener('pagehide', stopRunResources);
-      window.removeEventListener('beforeunload', stopRunResources);
+      window.removeEventListener('pagehide', stopRunResourcesInBackground);
+      window.removeEventListener('beforeunload', stopRunResourcesInBackground);
     };
-  }, [stopRunResources]);
+  }, [stopRunResourcesInBackground]);
 
   // Android hardware-back: discard the run by exiting the screen.
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      exitRun();
+      void exitRun();
       return true;
     });
     return () => sub.remove();
@@ -163,7 +165,7 @@ export default function RunRoute() {
       onExit={exitRun}
       onCompletion={() => completionSound.play()}
       onVoiceRunStart={startVoiceRunNotification}
-      onVoiceRunStop={stopListeningNotificationSafely}
+      onVoiceRunStop={stopListeningNotification}
     />
   );
 }

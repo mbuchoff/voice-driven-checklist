@@ -26,6 +26,7 @@ const TRANSIENT_RECOGNITION_ERRORS = new Set([
 ]);
 
 const RECOGNITION_RESTART_DELAY_MS = 500;
+const RECOGNITION_END_RESTART_DELAY_MS = 0;
 
 export type RunScreenProps = {
   snapshot: ChecklistRunSnapshot;
@@ -52,8 +53,7 @@ export function RunScreen({
   const [state, dispatch] = useReducer(runReducer, undefined, () =>
     initialRunState(snapshot, initialAvailability),
   );
-  const needsVoiceService = Boolean(onVoiceRunStart);
-  const [voiceServiceReady, setVoiceServiceReady] = useState(!needsVoiceService);
+  const [voiceServiceReady, setVoiceServiceReady] = useState(!onVoiceRunStart);
 
   const controlStyle = {
     paddingVertical: 10,
@@ -93,15 +93,17 @@ export function RunScreen({
   useEffect(() => {
     if (state.status !== 'listening' || !voiceServiceReady) return;
     let cancelled = false;
+    let handledCommand = false;
     let restartTimer: ReturnType<typeof setTimeout> | null = null;
 
     // Give Android's RecognitionService a cleanup window between stop() and
     // the next start() after a transient error.
-    const scheduleRestart = () => {
+    const scheduleRestart = (delayMs: number) => {
+      if (restartTimer) return;
       restartTimer = setTimeout(() => {
         restartTimer = null;
         startCycle();
-      }, RECOGNITION_RESTART_DELAY_MS);
+      }, delayMs);
     };
 
     const startCycle = () => {
@@ -113,19 +115,25 @@ export function RunScreen({
             if (cancelled || !result.isFinal) return;
             dispatch({ type: 'RECOGNIZED_PHRASE', phrase: result.transcript });
             const cmd = parseCommand(result.transcript);
+            if (!cmd) return;
+            handledCommand = true;
             if (cmd === 'next') dispatch({ type: 'NEXT' });
             else if (cmd === 'repeat') dispatch({ type: 'REPEAT' });
-            else if (cmd === 'previous') dispatch({ type: 'PREVIOUS' });
+            else dispatch({ type: 'PREVIOUS' });
           },
           onError: (error) => {
             if (cancelled) return;
             if (error === 'aborted') {
-              startCycle();
+              if (!handledCommand) {
+                recognition.stopListening().then(() => {
+                  if (!cancelled) scheduleRestart(RECOGNITION_END_RESTART_DELAY_MS);
+                });
+              }
               return;
             }
             if (TRANSIENT_RECOGNITION_ERRORS.has(error)) {
               recognition.stopListening().then(() => {
-                if (!cancelled) scheduleRestart();
+                if (!cancelled) scheduleRestart(RECOGNITION_RESTART_DELAY_MS);
               });
             } else {
               cancelled = true;
@@ -145,7 +153,7 @@ export function RunScreen({
       if (restartTimer) clearTimeout(restartTimer);
       recognition.stopListening();
     };
-  }, [state.status, recognition, voiceServiceReady]);
+  }, [state.status, state.playbackTick, recognition, voiceServiceReady]);
 
   // Start before the first listening window so locking during spoken playback
   // still leaves Android ready to open the mic under a foreground service.
@@ -154,7 +162,7 @@ export function RunScreen({
     (state.status === 'speaking' || state.status === 'listening');
 
   useEffect(() => {
-    setVoiceServiceReady(!needsVoiceService);
+    setVoiceServiceReady(!onVoiceRunStart);
     if (!voiceRunActive) return;
     let cancelled = false;
     Promise.resolve(onVoiceRunStart?.()).then(
@@ -169,7 +177,7 @@ export function RunScreen({
       cancelled = true;
       onVoiceRunStop?.();
     };
-  }, [voiceRunActive, needsVoiceService, onVoiceRunStart, onVoiceRunStop]);
+  }, [voiceRunActive, onVoiceRunStart, onVoiceRunStop]);
 
   // Stop recognition once the run completes and notify the host.
   useEffect(() => {

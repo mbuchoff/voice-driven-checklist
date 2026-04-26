@@ -70,7 +70,7 @@ export class ExpoRecognitionAdapter implements SpeechRecognitionAdapter {
     try {
       ExpoSpeechRecognitionModule.stop();
     } catch {
-      // The stop request is best-effort because listeners are already removed.
+      // Stop can emit `end` synchronously or throw when no native session remains.
     }
   }
 
