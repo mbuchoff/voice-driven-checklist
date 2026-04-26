@@ -192,7 +192,7 @@ export function RunScreen({
   useEffect(() => {
     if (state.status !== 'completed') return;
     recognition.stopListening();
-    void onCompletion?.();
+    onCompletion?.();
   }, [state.status, recognition, onCompletion]);
 
   // Tear down adapters when the screen unmounts.

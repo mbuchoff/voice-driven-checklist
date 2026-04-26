@@ -381,8 +381,6 @@ describe('RunScreen', () => {
       fireEvent.press(screen.getByTestId('manual-next'));
       await flush();
 
-      // Stopping the FG service synchronously with completion drops the
-      // chime on a locked screen. The host route stops it on navigate-away.
       expect(onVoiceRunStop).not.toHaveBeenCalled();
     });
 
