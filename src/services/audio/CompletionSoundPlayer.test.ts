@@ -57,4 +57,30 @@ describe('CompletionSoundPlayer', () => {
     const sound = new CompletionSoundPlayer();
     expect(() => sound.release()).not.toThrow();
   });
+
+  it('prepare creates the player exactly once', () => {
+    createAudioPlayer.mockReturnValue({ play: mockPlay, seekTo: mockSeekTo, release: mockRelease });
+    const sound = new CompletionSoundPlayer();
+    sound.prepare();
+    sound.prepare();
+    expect(createAudioPlayer).toHaveBeenCalledTimes(1);
+  });
+
+  it('play after prepare reuses the pre-warmed player', async () => {
+    createAudioPlayer.mockReturnValue({ play: mockPlay, seekTo: mockSeekTo, release: mockRelease });
+    const sound = new CompletionSoundPlayer();
+    sound.prepare();
+    await sound.play();
+    expect(createAudioPlayer).toHaveBeenCalledTimes(1);
+    expect(mockSeekTo).toHaveBeenCalledWith(0);
+    expect(mockPlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('prepare swallows errors so completion is unaffected', () => {
+    createAudioPlayer.mockImplementation(() => {
+      throw new Error('audio pipeline broken');
+    });
+    const sound = new CompletionSoundPlayer();
+    expect(() => sound.prepare()).not.toThrow();
+  });
 });

@@ -384,6 +384,36 @@ describe('RunScreen', () => {
       expect(onVoiceRunStop).toHaveBeenCalledTimes(1);
     });
 
+    it('defers stopping the listening notification until the chime resolves', async () => {
+      let resolveCompletion: (() => void) | null = null;
+      const onCompletion = jest.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveCompletion = resolve;
+          }),
+      );
+      const onVoiceRunStop = jest.fn();
+      setup({ onCompletion, onVoiceRunStart: jest.fn(), onVoiceRunStop });
+      await flush();
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+
+      expect(onCompletion).toHaveBeenCalledTimes(1);
+      expect(onVoiceRunStop).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveCompletion?.();
+      });
+      await flush();
+
+      expect(onVoiceRunStop).toHaveBeenCalledTimes(1);
+    });
+
     it('Restart resets to the first item without reloading', async () => {
       const { playback } = setup();
       await flush();

@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type {
@@ -158,6 +158,12 @@ export function RunScreen({
     state.voiceControlAvailable &&
     (state.status === 'speaking' || state.status === 'listening');
 
+  // Tracks the latest status so the voiceRunActive cleanup can defer the
+  // foreground-service stop on the completion transition — the completion
+  // effect needs the FG service alive while the chime player loads.
+  const statusRef = useRef(state.status);
+  statusRef.current = state.status;
+
   useEffect(() => {
     setVoiceServiceReady(!onVoiceRunStart);
     if (!voiceRunActive) return;
@@ -167,7 +173,7 @@ export function RunScreen({
       () => {
         started = true;
         if (cancelled) {
-          onVoiceRunStop?.();
+          if (statusRef.current !== 'completed') onVoiceRunStop?.();
           return;
         }
         setVoiceServiceReady(true);
@@ -178,16 +184,20 @@ export function RunScreen({
     );
     return () => {
       cancelled = true;
-      if (started) onVoiceRunStop?.();
+      if (started && statusRef.current !== 'completed') onVoiceRunStop?.();
     };
   }, [voiceRunActive, onVoiceRunStart, onVoiceRunStop]);
 
-  // Stop recognition once the run completes and notify the host.
+  // Stop recognition once the run completes and notify the host. The
+  // foreground-service stop is deferred until after onCompletion resolves so
+  // the chime player has time to start the AudioTrack while the app is still
+  // elevated — without this, locked-screen completions race with FG teardown
+  // and the chime is silently dropped.
   useEffect(() => {
     if (state.status !== 'completed') return;
     recognition.stopListening();
-    onCompletion?.();
-  }, [state.status, recognition, onCompletion]);
+    void Promise.resolve(onCompletion?.()).finally(() => onVoiceRunStop?.());
+  }, [state.status, recognition, onCompletion, onVoiceRunStop]);
 
   // Tear down adapters when the screen unmounts.
   useEffect(() => {
