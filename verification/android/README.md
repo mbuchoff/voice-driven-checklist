@@ -75,6 +75,40 @@ These were exercised via automated tests (`npm test`) rather than the manual wal
 - **AC#3** (delete confirmation), **AC#4** (validation messages), **AC#5** (no-items block), **AC#8** (snapshot survives mid-run edits/deletes), **AC#16** (spoken-playback unavailable banner) — see `src/features/checklists/*.test.tsx`, `src/features/run/snapshotDeletionRegression.test.tsx`, `src/features/run/RunScreen.test.tsx`.
 - **AC#10–13** voice-driven branch — the Pixel can't be made to "speak" from `adb`, so spoken `next` / `repeat` / `previous` are covered by `RunScreen.test.tsx` against the fake recognition adapter; the live recognizer was confirmed wired (it surfaced ambient phrases as non-command transcripts in shots 09 and 10). The manual-button equivalents of those commands are visually exercised in the deny-04..deny-06 walkthrough above.
 
+## Keyboard avoidance (ChecklistEditor)
+
+Bug: in the editor, when the focused row was near the bottom of the screen, the on-screen keyboard hid the focused `TextInput` itself. The user could type without seeing the text being entered.
+
+Accepted fix: use Android's native panning behavior instead of JS keyboard geometry. `app.json` sets `android.softwareKeyboardLayoutMode` to `pan`, which generates `android:windowSoftInputMode="adjustPan"`, and `ChecklistEditor` stays a plain `ScrollView` with `keyboardShouldPersistTaps="handled"`. When a low item field receives focus, Android pans the window so the focused `TextInput` is visible above Gboard's suggestion bar.
+
+Accepted limitation: row controls below the focused field (`Move up / Move down / Delete`) may be covered by the keyboard while typing. Dismiss the keyboard before using those controls. This is preferable here to the previous JS `measureInWindow` workaround with a device-tuned margin.
+
+The walkthrough was driven via `adb` against a debug build with Metro running:
+
+| #         | Screenshot                                | Demonstrates                                                                                                                  | Requirement(s)         |
+| --------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| kbd-00    | `kbd-00-before-fix-overlap.png`           | **Before fix:** focused `item-text-7` ("Item 8") at device y=2133–2222, fully behind the keyboard. User cannot see the field they're typing into. | bug repro              |
+| kbd-adjustpan | `kbd-adjustpan-accepted-last-item-visible.png` | **After accepted fix:** same scenario (8 items, focus the last). Focused field with typed text "ADJUSTPAN OK" at y=1359–1448, visible above the suggestion bar. The row buttons below it are behind the keyboard by design. | bug fix                |
+
+### Disabled-button caveat
+
+`keyboardShouldPersistTaps="handled"` only forwards taps that a child component handles. Buttons covered by the keyboard are not expected to be tappable until the keyboard is dismissed.
+
+### Implementation history
+
+This walkthrough is the verification of `src/features/checklists/ChecklistEditor.tsx` after the keyboard-avoidance fix. Several approaches were tried:
+
+1. **`<KeyboardAvoidingView behavior="height">`** wrapping the `<ScrollView>`. Result: focused field positioned at the top of the IME's *keys* area, but the IME's autocomplete suggestion bar above the keys still overlapped the field. Field text was not actually visible.
+2. **`Keyboard.addListener` + dynamic `paddingBottom`** with no `KeyboardAvoidingView`. Result: ScrollView had room to scroll past the keyboard, but RN's auto-scroll-to-focus did not fire under edge-to-edge mode, so the focused field stayed at its original position behind the keyboard.
+3. **`useAnimatedKeyboard()` from `react-native-reanimated`** as a cleaner IME-insets probe. On the Pixel 7, `Keyboard.addListener` reported `339.0476`, while `useAnimatedKeyboard().height.value` settled at `363` after the IME fully opened. That 24 px delta is not enough to replace the explicit row/action-button clearance, so this was rejected and the temporary diagnostic logs/import were removed.
+4. **`edgeToEdgeEnabled=false` with a plain ScrollView.** Result: the app rebuilt and installed successfully, but focusing `item-text-7` still left the focused row behind the keyboard. The screenshot showed only item 6 above the IME suggestion bar; typed text in item 7 was not visible.
+5. **`edgeToEdgeEnabled=false` plus `KeyboardAvoidingView`.** Result: the focused row moved up to the top edge of the IME key area, but the suggestion bar still covered the focused input. This fails the same way the original `KeyboardAvoidingView` attempt failed, just with slightly different coordinates.
+6. **`android:windowSoftInputMode="adjustPan"` with a plain ScrollView.** Result: accepted after clarifying scope. Android panned the focused `item-text-7` to y=1359–1448, so typed text was visible above Gboard's suggestion bar. The row buttons remained behind the keyboard, which is acceptable because the editing flow can require dismissing the keyboard before using row actions.
+7. **`adjustPan` plus static bottom padding.** Result: unnecessary. Extra `paddingBottom` changed the pre-focus scroll position but did not improve the accepted focused-input behavior.
+8. **`react-native-keyboard-controller` `KeyboardAwareScrollView`.** Result: rejected for this stack. Expo installed `react-native-keyboard-controller@1.20.7`; the app rebuilt, but the library produced dev warnings under Expo SDK 55 / RN 0.83 / Fabric, including ignored edge-to-edge provider props and native listener fallback logs. The editor scroll/focus behavior was unreliable enough that the existing walkthrough automation could not complete, and manual probing showed focus/scroll behavior that was not a trustworthy replacement for the verified implementation. The spike dependency and `KeyboardProvider` wrapper were removed.
+
+The accepted shipping fix is `adjustPan` plus the plain editor `ScrollView`, not the manual `Keyboard` listener / `measureInWindow` workaround.
+
 ## Notes from this verification pass
 
 - **`no-speech` is normal, not fatal.** The Pixel's offline recognizer fires

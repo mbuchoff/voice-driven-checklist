@@ -41,8 +41,9 @@ const Module = jest.requireMock('expo-speech-recognition').ExpoSpeechRecognition
   addListener: jest.Mock;
 };
 
-function setPlatform(os: 'android' | 'ios') {
+function setPlatform(os: 'android' | 'ios', version: number = 35) {
   Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
+  Object.defineProperty(Platform, 'Version', { configurable: true, get: () => version });
 }
 
 beforeEach(() => {
@@ -124,6 +125,18 @@ describe('ExpoRecognitionAdapter.startListening', () => {
 
   it('uses non-continuous iOS sessions so final results arrive before restart', async () => {
     setPlatform('ios');
+    const adapter = new ExpoRecognitionAdapter();
+
+    await adapter.startListening({ locale: 'en-US', onResult: jest.fn(), onError: jest.fn() });
+
+    expect(Module.start).toHaveBeenCalledWith(expect.objectContaining({
+      continuous: false,
+      interimResults: false,
+    }));
+  });
+
+  it('uses non-continuous sessions on Android versions without segmented recognition', async () => {
+    setPlatform('android', 32);
     const adapter = new ExpoRecognitionAdapter();
 
     await adapter.startListening({ locale: 'en-US', onResult: jest.fn(), onError: jest.fn() });

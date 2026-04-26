@@ -49,7 +49,7 @@ export class ExpoRecognitionAdapter implements SpeechRecognitionAdapter {
 
     ExpoSpeechRecognitionModule.start({
       lang: options.locale,
-      continuous: Platform.OS !== 'ios',
+      continuous: supportsSegmentedContinuousRecognition(),
       interimResults: false,
       maxAlternatives: 1,
       contextualStrings: ['next', 'repeat', 'previous'],
@@ -82,4 +82,8 @@ export class ExpoRecognitionAdapter implements SpeechRecognitionAdapter {
     for (const sub of this.subscriptions) sub.remove();
     this.subscriptions = [];
   }
+}
+
+function supportsSegmentedContinuousRecognition(): boolean {
+  return Platform.OS === 'android' && Number(Platform.Version) >= 33;
 }

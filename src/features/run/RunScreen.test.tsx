@@ -145,6 +145,23 @@ describe('RunScreen', () => {
       expect(playback.spoken).toEqual(['Item one', 'Item two']);
     });
 
+    it('ignores extra finalized commands from the same listening cycle', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+
+      act(() => {
+        recognition.emitResult({ transcript: 'next', isFinal: true });
+        recognition.emitResult({ transcript: 'next', isFinal: true });
+      });
+      await flush();
+
+      expect(screen.getByText('Item two')).toBeOnTheScreen();
+      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.queryByText('Item three')).toBeNull();
+    });
+
     it('does not reopen the mic when a command result is immediately followed by recognition end', async () => {
       const { playback, recognition } = setup();
       await flush();

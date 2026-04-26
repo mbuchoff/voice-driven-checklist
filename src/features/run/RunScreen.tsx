@@ -112,11 +112,13 @@ export function RunScreen({
         .startListening({
           locale: LOCALE,
           onResult: (result) => {
-            if (cancelled || !result.isFinal) return;
+            if (cancelled || handledCommand || !result.isFinal) return;
             dispatch({ type: 'RECOGNIZED_PHRASE', phrase: result.transcript });
             const cmd = parseCommand(result.transcript);
             if (!cmd) return;
             handledCommand = true;
+            cancelled = true;
+            void recognition.stopListening();
             if (cmd === 'next') dispatch({ type: 'NEXT' });
             else if (cmd === 'repeat') dispatch({ type: 'REPEAT' });
             else dispatch({ type: 'PREVIOUS' });

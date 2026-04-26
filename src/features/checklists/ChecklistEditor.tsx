@@ -89,6 +89,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
     <ScrollView
       style={{ backgroundColor: theme.background }}
       contentContainerStyle={{ padding: 16, gap: 16 }}
+      keyboardShouldPersistTaps="handled"
     >
       <View>
         <Text style={{ color: theme.text, fontWeight: '600', marginBottom: 4 }}>Title</Text>
