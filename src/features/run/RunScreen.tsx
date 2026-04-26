@@ -93,7 +93,6 @@ export function RunScreen({
   useEffect(() => {
     if (state.status !== 'listening' || !voiceServiceReady) return;
     let cancelled = false;
-    let handledCommand = false;
     let restartTimer: ReturnType<typeof setTimeout> | null = null;
 
     // Give Android's RecognitionService a cleanup window between stop() and
@@ -112,11 +111,10 @@ export function RunScreen({
         .startListening({
           locale: LOCALE,
           onResult: (result) => {
-            if (cancelled || handledCommand || !result.isFinal) return;
+            if (cancelled || !result.isFinal) return;
             dispatch({ type: 'RECOGNIZED_PHRASE', phrase: result.transcript });
             const cmd = parseCommand(result.transcript);
             if (!cmd) return;
-            handledCommand = true;
             cancelled = true;
             void recognition.stopListening();
             if (cmd === 'next') dispatch({ type: 'NEXT' });
@@ -126,7 +124,6 @@ export function RunScreen({
           onError: (error) => {
             if (cancelled) return;
             if (error === 'aborted') {
-              if (handledCommand) return;
               recognition.stopListening().then(() => {
                 if (!cancelled) scheduleRestart(RECOGNITION_END_RESTART_DELAY_MS);
               });
