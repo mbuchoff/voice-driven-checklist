@@ -36,18 +36,20 @@ describe('CompletionSoundPlayer', () => {
     expect(mockPlay).toHaveBeenCalledTimes(1);
   });
 
-  it('play is a no-op when prepare was never called or failed', async () => {
-    const sound = new CompletionSoundPlayer();
-    await expect(sound.play()).resolves.toBeUndefined();
-    expect(mockPlay).not.toHaveBeenCalled();
-  });
-
-  it('prepare swallows construction errors so completion UI still renders', () => {
+  it('prepare swallows construction errors and play stays a no-op', async () => {
     createAudioPlayer.mockImplementation(() => {
       throw new Error('audio pipeline broken');
     });
     const sound = new CompletionSoundPlayer();
     expect(() => sound.prepare()).not.toThrow();
+    await expect(sound.play()).resolves.toBeUndefined();
+    expect(mockPlay).not.toHaveBeenCalled();
+  });
+
+  it('play is a no-op when prepare was never called', async () => {
+    const sound = new CompletionSoundPlayer();
+    await expect(sound.play()).resolves.toBeUndefined();
+    expect(mockPlay).not.toHaveBeenCalled();
   });
 
   it('play swallows runtime errors so completion UI still renders', async () => {
