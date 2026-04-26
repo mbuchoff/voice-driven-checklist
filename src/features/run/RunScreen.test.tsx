@@ -398,6 +398,20 @@ describe('RunScreen', () => {
       expect(recognition.isListening()).toBe(true);
     });
 
+    it('restarts immediately when the continuous recognizer ends naturally', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+      const startsBefore = recognition.startCount;
+
+      act(() => recognition.emitError('aborted'));
+      await flush();
+
+      expect(recognition.startCount).toBeGreaterThan(startsBefore);
+      expect(recognition.isListening()).toBe(true);
+    });
+
     it('restarts the listening cycle when Android reports no finalized speech match', async () => {
       const { playback, recognition } = setup();
       await flush();
@@ -465,8 +479,31 @@ describe('RunScreen', () => {
   });
 
   describe('foreground listening notification', () => {
+    it('waits for the Android listening notification before opening the mic', async () => {
+      let resolveNotification!: () => void;
+      const notificationStarted = new Promise<void>((resolve) => {
+        resolveNotification = resolve;
+      });
+      const { recognition } = setup({
+        initialAvailability: { spokenPlaybackAvailable: false, voiceControlAvailable: true },
+        onVoiceRunStart: jest.fn(() => notificationStarted),
+      });
+      await flush();
+
+      expect(recognition.startCount).toBe(0);
+
+      await act(async () => {
+        resolveNotification();
+        await notificationStarted;
+      });
+      await flush();
+
+      expect(recognition.startCount).toBe(1);
+      expect(recognition.isListening()).toBe(true);
+    });
+
     it('marks voice unavailable when the Android listening notification cannot start', async () => {
-      const { playback } = setup({
+      const { playback, recognition } = setup({
         onVoiceRunStart: jest.fn(async () => {
           throw new Error('notification permission denied');
         }),
@@ -476,6 +513,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText(/voice control unavailable/i)).toBeOnTheScreen();
+      expect(recognition.startCount).toBe(0);
     });
   });
 });

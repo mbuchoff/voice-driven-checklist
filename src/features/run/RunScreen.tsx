@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type {
@@ -53,6 +53,8 @@ export function RunScreen({
   const [state, dispatch] = useReducer(runReducer, undefined, () =>
     initialRunState(snapshot, initialAvailability),
   );
+  const needsVoiceService = Boolean(onVoiceRunStart);
+  const [voiceServiceReady, setVoiceServiceReady] = useState(!needsVoiceService);
 
   const controlStyle = {
     paddingVertical: 10,
@@ -90,10 +92,12 @@ export function RunScreen({
 
   // Run one continuous recognition session while in `listening`.
   useEffect(() => {
-    if (state.status !== 'listening') return;
+    if (state.status !== 'listening' || !voiceServiceReady) return;
     let cancelled = false;
     let restartTimer: ReturnType<typeof setTimeout> | null = null;
 
+    // Give Android's speech service a short cleanup window after errors that
+    // can fire in bursts, such as no-speech followed by end.
     const scheduleRestart = () => {
       if (restartTimer) clearTimeout(restartTimer);
       restartTimer = setTimeout(() => {
@@ -117,6 +121,10 @@ export function RunScreen({
           },
           onError: (error) => {
             if (cancelled) return;
+            if (error === 'aborted') {
+              startCycle();
+              return;
+            }
             if (TRANSIENT_RECOGNITION_ERRORS.has(error)) {
               recognition.stopListening().then(() => {
                 if (!cancelled) scheduleRestart();
@@ -137,23 +145,32 @@ export function RunScreen({
       if (restartTimer) clearTimeout(restartTimer);
       recognition.stopListening();
     };
-  }, [state.status, recognition]);
+  }, [state.status, recognition, voiceServiceReady]);
 
   const voiceRunActive =
     state.voiceControlAvailable &&
     (state.status === 'speaking' || state.status === 'listening');
 
   useEffect(() => {
-    if (!voiceRunActive) return;
+    if (!voiceRunActive) {
+      setVoiceServiceReady(!needsVoiceService);
+      return;
+    }
     let cancelled = false;
-    Promise.resolve(onVoiceRunStart?.()).catch(() => {
-      if (!cancelled) dispatch({ type: 'VOICE_UNAVAILABLE' });
-    });
+    setVoiceServiceReady(!needsVoiceService);
+    Promise.resolve(onVoiceRunStart?.()).then(
+      () => {
+        if (!cancelled) setVoiceServiceReady(true);
+      },
+      () => {
+        if (!cancelled) dispatch({ type: 'VOICE_UNAVAILABLE' });
+      },
+    );
     return () => {
       cancelled = true;
       onVoiceRunStop?.();
     };
-  }, [voiceRunActive, onVoiceRunStart, onVoiceRunStop]);
+  }, [voiceRunActive, needsVoiceService, onVoiceRunStart, onVoiceRunStop]);
 
   // Stop recognition once the run completes and notify the host.
   useEffect(() => {

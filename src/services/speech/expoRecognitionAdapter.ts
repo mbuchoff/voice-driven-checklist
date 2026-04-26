@@ -65,10 +65,11 @@ export class ExpoRecognitionAdapter implements SpeechRecognitionAdapter {
   }
 
   async stopListening(): Promise<void> {
+    this.clearSubscriptions();
     try {
       ExpoSpeechRecognitionModule.stop();
-    } finally {
-      this.clearSubscriptions();
+    } catch {
+      // The stop request is best-effort because listeners are already removed.
     }
   }
 

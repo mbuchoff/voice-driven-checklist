@@ -149,7 +149,8 @@ describe('ExpoRecognitionAdapter.startListening', () => {
   it('removes its listeners and stops the module on stopListening', async () => {
     const adapter = new ExpoRecognitionAdapter();
     const onResult = jest.fn();
-    await adapter.startListening({ locale: 'en-US', onResult, onError: jest.fn() });
+    const onError = jest.fn();
+    await adapter.startListening({ locale: 'en-US', onResult, onError });
 
     await adapter.stopListening();
 
@@ -158,6 +159,8 @@ describe('ExpoRecognitionAdapter.startListening', () => {
       isFinal: true,
       results: [{ transcript: 'next', confidence: 0.9, segments: [] }],
     });
+    emit('end', null);
     expect(onResult).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
   });
 });
