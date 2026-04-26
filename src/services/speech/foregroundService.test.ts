@@ -31,6 +31,10 @@ jest.mock('@notifee/react-native', () => ({
   AndroidForegroundServiceType: {
     FOREGROUND_SERVICE_TYPE_MICROPHONE: 128,
   },
+  AuthorizationStatus: {
+    DENIED: 0,
+    AUTHORIZED: 1,
+  },
   AndroidImportance: {
     HIGH: 4,
   },
@@ -90,9 +94,18 @@ describe('foreground speech service', () => {
         channelId: 'voice-checklist-listening',
         foregroundServiceTypes: [128],
         ongoing: true,
-        pressAction: { id: 'open' },
       }),
     });
+  });
+
+  it('rejects when Android notification permission is denied', async () => {
+    mockNotifee.requestPermission.mockResolvedValueOnce({ authorizationStatus: 0 });
+    const { startListeningNotification } = await loadService();
+
+    await expect(startListeningNotification('Morning checklist')).rejects.toThrow(
+      /notification permission denied/i,
+    );
+    expect(mockNotifee.displayNotification).not.toHaveBeenCalled();
   });
 
   it('keeps the registered task alive until the notification stops', async () => {

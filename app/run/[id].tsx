@@ -124,10 +124,11 @@ export default function RunRoute() {
 
   useEffect(() => setListeningNotificationStopHandler(exitRun), [exitRun]);
 
-  const startVoiceRunNotification = useCallback(() => {
-    if (loadState.kind !== 'ready') return;
-    void startListeningNotification(loadState.snapshot.checklistTitle).catch(() => undefined);
-  }, [loadState]);
+  const checklistTitle = loadState.kind === 'ready' ? loadState.snapshot.checklistTitle : '';
+  const startVoiceRunNotification = useCallback(
+    () => startListeningNotification(checklistTitle),
+    [checklistTitle],
+  );
 
   if (loadState.kind === 'loading') {
     return (
@@ -160,10 +161,7 @@ export default function RunRoute() {
       recognition={adapters.recognition}
       initialAvailability={loadState.initialAvailability}
       onExit={exitRun}
-      onCompletion={() => {
-        stopListeningNotificationSafely();
-        completionSound.play();
-      }}
+      onCompletion={() => completionSound.play()}
       onVoiceRunStart={startVoiceRunNotification}
       onVoiceRunStop={stopListeningNotificationSafely}
     />

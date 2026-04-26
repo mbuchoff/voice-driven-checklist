@@ -28,20 +28,15 @@ export class ExpoRecognitionAdapter implements SpeechRecognitionAdapter {
 
   async startListening(options: RecognitionListenOptions): Promise<void> {
     this.clearSubscriptions();
-    let lastPartialTranscript = '';
 
     this.subscriptions.push(
       ExpoSpeechRecognitionModule.addListener('result', (event) => {
         const first = event.results[0];
         if (!first) return;
-        if (event.isFinal) lastPartialTranscript = '';
-        else lastPartialTranscript = first.transcript.trim();
         options.onResult({ transcript: first.transcript, isFinal: event.isFinal });
       }),
       ExpoSpeechRecognitionModule.addListener('nomatch', () => {
-        if (!lastPartialTranscript) return;
-        options.onResult({ transcript: lastPartialTranscript, isFinal: true });
-        lastPartialTranscript = '';
+        options.onError('no-match');
       }),
       ExpoSpeechRecognitionModule.addListener('error', (event) => {
         options.onError(event.error);
@@ -53,8 +48,8 @@ export class ExpoRecognitionAdapter implements SpeechRecognitionAdapter {
 
     ExpoSpeechRecognitionModule.start({
       lang: options.locale,
-      continuous: false,
-      interimResults: true,
+      continuous: true,
+      interimResults: false,
       maxAlternatives: 1,
       contextualStrings: ['next', 'repeat', 'previous'],
       androidIntentOptions: {

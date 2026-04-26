@@ -93,8 +93,8 @@ describe('ExpoRecognitionAdapter.startListening', () => {
 
     expect(Module.start).toHaveBeenCalledWith({
       lang: 'en-US',
-      continuous: false,
-      interimResults: true,
+      continuous: true,
+      interimResults: false,
       maxAlternatives: 1,
       contextualStrings: ['next', 'repeat', 'previous'],
       androidIntentOptions: {
@@ -136,38 +136,14 @@ describe('ExpoRecognitionAdapter.startListening', () => {
     expect(onError).toHaveBeenCalledWith('aborted');
   });
 
-  it('uses the last partial transcript when Android finalizes a segment as nomatch', async () => {
+  it('treats Android nomatch events as recoverable recognition misses', async () => {
     const adapter = new ExpoRecognitionAdapter();
-    const onResult = jest.fn();
-    await adapter.startListening({ locale: 'en-US', onResult, onError: jest.fn() });
+    const onError = jest.fn();
+    await adapter.startListening({ locale: 'en-US', onResult: jest.fn(), onError });
 
-    emit('result', {
-      isFinal: false,
-      results: [{ transcript: 'next', confidence: 0, segments: [] }],
-    });
     emit('nomatch', null);
 
-    expect(onResult).toHaveBeenCalledWith({ transcript: 'next', isFinal: false });
-    expect(onResult).toHaveBeenCalledWith({ transcript: 'next', isFinal: true });
-  });
-
-  it('does not reuse an old partial after a final result arrives', async () => {
-    const adapter = new ExpoRecognitionAdapter();
-    const onResult = jest.fn();
-    await adapter.startListening({ locale: 'en-US', onResult, onError: jest.fn() });
-
-    emit('result', {
-      isFinal: false,
-      results: [{ transcript: 'next', confidence: 0, segments: [] }],
-    });
-    emit('result', {
-      isFinal: true,
-      results: [{ transcript: 'hello', confidence: 0.9, segments: [] }],
-    });
-    emit('nomatch', null);
-
-    expect(onResult).toHaveBeenCalledTimes(2);
-    expect(onResult).toHaveBeenLastCalledWith({ transcript: 'hello', isFinal: true });
+    expect(onError).toHaveBeenCalledWith('no-match');
   });
 
   it('removes its listeners and stops the module on stopListening', async () => {

@@ -51,8 +51,13 @@ function withNotifeeCoreMavenRepo(config) {
       return gradleConfig;
     }
 
+    const repositoriesBlock = /(allprojects\s*\{\s*repositories\s*\{)/;
+    if (!repositoriesBlock.test(gradleConfig.modResults.contents)) {
+      throw new Error('Could not add the Notifee local Maven repository to android/build.gradle.');
+    }
+
     gradleConfig.modResults.contents = gradleConfig.modResults.contents.replace(
-      /(allprojects\s*\{\s*repositories\s*\{)/,
+      repositoriesBlock,
       `$1\n    ${NOTIFEE_MAVEN_REPO}`,
     );
     return gradleConfig;

@@ -1,4 +1,5 @@
 import notifee, {
+  AuthorizationStatus,
   AndroidForegroundServiceType,
   AndroidImportance,
   EventType,
@@ -26,7 +27,6 @@ export function registerListeningService(): void {
   notifee.registerForegroundService(
     () =>
       new Promise<void>((resolve) => {
-        stopResolver?.();
         stopResolver = resolve;
       }),
   );
@@ -47,8 +47,11 @@ export function setListeningNotificationStopHandler(handler: StopHandler | null)
 export async function startListeningNotification(checklistTitle: string): Promise<void> {
   if (Platform.OS !== 'android') return;
 
-  registerListeningService();
-  await notifee.requestPermission();
+  const settings = await notifee.requestPermission();
+  if (settings.authorizationStatus === AuthorizationStatus.DENIED) {
+    throw new Error('Notification permission denied.');
+  }
+
   await notifee.createChannel({
     id: LISTENING_CHANNEL_ID,
     name: 'Voice checklist listening',
@@ -67,7 +70,6 @@ export async function startListeningNotification(checklistTitle: string): Promis
       ],
       ongoing: true,
       autoCancel: false,
-      pressAction: { id: 'open' },
       actions: [{ title: 'Stop', pressAction: { id: STOP_ACTION_ID } }],
     },
   });

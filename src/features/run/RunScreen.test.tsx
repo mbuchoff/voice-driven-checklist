@@ -1,5 +1,4 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { AppState } from 'react-native';
 
 import {
   FakeSpeechPlaybackAdapter,
@@ -20,7 +19,10 @@ const snapshot: ChecklistRunSnapshot = {
 };
 
 type RenderOptions = Partial<
-  Pick<RunScreenProps, 'onExit' | 'onCompletion' | 'initialAvailability'>
+  Pick<
+    RunScreenProps,
+    'onExit' | 'onCompletion' | 'onVoiceRunStart' | 'onVoiceRunStop' | 'initialAvailability'
+  >
 >;
 
 function setup(options: RenderOptions = {}) {
@@ -41,6 +43,8 @@ function setup(options: RenderOptions = {}) {
       initialAvailability={initialAvailability}
       onExit={onExit}
       onCompletion={onCompletion}
+      onVoiceRunStart={options.onVoiceRunStart}
+      onVoiceRunStop={options.onVoiceRunStop}
     />,
   );
 
@@ -394,14 +398,14 @@ describe('RunScreen', () => {
       expect(recognition.isListening()).toBe(true);
     });
 
-    it('restarts the listening cycle when Android briefly reports audio capture as the recognizer turns over', async () => {
+    it('restarts the listening cycle when Android reports no finalized speech match', async () => {
       const { playback, recognition } = setup();
       await flush();
       playback.completePlayback();
       await flush();
       const startsBefore = recognition.startCount;
 
-      act(() => recognition.emitError('audio-capture'));
+      act(() => recognition.emitError('no-match'));
       await flush();
 
       expect(screen.queryByText(/voice control unavailable/i)).toBeNull();
@@ -410,57 +414,6 @@ describe('RunScreen', () => {
       await act(async () => {
         await new Promise<void>((resolve) => setTimeout(resolve, 550));
       });
-
-      expect(recognition.startCount).toBeGreaterThan(startsBefore);
-      expect(recognition.isListening()).toBe(true);
-    });
-  });
-
-  describe('app lifecycle', () => {
-    let appStateListeners: ((state: string) => void)[];
-    let appStateSpy: jest.SpiedFunction<typeof AppState.addEventListener>;
-
-    beforeEach(() => {
-      appStateListeners = [];
-      appStateSpy = jest
-        .spyOn(AppState, 'addEventListener')
-        .mockImplementation((_event, listener) => {
-          appStateListeners.push(listener as (state: string) => void);
-          return { remove: jest.fn() };
-        });
-    });
-
-    afterEach(() => {
-      appStateSpy.mockRestore();
-    });
-
-    it('does not stop recognition when the app is backgrounded', async () => {
-      const { playback, recognition } = setup();
-      await flush();
-      playback.completePlayback();
-      await flush();
-      const stopsBefore = recognition.stopCount;
-
-      act(() => {
-        appStateListeners.forEach((listener) => listener('background'));
-      });
-      await flush();
-
-      expect(recognition.stopCount).toBe(stopsBefore);
-      expect(recognition.isListening()).toBe(true);
-    });
-
-    it('re-arms recognition when the app becomes active during listening', async () => {
-      const { playback, recognition } = setup();
-      await flush();
-      playback.completePlayback();
-      await flush();
-      const startsBefore = recognition.startCount;
-
-      act(() => {
-        appStateListeners.forEach((listener) => listener('active'));
-      });
-      await flush();
 
       expect(recognition.startCount).toBeGreaterThan(startsBefore);
       expect(recognition.isListening()).toBe(true);
@@ -508,6 +461,21 @@ describe('RunScreen', () => {
       await flush();
       expect(playback.spoken).toEqual(['Item one']);
       expect(screen.getByText('Item one')).toBeOnTheScreen();
+    });
+  });
+
+  describe('foreground listening notification', () => {
+    it('marks voice unavailable when the Android listening notification cannot start', async () => {
+      const { playback } = setup({
+        onVoiceRunStart: jest.fn(async () => {
+          throw new Error('notification permission denied');
+        }),
+      });
+      await flush();
+      playback.completePlayback();
+      await flush();
+
+      expect(screen.getByText(/voice control unavailable/i)).toBeOnTheScreen();
     });
   });
 });

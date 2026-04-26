@@ -1,5 +1,5 @@
 import { useEffect, useReducer } from 'react';
-import { AppState, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type {
   SpeechPlaybackAdapter,
@@ -19,10 +19,10 @@ const LOCALE = 'en-US';
 // the rest of the run.
 const TRANSIENT_RECOGNITION_ERRORS = new Set([
   'no-speech',
+  'no-match',
   'speech-timeout',
   'aborted',
   'network',
-  'audio-capture',
   'busy',
 ]);
 
@@ -35,7 +35,7 @@ export type RunScreenProps = {
   initialAvailability: { spokenPlaybackAvailable: boolean; voiceControlAvailable: boolean };
   onExit: () => void;
   onCompletion?: () => void;
-  onVoiceRunStart?: () => void;
+  onVoiceRunStart?: () => void | Promise<void>;
   onVoiceRunStop?: () => void;
 };
 
@@ -53,7 +53,6 @@ export function RunScreen({
   const [state, dispatch] = useReducer(runReducer, undefined, () =>
     initialRunState(snapshot, initialAvailability),
   );
-  const [listeningEpoch, rearmListening] = useReducer((value: number) => value + 1, 0);
 
   const controlStyle = {
     paddingVertical: 10,
@@ -138,16 +137,7 @@ export function RunScreen({
       if (restartTimer) clearTimeout(restartTimer);
       recognition.stopListening();
     };
-  }, [state.status, recognition, listeningEpoch]);
-
-  // Returning to the foreground can leave native recognizers disconnected
-  // without delivering a usable error event, so re-arm the active session.
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active' && state.status === 'listening') rearmListening();
-    });
-    return () => sub?.remove?.();
-  }, [state.status]);
+  }, [state.status, recognition]);
 
   const voiceRunActive =
     state.voiceControlAvailable &&
@@ -155,8 +145,14 @@ export function RunScreen({
 
   useEffect(() => {
     if (!voiceRunActive) return;
-    onVoiceRunStart?.();
-    return () => onVoiceRunStop?.();
+    let cancelled = false;
+    Promise.resolve(onVoiceRunStart?.()).catch(() => {
+      if (!cancelled) dispatch({ type: 'VOICE_UNAVAILABLE' });
+    });
+    return () => {
+      cancelled = true;
+      onVoiceRunStop?.();
+    };
   }, [voiceRunActive, onVoiceRunStart, onVoiceRunStop]);
 
   // Stop recognition once the run completes and notify the host.
