@@ -369,7 +369,7 @@ describe('RunScreen', () => {
       expect(playback.spoken).toEqual(['Item one', 'Item two', 'Item three']);
     });
 
-    it('stops the Android listening notification when the checklist completes', async () => {
+    it('keeps the listening notification up after completion so the chime can play', async () => {
       const onVoiceRunStop = jest.fn();
       setup({ onVoiceRunStart: jest.fn(), onVoiceRunStop });
       await flush();
@@ -381,37 +381,10 @@ describe('RunScreen', () => {
       fireEvent.press(screen.getByTestId('manual-next'));
       await flush();
 
-      expect(onVoiceRunStop).toHaveBeenCalledTimes(1);
-    });
-
-    it('defers stopping the listening notification until the chime resolves', async () => {
-      let resolveCompletion: (() => void) | null = null;
-      const onCompletion = jest.fn(
-        () =>
-          new Promise<void>((resolve) => {
-            resolveCompletion = resolve;
-          }),
-      );
-      const onVoiceRunStop = jest.fn();
-      setup({ onCompletion, onVoiceRunStart: jest.fn(), onVoiceRunStop });
-      await flush();
-
-      fireEvent.press(screen.getByTestId('manual-next'));
-      await flush();
-      fireEvent.press(screen.getByTestId('manual-next'));
-      await flush();
-      fireEvent.press(screen.getByTestId('manual-next'));
-      await flush();
-
-      expect(onCompletion).toHaveBeenCalledTimes(1);
+      // Stopping the foreground service synchronously with completion drops
+      // the chime when the screen is locked. The host route stops the service
+      // on its own when the user navigates away.
       expect(onVoiceRunStop).not.toHaveBeenCalled();
-
-      await act(async () => {
-        resolveCompletion?.();
-      });
-      await flush();
-
-      expect(onVoiceRunStop).toHaveBeenCalledTimes(1);
     });
 
     it('Restart resets to the first item without reloading', async () => {

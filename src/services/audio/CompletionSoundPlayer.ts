@@ -23,12 +23,9 @@ export class CompletionSoundPlayer {
   }
 
   async play(): Promise<void> {
+    if (!this.player) return;
     try {
-      if (!this.player) {
-        this.player = createAudioPlayer(SOURCE);
-      } else {
-        await this.player.seekTo(0);
-      }
+      await this.player.seekTo(0);
       this.player.play();
     } catch {
       // Completion UI must still appear even if sound playback fails.
