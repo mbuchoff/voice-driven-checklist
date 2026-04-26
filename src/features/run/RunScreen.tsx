@@ -95,10 +95,9 @@ export function RunScreen({
     let cancelled = false;
     let restartTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // Give Android's speech service a short cleanup window after errors that
-    // can fire in bursts, such as no-speech followed by end.
+    // Give Android's RecognitionService a cleanup window between stop() and
+    // the next start() after a transient error.
     const scheduleRestart = () => {
-      if (restartTimer) clearTimeout(restartTimer);
       restartTimer = setTimeout(() => {
         restartTimer = null;
         startCycle();
@@ -129,6 +128,8 @@ export function RunScreen({
                 if (!cancelled) scheduleRestart();
               });
             } else {
+              cancelled = true;
+              recognition.stopListening();
               dispatch({ type: 'VOICE_UNAVAILABLE' });
             }
           },

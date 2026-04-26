@@ -1,5 +1,6 @@
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import type { EventSubscription } from 'expo-modules-core';
+import { Platform } from 'react-native';
 
 import type {
   RecognitionListenOptions,
@@ -48,7 +49,7 @@ export class ExpoRecognitionAdapter implements SpeechRecognitionAdapter {
 
     ExpoSpeechRecognitionModule.start({
       lang: options.locale,
-      continuous: true,
+      continuous: Platform.OS !== 'ios',
       interimResults: false,
       maxAlternatives: 1,
       contextualStrings: ['next', 'repeat', 'previous'],

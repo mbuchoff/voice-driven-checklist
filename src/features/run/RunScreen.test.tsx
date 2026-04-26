@@ -380,16 +380,21 @@ describe('RunScreen', () => {
       expect(recognition.isListening()).toBe(true);
     });
 
-    it('marks voice unavailable when recognition errors with a fatal code', async () => {
+    it('marks voice unavailable without restarting after a fatal recognition error', async () => {
       const { playback, recognition } = setup();
       await flush();
       playback.completePlayback();
       await flush();
+      const startsBefore = recognition.startCount;
 
-      act(() => recognition.emitError('not-allowed'));
+      act(() => {
+        recognition.emitError('not-allowed');
+        recognition.emitError('aborted');
+      });
       await flush();
 
       expect(screen.getByText(/voice control unavailable/i)).toBeOnTheScreen();
+      expect(recognition.startCount).toBe(startsBefore);
     });
 
     it('restarts the listening cycle when recognition emits "no-speech"', async () => {
