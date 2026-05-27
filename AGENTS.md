@@ -43,6 +43,32 @@ adb exec-out screencap -p > /tmp/shot.png
 
 Direct `adb connect 192.168.1.x:...` from the container fails even when the device's port is reachable — the device's ADB pairing is bound to the host's keys, not ours. Relaying through the host adb server sidesteps that.
 
+### Fallback: pair wireless debugging directly to the devcontainer
+
+If the host Mac adb server is not listening on `host.docker.internal:5037`, or if
+the user explicitly wants the phone paired to the devcontainer, pair directly
+from the container:
+
+```bash
+unset ADB_SERVER_SOCKET
+adb pair 192.168.1.x:<pairing-port> <six-digit-code>
+adb connect 192.168.1.x:<connection-port>
+adb devices -l
+```
+
+On the phone, both values are under **Developer options → Wireless debugging**:
+
+1. Tap **Pair device with pairing code** and use that dialog's IP, pairing port,
+   and six-digit code for `adb pair`.
+2. Close the pairing dialog. Use the main **IP address & Port** value for
+   `adb connect`.
+
+The pairing port is temporary and usually differs from the connection port. If
+`adb connect` reports `offline` or `connection refused`, toggle Wireless
+debugging off/on and repeat the pair/connect sequence with the fresh ports.
+After direct devcontainer pairing, keep `ADB_SERVER_SOCKET` unset for all adb
+commands in that session.
+
 ## Building the Android app
 
 **Prefer running `npx expo run:android` from the host Mac.** Reasons:
@@ -58,6 +84,29 @@ Direct `adb connect 192.168.1.x:...` from the container fails even when the devi
    Fix: `rm -rf android/build android/app/build android/app/.cxx android/.gradle` before building.
 
 If you must build in the container, at least use `./gradlew --no-daemon --no-parallel assembleRelease` to reduce memory pressure, and expect it to be slow.
+
+For debug installs to a Pixel-class physical device from the container, target
+only the device ABI to avoid compiling unused `armeabi-v7a`, `x86`, and `x86_64`
+native outputs:
+
+```bash
+npx expo prebuild --platform android --no-install
+cd android
+./gradlew --no-daemon --no-parallel -PreactNativeArchitectures=arm64-v8a installDebug
+```
+
+If a Play/internal-testing build with a higher `versionCode` is already
+installed, `installDebug` may fail with `INSTALL_FAILED_VERSION_DOWNGRADE`.
+Uninstall the app from the phone first, or bump the debug build's version code.
+
+For a Metro-backed debug app installed this way:
+
+```bash
+unset ADB_SERVER_SOCKET              # only if paired directly to the container
+adb reverse tcp:8081 tcp:8081
+npx expo start --port 8081 --host lan
+adb shell am start -n com.mbuchoff.voicechecklist/.MainActivity
+```
 
 ## Expo web dev server
 

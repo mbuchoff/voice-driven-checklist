@@ -87,8 +87,7 @@ The walkthrough was driven via `adb` against a debug build with Metro running:
 
 | #         | Screenshot                                | Demonstrates                                                                                                                  | Requirement(s)         |
 | --------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| kbd-00    | `kbd-00-before-fix-overlap.png`           | **Before fix:** focused `item-text-7` ("Item 8") at device y=2133–2222, fully behind the keyboard. User cannot see the field they're typing into. | bug repro              |
-| kbd-adjustpan | `kbd-adjustpan-accepted-last-item-visible.png` | **After accepted fix:** same scenario (8 items, focus the last). Focused field with typed text "ADJUSTPAN OK" at y=1359–1448, visible above the suggestion bar. The row buttons below it are behind the keyboard by design. | bug fix                |
+| kbd-adjustpan-live | `kbd-adjustpan-live-20260527.png` | **After accepted fix:** same scenario (8 items, focus the last). Before focus, `item-text-7` was at y=2133–2222 behind the keyboard area; after focus, Android panned it to y=1359–1448 with typed text visible above Gboard. The row buttons below it are behind the keyboard by design. | bug fix                |
 
 ### Disabled-button caveat
 
