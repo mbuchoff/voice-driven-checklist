@@ -64,6 +64,9 @@ class VoiceChecklistAudioRouteModule(
       Log.i(TAG, "start resolved routedToBluetooth=true")
       promise.resolve(true)
     } catch (error: Throwable) {
+      // Routing threw after the audio mode may have changed; restore so a
+      // failure cannot strand the device in communication mode.
+      restorePreviousAudioState()
       Log.e(TAG, "start failed", error)
       promise.reject(
         "ERR_VOICE_CHECKLIST_AUDIO_ROUTE",

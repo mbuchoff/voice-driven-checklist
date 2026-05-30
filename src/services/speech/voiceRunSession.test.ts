@@ -2,8 +2,8 @@ const mockStartListeningNotification = jest.fn<Promise<void>, [string]>(
   async () => undefined,
 );
 const mockStopListeningNotification = jest.fn<Promise<void>, []>(async () => undefined);
-const mockStartAndroidBluetoothAudioRoute = jest.fn<Promise<boolean>, []>(
-  async () => false,
+const mockStartAndroidBluetoothAudioRoute = jest.fn<Promise<void>, []>(
+  async () => undefined,
 );
 const mockStopAndroidBluetoothAudioRoute = jest.fn<Promise<void>, []>(
   async () => undefined,
@@ -38,7 +38,6 @@ describe('voiceRunSession', () => {
     });
     mockStartAndroidBluetoothAudioRoute.mockImplementationOnce(async () => {
       calls.push('bluetooth-route');
-      return true;
     });
 
     await startVoiceRunSession('Morning checklist');
