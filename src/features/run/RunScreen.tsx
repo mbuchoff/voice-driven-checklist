@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type {
@@ -158,6 +158,11 @@ export function RunScreen({
     state.voiceControlAvailable &&
     (state.status === 'speaking' || state.status === 'listening');
 
+  // Suppress onVoiceRunStop on the completed transition — stopping the FG
+  // service synchronously drops the chime on a locked screen.
+  const statusRef = useRef(state.status);
+  statusRef.current = state.status;
+
   useEffect(() => {
     setVoiceServiceReady(!onVoiceRunStart);
     if (!voiceRunActive) return;
@@ -167,7 +172,7 @@ export function RunScreen({
       () => {
         started = true;
         if (cancelled) {
-          onVoiceRunStop?.();
+          if (statusRef.current !== 'completed') onVoiceRunStop?.();
           return;
         }
         setVoiceServiceReady(true);
@@ -178,11 +183,12 @@ export function RunScreen({
     );
     return () => {
       cancelled = true;
-      if (started) onVoiceRunStop?.();
+      if (started && statusRef.current !== 'completed') onVoiceRunStop?.();
     };
   }, [voiceRunActive, onVoiceRunStart, onVoiceRunStop]);
 
-  // Stop recognition once the run completes and notify the host.
+  // Stop recognition on completion. The FG service is left up so the chime
+  // can open its AudioTrack; the host route stops it on unmount.
   useEffect(() => {
     if (state.status !== 'completed') return;
     recognition.stopListening();

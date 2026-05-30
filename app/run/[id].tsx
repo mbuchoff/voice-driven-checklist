@@ -37,6 +37,7 @@ export default function RunRoute() {
   const completionSound = useMemo(() => new CompletionSoundPlayer(), []);
 
   useEffect(() => {
+    completionSound.prepare();
     return () => completionSound.release();
   }, [completionSound]);
 

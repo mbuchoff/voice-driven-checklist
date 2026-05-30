@@ -19,41 +19,61 @@ beforeEach(() => {
 });
 
 describe('CompletionSoundPlayer', () => {
-  it('creates a player on first play and invokes play()', async () => {
+  it('prepare creates the player exactly once across repeat calls', () => {
     createAudioPlayer.mockReturnValue({ play: mockPlay, seekTo: mockSeekTo, release: mockRelease });
     const sound = new CompletionSoundPlayer();
-    await sound.play();
+    sound.prepare();
+    sound.prepare();
     expect(createAudioPlayer).toHaveBeenCalledTimes(1);
+  });
+
+  it('play seeks to 0 and starts the pre-warmed player', async () => {
+    createAudioPlayer.mockReturnValue({ play: mockPlay, seekTo: mockSeekTo, release: mockRelease });
+    const sound = new CompletionSoundPlayer();
+    sound.prepare();
+    await sound.play();
+    expect(mockSeekTo).toHaveBeenCalledWith(0);
     expect(mockPlay).toHaveBeenCalledTimes(1);
   });
 
-  it('reuses the player and seeks to 0 on subsequent plays', async () => {
-    createAudioPlayer.mockReturnValue({ play: mockPlay, seekTo: mockSeekTo, release: mockRelease });
-    const sound = new CompletionSoundPlayer();
-    await sound.play();
-    await sound.play();
-    expect(createAudioPlayer).toHaveBeenCalledTimes(1);
-    expect(mockSeekTo).toHaveBeenCalledWith(0);
-    expect(mockPlay).toHaveBeenCalledTimes(2);
-  });
-
-  it('swallows errors so the completion UI can still render when playback fails', async () => {
+  it('prepare swallows construction errors and play stays a no-op', async () => {
     createAudioPlayer.mockImplementation(() => {
       throw new Error('audio pipeline broken');
     });
     const sound = new CompletionSoundPlayer();
+    expect(() => sound.prepare()).not.toThrow();
+    await expect(sound.play()).resolves.toBeUndefined();
+    expect(mockPlay).not.toHaveBeenCalled();
+  });
+
+  it('play is a no-op when prepare was never called', async () => {
+    const sound = new CompletionSoundPlayer();
+    await expect(sound.play()).resolves.toBeUndefined();
+    expect(mockPlay).not.toHaveBeenCalled();
+  });
+
+  it('play swallows runtime errors so completion UI still renders', async () => {
+    createAudioPlayer.mockReturnValue({
+      play: jest.fn(() => {
+        throw new Error('audio pipeline broken');
+      }),
+      seekTo: mockSeekTo,
+      release: mockRelease,
+    });
+    const sound = new CompletionSoundPlayer();
+    sound.prepare();
     await expect(sound.play()).resolves.toBeUndefined();
   });
 
-  it('releases the underlying player', async () => {
+  it('release tears down the underlying player', () => {
     createAudioPlayer.mockReturnValue({ play: mockPlay, seekTo: mockSeekTo, release: mockRelease });
     const sound = new CompletionSoundPlayer();
-    await sound.play();
+    sound.prepare();
     sound.release();
     expect(mockRelease).toHaveBeenCalledTimes(1);
   });
 
-  it('release is safe to call when nothing was ever played', () => {
+  it('release is safe to call when prepare was never called', () => {
     const sound = new CompletionSoundPlayer();
     expect(() => sound.release()).not.toThrow();
   });
