@@ -51,9 +51,18 @@ class VoiceChecklistAudioRouteModule(
       audioManager.isSpeakerphoneOn = false
 
       val routedToBluetooth = routeToBluetooth()
+      if (!routedToBluetooth) {
+        // No Bluetooth mic to route to: don't hold the device in communication
+        // mode (that routes playback to the earpiece). Restore audio and report.
+        restorePreviousAudioState()
+        Log.i(TAG, "start resolved routedToBluetooth=false (restored audio state)")
+        promise.resolve(false)
+        return
+      }
+
       active = true
-      Log.i(TAG, "start resolved routedToBluetooth=" + routedToBluetooth)
-      promise.resolve(routedToBluetooth)
+      Log.i(TAG, "start resolved routedToBluetooth=true")
+      promise.resolve(true)
     } catch (error: Throwable) {
       Log.e(TAG, "start failed", error)
       promise.reject(

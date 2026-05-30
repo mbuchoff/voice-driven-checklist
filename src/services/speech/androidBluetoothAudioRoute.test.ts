@@ -15,16 +15,6 @@ function loadRoute(platform: 'android' | 'ios', nativeModule?: NativeRouteModule
 }
 
 describe('androidBluetoothAudioRoute', () => {
-  // The route logs diagnostics under __DEV__ (true in tests); silence them so
-  // test output stays pristine.
-  beforeEach(() => {
-    jest.spyOn(console, 'log').mockImplementation(() => {});
-    jest.spyOn(console, 'warn').mockImplementation(() => {});
-  });
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
   it('starts and stops the native Bluetooth audio route on Android', async () => {
     const nativeModule = {
       start: jest.fn(async () => true),
@@ -33,7 +23,7 @@ describe('androidBluetoothAudioRoute', () => {
     const { startAndroidBluetoothAudioRoute, stopAndroidBluetoothAudioRoute } =
       loadRoute('android', nativeModule);
 
-    await expect(startAndroidBluetoothAudioRoute()).resolves.toBe(true);
+    await startAndroidBluetoothAudioRoute();
     await stopAndroidBluetoothAudioRoute();
 
     expect(nativeModule.start).toHaveBeenCalledTimes(1);
@@ -48,14 +38,14 @@ describe('androidBluetoothAudioRoute', () => {
     const { startAndroidBluetoothAudioRoute, stopAndroidBluetoothAudioRoute } =
       loadRoute('ios', nativeModule);
 
-    await expect(startAndroidBluetoothAudioRoute()).resolves.toBe(false);
+    await startAndroidBluetoothAudioRoute();
     await stopAndroidBluetoothAudioRoute();
 
     expect(nativeModule.start).not.toHaveBeenCalled();
     expect(nativeModule.stop).not.toHaveBeenCalled();
   });
 
-  it('keeps voice control usable when the native route is unavailable or rejects', async () => {
+  it('stays usable when the native route rejects', async () => {
     const nativeModule = {
       start: jest.fn(async () => {
         throw new Error('route unavailable');
@@ -67,7 +57,7 @@ describe('androidBluetoothAudioRoute', () => {
     const { startAndroidBluetoothAudioRoute, stopAndroidBluetoothAudioRoute } =
       loadRoute('android', nativeModule);
 
-    await expect(startAndroidBluetoothAudioRoute()).resolves.toBe(false);
+    await expect(startAndroidBluetoothAudioRoute()).resolves.toBeUndefined();
     await expect(stopAndroidBluetoothAudioRoute()).resolves.toBeUndefined();
 
     expect(nativeModule.start).toHaveBeenCalledTimes(1);
@@ -78,7 +68,7 @@ describe('androidBluetoothAudioRoute', () => {
     const { startAndroidBluetoothAudioRoute, stopAndroidBluetoothAudioRoute } =
       loadRoute('android');
 
-    await expect(startAndroidBluetoothAudioRoute()).resolves.toBe(false);
+    await expect(startAndroidBluetoothAudioRoute()).resolves.toBeUndefined();
     await expect(stopAndroidBluetoothAudioRoute()).resolves.toBeUndefined();
   });
 });

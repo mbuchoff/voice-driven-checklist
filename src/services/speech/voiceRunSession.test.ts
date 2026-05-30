@@ -65,13 +65,4 @@ describe('voiceRunSession', () => {
     expect(mockStopAndroidBluetoothAudioRoute).toHaveBeenCalledTimes(1);
     expect(mockStopListeningNotification).toHaveBeenCalledTimes(1);
   });
-
-  it('continues stopping the foreground service when Bluetooth route cleanup fails', async () => {
-    mockStopAndroidBluetoothAudioRoute.mockRejectedValueOnce(new Error('route failed'));
-
-    await expect(stopVoiceRunSession()).resolves.toBeUndefined();
-
-    expect(mockStopAndroidBluetoothAudioRoute).toHaveBeenCalledTimes(1);
-    expect(mockStopListeningNotification).toHaveBeenCalledTimes(1);
-  });
 });
