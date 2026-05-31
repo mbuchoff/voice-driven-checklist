@@ -9,11 +9,11 @@ import type { ChecklistRunSnapshot } from '@/src/features/run/types';
 import { getChecklist } from '@/src/features/checklists/repository';
 import { CompletionSoundPlayer } from '@/src/services/audio/CompletionSoundPlayer';
 import { createSpeechAdapters } from '@/src/services/speech/createSpeechAdapters';
+import { setListeningNotificationStopHandler } from '@/src/services/speech/foregroundService';
 import {
-  setListeningNotificationStopHandler,
-  startListeningNotification,
-  stopListeningNotification,
-} from '@/src/services/speech/foregroundService';
+  startVoiceRunSession,
+  stopVoiceRunSession,
+} from '@/src/services/speech/voiceRunSession';
 
 type LoadState =
   | { kind: 'loading' }
@@ -47,7 +47,7 @@ export default function RunRoute() {
     await Promise.allSettled([
       adapters.playback.stop(),
       adapters.recognition.stopListening(),
-      stopListeningNotification(),
+      stopVoiceRunSession(),
     ]);
   }, [adapters]);
 
@@ -128,8 +128,8 @@ export default function RunRoute() {
   useEffect(() => setListeningNotificationStopHandler(exitRun), [exitRun]);
 
   const checklistTitle = loadState.kind === 'ready' ? loadState.snapshot.checklistTitle : '';
-  const startVoiceRunNotification = useCallback(
-    () => startListeningNotification(checklistTitle),
+  const startVoiceRun = useCallback(
+    () => startVoiceRunSession(checklistTitle),
     [checklistTitle],
   );
 
@@ -165,8 +165,8 @@ export default function RunRoute() {
       initialAvailability={loadState.initialAvailability}
       onExit={exitRun}
       onCompletion={() => completionSound.play()}
-      onVoiceRunStart={startVoiceRunNotification}
-      onVoiceRunStop={stopListeningNotification}
+      onVoiceRunStart={startVoiceRun}
+      onVoiceRunStop={stopVoiceRunSession}
     />
   );
 }

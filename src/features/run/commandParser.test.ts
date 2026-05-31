@@ -13,15 +13,30 @@ describe('parseCommand', () => {
     expect(parseCommand(input)).toBe('previous');
   });
 
+  // The recognizer frequently returns the keyword inside a longer phrase or
+  // with a trailing plural ("next it", "repeats"). Match the keyword wherever
+  // it lands as a word.
   it.each([
-    'next item',
-    'go next',
-    'go to the next one please',
-    'hello world',
-    '',
-    '   ',
-    'nope',
-  ])('returns null for non-command input %j', (input) => {
-    expect(parseCommand(input)).toBeNull();
+    ['next it', 'next'],
+    ['next item', 'next'],
+    ['go next', 'next'],
+    ['go to the next one please', 'next'],
+    ['nexts', 'next'],
+    ['repeats', 'repeat'],
+    ['repeat that', 'repeat'],
+    ['the previous one', 'previous'],
+  ])('parses %j as %j', (input, expected) => {
+    expect(parseCommand(input)).toBe(expected);
   });
+
+  it('returns the first command keyword when several are present', () => {
+    expect(parseCommand('next then repeat')).toBe('next');
+  });
+
+  it.each(['hello world', '', '   ', 'nope', 'go back', 'context'])(
+    'returns null when no command keyword is present %j',
+    (input) => {
+      expect(parseCommand(input)).toBeNull();
+    },
+  );
 });
