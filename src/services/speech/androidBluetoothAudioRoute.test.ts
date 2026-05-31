@@ -6,7 +6,9 @@ type NativeRouteModule = {
 function loadRoute(nativeModule: NativeRouteModule | null) {
   jest.resetModules();
   jest.doMock('expo-modules-core', () => ({
-    requireOptionalNativeModule: () => nativeModule,
+    // Name-aware so the test fails if the wrapper requests the wrong module name.
+    requireOptionalNativeModule: (name: string) =>
+      name === 'VoiceChecklistAudioRoute' ? nativeModule : null,
   }));
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
