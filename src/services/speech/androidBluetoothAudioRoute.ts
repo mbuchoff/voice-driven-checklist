@@ -1,16 +1,19 @@
-import { NativeModules, Platform } from 'react-native';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 
 type AndroidBluetoothAudioRouteModule = {
   start(): Promise<boolean>;
   stop(): Promise<void>;
 };
 
-const nativeRoute = NativeModules.VoiceChecklistAudioRoute as
-  | AndroidBluetoothAudioRouteModule
-  | undefined;
+// Android-only Expo module (modules/voice-checklist-audio-route). requireOptional
+// returns null on iOS/web — or a build that doesn't include it — so callers no-op
+// and recognition falls back to the built-in mic.
+const nativeRoute = requireOptionalNativeModule<AndroidBluetoothAudioRouteModule>(
+  'VoiceChecklistAudioRoute',
+);
 
 export async function startAndroidBluetoothAudioRoute(): Promise<void> {
-  if (Platform.OS !== 'android' || !nativeRoute) return;
+  if (!nativeRoute) return;
 
   try {
     await nativeRoute.start();
@@ -21,7 +24,7 @@ export async function startAndroidBluetoothAudioRoute(): Promise<void> {
 }
 
 export async function stopAndroidBluetoothAudioRoute(): Promise<void> {
-  if (Platform.OS !== 'android' || !nativeRoute) return;
+  if (!nativeRoute) return;
 
   try {
     await nativeRoute.stop();

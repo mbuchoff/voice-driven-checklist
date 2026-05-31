@@ -42,6 +42,9 @@ app-example
 /ios
 /android
 
+# local Expo module build output (the source under modules/ is tracked)
+modules/*/android/build/
+
 # Local-only tool state (Claude Code agent runtime, Playwright MCP traces)
 .claude/
 .playwright-mcp/
