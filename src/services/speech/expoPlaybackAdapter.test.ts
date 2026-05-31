@@ -1,4 +1,4 @@
-import { ExpoPlaybackAdapter } from './expoPlaybackAdapter';
+import { AVAILABILITY_TIMEOUT_MS, ExpoPlaybackAdapter } from './expoPlaybackAdapter';
 
 jest.mock('expo-speech', () => ({
   __esModule: true,
@@ -45,8 +45,27 @@ describe('ExpoPlaybackAdapter.isAvailable', () => {
     try {
       Speech.getAvailableVoicesAsync.mockReturnValue(new Promise(() => {}));
       const result = new ExpoPlaybackAdapter().isAvailable();
-      await jest.advanceTimersByTimeAsync(3000);
+      await jest.advanceTimersByTimeAsync(AVAILABILITY_TIMEOUT_MS);
       expect(await result).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // A cold TTS engine (just after boot/idle) can take several seconds to
+  // enumerate voices — longer than a 3s cap, which would falsely report it
+  // unavailable on the first checklist. The timeout must outlast a cold start.
+  it('returns true when a cold engine resolves voices after ~5s', async () => {
+    jest.useFakeTimers();
+    try {
+      Speech.getAvailableVoicesAsync.mockReturnValue(
+        new Promise((resolve) => {
+          setTimeout(() => resolve([{ identifier: 'v1' }]), 5000);
+        }),
+      );
+      const result = new ExpoPlaybackAdapter().isAvailable();
+      await jest.advanceTimersByTimeAsync(5000);
+      expect(await result).toBe(true);
     } finally {
       jest.useRealTimers();
     }
