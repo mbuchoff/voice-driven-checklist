@@ -36,24 +36,33 @@ async function insertItems(db: Database, checklistId: string, items: ChecklistIt
   }
 }
 
-export async function createChecklist(db: Database, input: ChecklistInput): Promise<Checklist> {
-  const title = trimTitle(input.title);
-  const items = buildItems(input.items);
-  const id = uuidv4();
+function prepareChecklist(input: ChecklistInput): Checklist {
+  return {
+    id: uuidv4(),
+    title: trimTitle(input.title),
+    items: buildItems(input.items),
+  };
+}
+
+async function writeChecklist(db: Database, checklist: Checklist): Promise<void> {
   const now = Date.now();
 
-  await db.withTransactionAsync(async () => {
-    await db.runAsync(
-      'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
-      id,
-      title,
-      now,
-      now,
-    );
-    await insertItems(db, id, items);
-  });
+  await db.runAsync(
+    'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+    checklist.id,
+    checklist.title,
+    now,
+    now,
+  );
+  await insertItems(db, checklist.id, checklist.items);
+}
 
-  return { id, title, items };
+export async function createChecklist(db: Database, input: ChecklistInput): Promise<Checklist> {
+  const checklist = prepareChecklist(input);
+
+  await db.withTransactionAsync(() => writeChecklist(db, checklist));
+
+  return checklist;
 }
 
 export async function updateChecklist(
@@ -84,6 +93,46 @@ export async function updateChecklist(
 
 export async function deleteChecklist(db: Database, id: string): Promise<void> {
   await db.runAsync('DELETE FROM checklists WHERE id = ?', id);
+}
+
+export async function exportAllChecklists(db: Database): Promise<ChecklistInput[]> {
+  const rows = await db.getAllAsync<{ id: string; title: string; item_text: string | null }>(
+    `SELECT c.id AS id, c.title AS title, ci.text AS item_text
+     FROM checklists c
+     LEFT JOIN checklist_items ci ON ci.checklist_id = c.id
+     ORDER BY c.created_at ASC, c.title ASC, ci.position ASC`,
+  );
+
+  const inputs: ChecklistInput[] = [];
+  let currentId: string | null = null;
+  let current: ChecklistInput | null = null;
+
+  for (const row of rows) {
+    if (row.id !== currentId) {
+      currentId = row.id;
+      current = { title: row.title, items: [] };
+      inputs.push(current);
+    }
+    if (row.item_text != null) {
+      current?.items.push({ text: row.item_text });
+    }
+  }
+  return inputs;
+}
+
+export async function importChecklists(
+  db: Database,
+  inputs: ChecklistInput[],
+): Promise<number> {
+  const prepared = inputs.map(prepareChecklist);
+
+  await db.withTransactionAsync(async () => {
+    for (const checklist of prepared) {
+      await writeChecklist(db, checklist);
+    }
+  });
+
+  return prepared.length;
 }
 
 export async function getChecklist(db: Database, id: string): Promise<Checklist | null> {

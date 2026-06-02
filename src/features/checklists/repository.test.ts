@@ -1,7 +1,9 @@
 import {
   createChecklist,
   deleteChecklist,
+  exportAllChecklists,
   getChecklist,
+  importChecklists,
   listChecklists,
   updateChecklist,
 } from './repository';
@@ -163,6 +165,157 @@ describe('checklist repository', () => {
       expect(byId.get(a.id)).toBe(1);
       expect(byId.get(b.id)).toBe(3);
       expect(byId.get(c.id)).toBe(0);
+    });
+  });
+
+  describe('exportAllChecklists', () => {
+    it('returns all stored checklists as input-shaped data with items in position order', async () => {
+      const db = await setup();
+      const ts = 1_700_000_000_000;
+      await db.runAsync(
+        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        'id-b',
+        'Beta',
+        ts,
+        ts,
+      );
+      await db.runAsync(
+        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        'id-a',
+        'Alpha',
+        ts,
+        ts,
+      );
+      await db.runAsync(
+        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        'id-c',
+        'Later',
+        ts + 1,
+        ts + 1,
+      );
+      await db.runAsync(
+        'INSERT INTO checklist_items (id, checklist_id, position, text) VALUES (?, ?, ?, ?)',
+        'item-b-1',
+        'id-b',
+        1,
+        'second',
+      );
+      await db.runAsync(
+        'INSERT INTO checklist_items (id, checklist_id, position, text) VALUES (?, ?, ?, ?)',
+        'item-b-0',
+        'id-b',
+        0,
+        'first',
+      );
+
+      await expect(exportAllChecklists(db)).resolves.toEqual([
+        { title: 'Alpha', items: [] },
+        { title: 'Beta', items: [{ text: 'first' }, { text: 'second' }] },
+        { title: 'Later', items: [] },
+      ]);
+    });
+
+    it('returns an empty array when there are no checklists', async () => {
+      const db = await setup();
+      await expect(exportAllChecklists(db)).resolves.toEqual([]);
+    });
+  });
+
+  describe('importChecklists', () => {
+    it('inserts every checklist and returns the count', async () => {
+      const db = await setup();
+
+      await expect(
+        importChecklists(db, [
+          { title: 'Morning', items: [{ text: 'Wake up' }] },
+          { title: 'Evening', items: [] },
+        ]),
+      ).resolves.toBe(2);
+
+      await expect(listChecklists(db)).resolves.toHaveLength(2);
+    });
+
+    it('adds imported checklists without replacing existing checklists', async () => {
+      const db = await setup();
+      const existing = await createChecklist(db, {
+        title: 'Existing',
+        items: [{ text: 'Keep' }],
+      });
+
+      await importChecklists(db, [
+        { title: 'Imported 1', items: [] },
+        { title: 'Imported 2', items: [] },
+      ]);
+
+      const list = await listChecklists(db);
+      expect(list).toHaveLength(3);
+      expect(await getChecklist(db, existing.id)).toMatchObject({
+        id: existing.id,
+        title: 'Existing',
+      });
+    });
+
+    it('preserves item text and order', async () => {
+      const db = await setup();
+
+      await importChecklists(db, [
+        {
+          title: 'Ordered',
+          items: [{ text: 'one' }, { text: 'two' }, { text: 'three' }],
+        },
+      ]);
+
+      const [summary] = await listChecklists(db);
+      const loaded = await getChecklist(db, summary.id);
+      expect(loaded?.items.map((item) => item.text)).toEqual(['one', 'two', 'three']);
+      expect(loaded?.items.map((item) => item.order)).toEqual([0, 1, 2]);
+    });
+
+    it('imports an exported library into a fresh database', async () => {
+      const source = await setup();
+      await createChecklist(source, {
+        title: 'Trip',
+        items: [{ text: 'Pack' }, { text: 'Drive' }],
+      });
+      await createChecklist(source, { title: 'Draft', items: [] });
+      const exported = await exportAllChecklists(source);
+
+      const target = await setup();
+      await importChecklists(target, exported);
+
+      const summaries = await listChecklists(target);
+      const loaded = await Promise.all(
+        summaries.map(async (summary) => {
+          const checklist = await getChecklist(target, summary.id);
+          return {
+            title: checklist?.title,
+            items: checklist?.items.map((item) => ({ text: item.text, order: item.order })),
+          };
+        }),
+      );
+      expect(loaded.sort((a, b) => String(a.title).localeCompare(String(b.title)))).toEqual([
+        { title: 'Draft', items: [] },
+        {
+          title: 'Trip',
+          items: [
+            { text: 'Pack', order: 0 },
+            { text: 'Drive', order: 1 },
+          ],
+        },
+      ]);
+    });
+
+    it('rolls back the whole import when one checklist is invalid', async () => {
+      const db = await setup();
+
+      await expect(
+        importChecklists(db, [
+          { title: 'Valid', items: [{ text: 'Keep' }] },
+          { title: '   ', items: [] },
+        ]),
+      ).rejects.toThrow(/Title is required/);
+
+      await expect(listChecklists(db)).resolves.toEqual([]);
     });
   });
 
