@@ -45,19 +45,28 @@ export async function pickBackupFile(): Promise<string | null> {
       return null;
     }
 
-    return new Promise<string | null>((resolve) => {
+    return new Promise<string | null>((resolve, reject) => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'application/json';
       input.style.display = 'none';
 
       let settled = false;
+      const cleanup = () => {
+        window.removeEventListener('focus', onFocus);
+        input.remove();
+      };
       const settle = (value: string | null) => {
         if (settled) return;
         settled = true;
-        window.removeEventListener('focus', onFocus);
-        input.remove();
+        cleanup();
         resolve(value);
+      };
+      const fail = (err: unknown) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(err);
       };
       const onFocus = () => {
         window.setTimeout(() => {
@@ -71,7 +80,7 @@ export async function pickBackupFile(): Promise<string | null> {
           settle(null);
           return;
         }
-        file.text().then(settle, () => settle(null));
+        file.text().then(settle, fail);
       });
       input.addEventListener('cancel', () => settle(null));
       window.addEventListener('focus', onFocus, { once: true });

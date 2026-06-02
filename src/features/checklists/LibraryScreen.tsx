@@ -60,12 +60,19 @@ export function LibraryScreen({ onCreate, onEdit, onStart, refreshKey }: Library
   };
 
   const handleExport = async () => {
-    const inputs = await exportAllChecklists(db);
-    if (inputs.length === 0) {
-      await notify('Nothing to export', 'Create a checklist first.');
-      return;
+    try {
+      const inputs = await exportAllChecklists(db);
+      if (inputs.length === 0) {
+        await notify('Nothing to export', 'Create a checklist first.');
+        return;
+      }
+      await exportBackupFile(serializeBackup(inputs), 'voice-checklist-backup.json');
+    } catch (err) {
+      await notify(
+        'Export failed',
+        err instanceof Error ? err.message : 'Could not export your checklists.',
+      );
     }
-    await exportBackupFile(serializeBackup(inputs), 'voice-checklist-backup.json');
   };
 
   const handleImport = async () => {

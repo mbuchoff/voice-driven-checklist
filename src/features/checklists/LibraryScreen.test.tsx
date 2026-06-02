@@ -145,6 +145,28 @@ describe('LibraryScreen', () => {
     alertSpy.mockRestore();
   });
 
+  it('notifies the user when export fails', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    exportBackupFileMock.mockRejectedValue(new Error('Could not write file.'));
+    const database = await setupDb();
+    await createChecklist(database, {
+      title: 'Morning routine',
+      items: [{ text: 'Wake up' }],
+    });
+    await renderWithDatabase(
+      <LibraryScreen onCreate={jest.fn()} onEdit={jest.fn()} onStart={jest.fn()} />,
+      { database },
+    );
+    await waitFor(() => screen.getByText('Morning routine'));
+
+    fireEvent.press(screen.getByTestId('export-checklists'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith('Export failed', 'Could not write file.');
+    });
+    alertSpy.mockRestore();
+  });
+
   it('imports a selected backup and refreshes the list', async () => {
     pickBackupFileMock.mockResolvedValue(
       serializeBackup([{ title: 'Imported checklist', items: [{ text: 'Review' }] }]),
@@ -175,6 +197,24 @@ describe('LibraryScreen', () => {
     await waitFor(() => expect(pickBackupFileMock).toHaveBeenCalledTimes(1));
     await expect(listChecklists(database)).resolves.toEqual([]);
     expect(alertSpy).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('notifies the user when the import picker cannot read the file', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    pickBackupFileMock.mockRejectedValue(new Error('Could not read file.'));
+    const database = await setupDb();
+    await renderWithDatabase(
+      <LibraryScreen onCreate={jest.fn()} onEdit={jest.fn()} onStart={jest.fn()} />,
+      { database },
+    );
+
+    fireEvent.press(screen.getByTestId('import-checklists'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith('Import failed', 'Could not read file.');
+    });
+    await expect(listChecklists(database)).resolves.toEqual([]);
     alertSpy.mockRestore();
   });
 
