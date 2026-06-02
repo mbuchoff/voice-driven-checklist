@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { confirmAction } from '@/src/components/confirm';
+import { confirmAction, notify } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
 import { useTheme } from '@/src/theme/useTheme';
 
-import { deleteChecklist, listChecklists } from './repository';
+import { parseBackup, serializeBackup } from './backup';
+import { exportBackupFile, pickBackupFile } from './backupIO';
+import {
+  deleteChecklist,
+  exportAllChecklists,
+  importChecklists,
+  listChecklists,
+} from './repository';
 import type { ChecklistSummary } from './types';
 
 export type LibraryScreenProps = {
@@ -21,6 +28,10 @@ export type LibraryScreenProps = {
 
 function itemCountLabel(count: number): string {
   return count === 1 ? '1 item' : `${count} items`;
+}
+
+function importCountLabel(count: number): string {
+  return count === 1 ? '1 checklist added.' : `${count} checklists added.`;
 }
 
 export function LibraryScreen({ onCreate, onEdit, onStart, refreshKey }: LibraryScreenProps) {
@@ -48,6 +59,31 @@ export function LibraryScreen({ onCreate, onEdit, onStart, refreshKey }: Library
     refresh();
   };
 
+  const handleExport = async () => {
+    const inputs = await exportAllChecklists(db);
+    if (inputs.length === 0) {
+      await notify('Nothing to export', 'Create a checklist first.');
+      return;
+    }
+    await exportBackupFile(serializeBackup(inputs), 'voice-checklist-backup.json');
+  };
+
+  const handleImport = async () => {
+    try {
+      const text = await pickBackupFile();
+      if (text == null) return;
+      const inputs = parseBackup(text);
+      const count = await importChecklists(db, inputs);
+      refresh();
+      await notify('Import complete', importCountLabel(count));
+    } catch (err) {
+      await notify(
+        'Import failed',
+        err instanceof Error ? err.message : 'Could not import that file.',
+      );
+    }
+  };
+
   return (
     <ScrollView
       style={{ backgroundColor: theme.background }}
@@ -60,6 +96,25 @@ export function LibraryScreen({ onCreate, onEdit, onStart, refreshKey }: Library
       >
         <Text style={{ color: theme.onPrimary, fontWeight: '600', textAlign: 'center' }}>New checklist</Text>
       </Pressable>
+
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Pressable
+          accessibilityRole="button"
+          testID="export-checklists"
+          onPress={handleExport}
+          style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: theme.border, borderRadius: 6, flex: 1 }}
+        >
+          <Text style={{ color: theme.text, textAlign: 'center' }}>Export</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          testID="import-checklists"
+          onPress={handleImport}
+          style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: theme.border, borderRadius: 6, flex: 1 }}
+        >
+          <Text style={{ color: theme.text, textAlign: 'center' }}>Import</Text>
+        </Pressable>
+      </View>
 
       {items.length === 0 ? (
         <Text style={{ color: theme.text }}>No checklists yet. Create one to get started.</Text>

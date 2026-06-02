@@ -31,3 +31,15 @@ export function confirmAction(options: ConfirmOptions): Promise<boolean> {
     ]);
   });
 }
+
+export function notify(title: string, message: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+      window.alert(`${title}\n\n${message}`);
+    }
+    return Promise.resolve();
+  }
+
+  Alert.alert(title, message);
+  return Promise.resolve();
+}

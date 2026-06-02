@@ -17,6 +17,7 @@ Contact: **mbuchoff@gmail.com**
 developer.** All checklists you create are stored in a local SQLite
 database on your device; they are not uploaded anywhere and are not
 accessible to the developer.
+The export feature lets you save a local backup file through the operating system share sheet, and the developer still receives nothing.
 
 Specifically, the app does not:
 

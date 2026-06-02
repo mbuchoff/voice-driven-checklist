@@ -86,6 +86,50 @@ export async function deleteChecklist(db: Database, id: string): Promise<void> {
   await db.runAsync('DELETE FROM checklists WHERE id = ?', id);
 }
 
+export async function exportAllChecklists(db: Database): Promise<ChecklistInput[]> {
+  const rows = await db.getAllAsync<{ id: string; title: string }>(
+    'SELECT id, title FROM checklists ORDER BY created_at ASC, title ASC',
+  );
+
+  const inputs: ChecklistInput[] = [];
+  for (const row of rows) {
+    const itemRows = await db.getAllAsync<{ text: string }>(
+      'SELECT text FROM checklist_items WHERE checklist_id = ? ORDER BY position ASC',
+      row.id,
+    );
+    inputs.push({
+      title: row.title,
+      items: itemRows.map((item) => ({ text: item.text })),
+    });
+  }
+  return inputs;
+}
+
+export async function importChecklists(
+  db: Database,
+  inputs: ChecklistInput[],
+): Promise<number> {
+  await db.withTransactionAsync(async () => {
+    for (const input of inputs) {
+      const title = trimTitle(input.title);
+      const items = buildItems(input.items);
+      const id = uuidv4();
+      const now = Date.now();
+
+      await db.runAsync(
+        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        id,
+        title,
+        now,
+        now,
+      );
+      await insertItems(db, id, items);
+    }
+  });
+
+  return inputs.length;
+}
+
 export async function getChecklist(db: Database, id: string): Promise<Checklist | null> {
   const row = await db.getFirstAsync<{ id: string; title: string }>(
     'SELECT id, title FROM checklists WHERE id = ?',
