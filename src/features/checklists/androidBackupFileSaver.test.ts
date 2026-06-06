@@ -29,6 +29,34 @@ describe('androidBackupFileSaver', () => {
     );
   });
 
+  it('rejects another Android save while the save picker is open', async () => {
+    let finishSave: (saved: boolean) => void = () => {};
+    const activeSave = new Promise<boolean>((resolve) => {
+      finishSave = resolve;
+    });
+    const nativeModule = {
+      save: jest.fn(() => activeSave),
+    };
+    const { saveAndroidBackupFile } = loadSaver(nativeModule);
+
+    const firstSave = saveAndroidBackupFile('{"checklists":[1]}', 'first.json');
+
+    await expect(saveAndroidBackupFile('{"checklists":[2]}', 'second.json')).rejects.toThrow(
+      'Android save dialog is already open.',
+    );
+
+    expect(nativeModule.save).toHaveBeenCalledTimes(1);
+    expect(nativeModule.save).toHaveBeenCalledWith(
+      'first.json',
+      'application/json',
+      '{"checklists":[1]}',
+    );
+
+    finishSave(true);
+
+    await expect(firstSave).resolves.toBe(true);
+  });
+
   it('surfaces a clear error when the native save-as module is unavailable', async () => {
     const { saveAndroidBackupFile } = loadSaver(null);
 

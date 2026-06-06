@@ -10,6 +10,8 @@ const nativeSaver = requireOptionalNativeModule<AndroidBackupFileSaverModule>(
   'VoiceChecklistFileSave',
 );
 
+let activeSave: Promise<boolean> | null = null;
+
 export async function saveAndroidBackupFile(
   jsonText: string,
   suggestedName: string,
@@ -18,5 +20,15 @@ export async function saveAndroidBackupFile(
     throw new Error('Android save dialog is unavailable.');
   }
 
-  return nativeSaver.save(suggestedName, BACKUP_MIME_TYPE, jsonText);
+  if (activeSave) {
+    throw new Error('Android save dialog is already open.');
+  }
+
+  const save = nativeSaver.save(suggestedName, BACKUP_MIME_TYPE, jsonText);
+  activeSave = save;
+  try {
+    return await save;
+  } finally {
+    activeSave = null;
+  }
 }

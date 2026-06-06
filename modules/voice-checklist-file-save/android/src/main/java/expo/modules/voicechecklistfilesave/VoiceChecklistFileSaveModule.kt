@@ -15,8 +15,11 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.IOException
 import java.io.OutputStreamWriter
 import java.io.Serializable
+import java.util.concurrent.atomic.AtomicBoolean
 
 class VoiceChecklistFileSaveModule : Module() {
+  private val saveInProgress = AtomicBoolean(false)
+
   private val contentResolver: ContentResolver
     get() {
       val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
@@ -34,27 +37,37 @@ class VoiceChecklistFileSaveModule : Module() {
     }
 
     AsyncFunction("save") Coroutine { fileName: String, mimeType: String, contents: String ->
-      val result = saveLauncher.launch(CreateDocumentOptions(fileName, mimeType))
-      when (result) {
-        is CreateDocumentResult.Cancelled -> false
-        is CreateDocumentResult.Success -> {
-          writeText(result.uri, contents)
-          true
+      if (!saveInProgress.compareAndSet(false, true)) {
+        throw SaveAlreadyInProgressException()
+      }
+
+      try {
+        val result = saveLauncher.launch(CreateDocumentOptions(fileName, mimeType))
+        when (result) {
+          is CreateDocumentResult.Cancelled -> false
+          is CreateDocumentResult.Success -> {
+            writeText(result.uri, contents)
+            true
+          }
         }
+      } finally {
+        saveInProgress.set(false)
       }
     }
   }
 
   private fun writeText(uri: Uri, contents: String) {
-    val outputStream =
-      contentResolver.openOutputStream(uri, "wt")
-        ?: throw UnableToSaveFileException("Could not open the selected file for writing.")
-
     try {
+      val outputStream =
+        contentResolver.openOutputStream(uri, "wt")
+          ?: throw UnableToSaveFileException("Could not open the selected file for writing.")
+
       OutputStreamWriter(outputStream, Charsets.UTF_8).use { writer ->
         writer.write(contents)
       }
     } catch (error: IOException) {
+      throw UnableToSaveFileException("Could not write the selected file.", error)
+    } catch (error: SecurityException) {
       throw UnableToSaveFileException("Could not write the selected file.", error)
     }
   }
@@ -95,3 +108,6 @@ private class UnableToSaveFileException(
   reason: String,
   cause: Throwable? = null
 ) : CodedException("Unable to save file: $reason", cause)
+
+private class SaveAlreadyInProgressException :
+  CodedException("An Android save dialog is already open.")
