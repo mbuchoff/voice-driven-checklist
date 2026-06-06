@@ -12,6 +12,7 @@ import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.io.IOException
 import java.io.OutputStreamWriter
 import java.io.Serializable
 
@@ -53,7 +54,7 @@ class VoiceChecklistFileSaveModule : Module() {
       OutputStreamWriter(outputStream, Charsets.UTF_8).use { writer ->
         writer.write(contents)
       }
-    } catch (error: Throwable) {
+    } catch (error: IOException) {
       throw UnableToSaveFileException("Could not write the selected file.", error)
     }
   }
