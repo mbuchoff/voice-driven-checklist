@@ -1,11 +1,27 @@
 import { Platform } from 'react-native';
 
-import { pickBackupFile } from './backupIO';
+import * as Sharing from 'expo-sharing';
+
+import { exportBackupFile, pickBackupFile } from './backupIO';
+import { saveAndroidBackupFile } from './androidBackupFileSaver';
+
+jest.mock('./androidBackupFileSaver', () => ({
+  saveAndroidBackupFile: jest.fn(),
+}));
+
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: jest.fn(),
+  shareAsync: jest.fn(),
+}));
 
 type InputFixture = {
   input: HTMLInputElement;
   triggerChange: () => void;
 };
+
+const saveAndroidBackupFileMock = saveAndroidBackupFile as jest.MockedFunction<
+  typeof saveAndroidBackupFile
+>;
 
 function setPlatform(os: 'ios' | 'android' | 'web') {
   Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
@@ -67,5 +83,37 @@ describe('backup file picker', () => {
 
     await expect(result).rejects.toThrow('read failed');
     expect(fixture.input.remove).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('backup file exporter', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+    Reflect.deleteProperty(globalThis, 'document');
+    Reflect.deleteProperty(globalThis, 'window');
+  });
+
+  it('opens the Android save-as picker instead of sharing', async () => {
+    setPlatform('android');
+    saveAndroidBackupFileMock.mockResolvedValue(true);
+
+    await exportBackupFile('{"checklists":[]}', 'voice-checklist-backup.json');
+
+    expect(saveAndroidBackupFileMock).toHaveBeenCalledWith(
+      '{"checklists":[]}',
+      'voice-checklist-backup.json',
+    );
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
+  });
+
+  it('treats a canceled Android save-as picker as a canceled export', async () => {
+    setPlatform('android');
+    saveAndroidBackupFileMock.mockResolvedValue(false);
+
+    await expect(exportBackupFile('{"checklists":[]}', 'voice-checklist-backup.json')).resolves.toBeUndefined();
+
+    expect(saveAndroidBackupFileMock).toHaveBeenCalledTimes(1);
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
   });
 });

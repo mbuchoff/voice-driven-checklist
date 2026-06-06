@@ -3,6 +3,10 @@ import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 
+import { saveAndroidBackupFile } from './androidBackupFileSaver';
+
+const BACKUP_MIME_TYPE = 'application/json';
+
 export async function exportBackupFile(jsonText: string, suggestedName: string): Promise<void> {
   if (Platform.OS === 'web') {
     if (
@@ -14,7 +18,7 @@ export async function exportBackupFile(jsonText: string, suggestedName: string):
       return;
     }
 
-    const blob = new Blob([jsonText], { type: 'application/json' });
+    const blob = new Blob([jsonText], { type: BACKUP_MIME_TYPE });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -27,12 +31,17 @@ export async function exportBackupFile(jsonText: string, suggestedName: string):
     return;
   }
 
+  if (Platform.OS === 'android') {
+    await saveAndroidBackupFile(jsonText, suggestedName);
+    return;
+  }
+
   const file = new File(Paths.cache, suggestedName);
   file.create({ overwrite: true });
   file.write(jsonText);
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(file.uri, {
-      mimeType: 'application/json',
+      mimeType: BACKUP_MIME_TYPE,
       UTI: 'public.json',
       dialogTitle: 'Export checklists',
     });
