@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="493" viewBox="0 0 780 493">
+  <defs>
+    <style>
+      .label { font-family: DejaVu-Sans; font-size: 14px; font-weight: 700; fill: #000; }
+      .body { font-family: DejaVu-Sans; font-size: 14px; fill: #111; }
+      .title { font-family: DejaVu-Sans; font-size: 21px; fill: #222; }
+      .button { font-family: DejaVu-Sans; font-size: 14px; fill: #111; }
+      .button-primary { font-family: DejaVu-Sans; font-size: 14px; font-weight: 700; fill: #fff; }
+      .danger { font-family: DejaVu-Sans; font-size: 14px; fill: #a0431f; }
+    </style>
+  </defs>
+
+  <rect width="780" height="493" fill="#f7f7f7"/>
+  <rect width="780" height="63" fill="#fff"/>
+  <path d="M29 20 L18 32 L29 44" fill="none" stroke="#111" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="18" y1="32" x2="41" y2="32" stroke="#111" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="56" y="39" class="title">Edit Checklist</text>
+  <line x1="0" y1="63" x2="780" y2="63" stroke="#e2e2e2"/>
+
+  <text x="16" y="92" class="label">Title</text>
+  <rect x="16" y="101" width="748" height="33" rx="5" fill="#f7f7f7" stroke="#c9c9c9"/>
+  <text x="25" y="123" class="body">Morning routine</text>
+
+  <text x="16" y="163" class="label">Items</text>
+
+  <g>
+    <rect x="16" y="174" width="748" height="62" rx="6" fill="#f7f7f7" stroke="#dddddd"/>
+    <circle cx="33" cy="195" r="2.2" fill="#777"/>
+    <circle cx="42" cy="195" r="2.2" fill="#777"/>
+    <circle cx="33" cy="204" r="2.2" fill="#777"/>
+    <circle cx="42" cy="204" r="2.2" fill="#777"/>
+    <circle cx="33" cy="213" r="2.2" fill="#777"/>
+    <circle cx="42" cy="213" r="2.2" fill="#777"/>
+    <rect x="56" y="184" width="608" height="28" rx="5" fill="#f7f7f7" stroke="#cccccc"/>
+    <text x="64" y="203" class="body">Wake up</text>
+    <rect x="682" y="184" width="72" height="28" rx="6" fill="#f7f7f7" stroke="#111"/>
+    <text x="701" y="203" class="danger">Delete</text>
+  </g>
+
+  <g>
+    <rect x="16" y="246" width="748" height="62" rx="6" fill="#f7f7f7" stroke="#dddddd"/>
+    <circle cx="33" cy="267" r="2.2" fill="#777"/>
+    <circle cx="42" cy="267" r="2.2" fill="#777"/>
+    <circle cx="33" cy="276" r="2.2" fill="#777"/>
+    <circle cx="42" cy="276" r="2.2" fill="#777"/>
+    <circle cx="33" cy="285" r="2.2" fill="#777"/>
+    <circle cx="42" cy="285" r="2.2" fill="#777"/>
+    <rect x="56" y="256" width="608" height="28" rx="5" fill="#f7f7f7" stroke="#cccccc"/>
+    <text x="64" y="275" class="body">Brush teeth</text>
+    <rect x="682" y="256" width="72" height="28" rx="6" fill="#f7f7f7" stroke="#111"/>
+    <text x="701" y="275" class="danger">Delete</text>
+  </g>
+
+  <g>
+    <rect x="16" y="318" width="748" height="62" rx="6" fill="#f7f7f7" stroke="#dddddd"/>
+    <circle cx="33" cy="339" r="2.2" fill="#777"/>
+    <circle cx="42" cy="339" r="2.2" fill="#777"/>
+    <circle cx="33" cy="348" r="2.2" fill="#777"/>
+    <circle cx="42" cy="348" r="2.2" fill="#777"/>
+    <circle cx="33" cy="357" r="2.2" fill="#777"/>
+    <circle cx="42" cy="357" r="2.2" fill="#777"/>
+    <rect x="56" y="328" width="608" height="28" rx="5" fill="#f7f7f7" stroke="#cccccc"/>
+    <text x="64" y="347" class="body">Start coffee</text>
+    <rect x="682" y="328" width="72" height="28" rx="6" fill="#f7f7f7" stroke="#111"/>
+    <text x="701" y="347" class="danger">Delete</text>
+  </g>
+
+  <rect x="16" y="392" width="81" height="33" rx="6" fill="#f7f7f7" stroke="#111" stroke-dasharray="4 4"/>
+  <text x="30" y="414" class="button">Add item</text>
+
+  <rect x="16" y="443" width="69" height="37" rx="6" fill="#0a84ff"/>
+  <text x="34" y="466" class="button-primary">Save</text>
+  <rect x="97" y="443" width="80" height="37" rx="6" fill="#f7f7f7" stroke="#111"/>
+  <text x="116" y="466" class="button">Cancel</text>
+</svg>
