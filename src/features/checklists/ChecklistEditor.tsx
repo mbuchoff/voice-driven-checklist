@@ -140,7 +140,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
 
   const autoscrollNearEdge = (pageY: number) => {
     const maxY = Math.max(0, contentHeight.current - viewportHeight.current);
-    if (!viewportHeight.current || !maxY) return 0;
+    if (!viewportHeight.current || !maxY) return;
 
     const threshold = 48;
     const step = 28;
@@ -151,22 +151,19 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
     } else if (viewportHeight.current - viewportY < threshold) {
       nextY = Math.min(maxY, scrollY.current + step);
     }
-    if (nextY === scrollY.current) return 0;
+    if (nextY === scrollY.current) return;
 
-    const delta = nextY - scrollY.current;
     scrollY.current = nextY;
     scrollRef.current?.scrollTo({ y: nextY, animated: false });
-    return delta;
   };
 
   const updateDrag = (pageY: number) => {
     const current = dragRef.current;
     if (!current) return;
 
-    const contentYBeforeScroll =
+    autoscrollNearEdge(pageY);
+    const contentY =
       current.startCenterY + (pageY - current.startPageY) + (scrollY.current - current.startScrollY);
-    const scrollDelta = autoscrollNearEdge(pageY);
-    const contentY = contentYBeforeScroll + scrollDelta;
     const to = dropIndexFor(current.localId, contentY);
     current.to = to;
     current.top = contentY - current.height / 2;
@@ -260,6 +257,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
       contentContainerStyle={{ padding: 16, gap: 16 }}
       keyboardShouldPersistTaps="handled"
       testID="checklist-editor-scroll"
+      disableScrollViewPanResponder={drag !== null}
       onLayout={(event) => {
         const { y, height } = event.nativeEvent.layout;
         viewportTop.current = y;
@@ -374,7 +372,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
             );
           });
         })()}
-        {drag && renderDropTarget(items.length - 1)}
+        {renderDropTarget(items.length - 1)}
         {drag && (
           <View
             testID="item-drag-preview"

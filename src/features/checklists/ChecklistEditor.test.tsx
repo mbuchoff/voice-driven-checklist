@@ -493,6 +493,46 @@ describe('ChecklistEditor', () => {
       expect(screen.queryByTestId('item-drag-preview')).toBeNull();
     });
 
+    it('prevents the parent scroll view from taking over an active drag', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'keep responder',
+        items: [{ text: 'a' }, { text: 'b' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+
+      expect(screen.getByTestId('checklist-editor-scroll').props.disableScrollViewPanResponder).toBe(
+        false,
+      );
+
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
+        nativeEvent: { pageY: 25 },
+      });
+
+      expect(screen.getByTestId('checklist-editor-scroll').props.disableScrollViewPanResponder).toBe(
+        true,
+      );
+
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', {
+        nativeEvent: { pageY: 25 },
+      });
+
+      expect(screen.getByTestId('checklist-editor-scroll').props.disableScrollViewPanResponder).toBe(
+        false,
+      );
+    });
+
     it('shows drag handles instead of visible move controls', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
