@@ -10,6 +10,8 @@ import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type TextStyle,
+  type ViewStyle,
 } from 'react-native';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -78,6 +80,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
   const rowLayouts = useRef<RowLayout[]>([]);
   const dragRef = useRef<DragContext | null>(null);
   const scrollY = useRef(0);
+  const viewportTop = useRef(0);
   const viewportHeight = useRef(0);
   const contentHeight = useRef(0);
   const [title, setTitle] = useState(initialChecklist?.title ?? '');
@@ -85,6 +88,24 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
   const [titleError, setTitleError] = useState<string | null>(null);
   const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
   const [drag, setDrag] = useState<DragState | null>(null);
+  const dragHandleBoxStyle: ViewStyle = {
+    width: 36,
+    height: 36,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  };
+  const itemTextStyle: TextStyle = {
+    color: theme.text,
+    borderWidth: 1,
+    borderColor: theme.inputBorder,
+    borderRadius: 6,
+    padding: 6,
+    flex: 1,
+  };
 
   const updateItemText = (localId: string, text: string) => {
     setItems((prev) => prev.map((item) => (item.localId === localId ? { ...item, text } : item)));
@@ -117,16 +138,17 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
     return index;
   };
 
-  const autoscrollNearEdge = (contentY: number) => {
+  const autoscrollNearEdge = (pageY: number) => {
     const maxY = Math.max(0, contentHeight.current - viewportHeight.current);
     if (!viewportHeight.current || !maxY) return;
 
     const threshold = 48;
     const step = 28;
+    const viewportY = pageY - viewportTop.current;
     let nextY = scrollY.current;
-    if (contentY - scrollY.current < threshold) {
+    if (viewportY < threshold) {
       nextY = Math.max(0, scrollY.current - step);
-    } else if (scrollY.current + viewportHeight.current - contentY < threshold) {
+    } else if (viewportHeight.current - viewportY < threshold) {
       nextY = Math.min(maxY, scrollY.current + step);
     }
     if (nextY === scrollY.current) return;
@@ -145,7 +167,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
     current.to = to;
     current.top = contentY - current.height / 2;
     setDrag(dragStateFrom(current));
-    autoscrollNearEdge(contentY);
+    autoscrollNearEdge(pageY);
   };
 
   const startDrag = (item: EditorItem, index: number, event: GestureResponderEvent) => {
@@ -229,8 +251,11 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
       style={{ backgroundColor: theme.background }}
       contentContainerStyle={{ padding: 16, gap: 16 }}
       keyboardShouldPersistTaps="handled"
+      testID="checklist-editor-scroll"
       onLayout={(event) => {
-        viewportHeight.current = event.nativeEvent.layout.height;
+        const { y, height } = event.nativeEvent.layout;
+        viewportTop.current = y;
+        viewportHeight.current = height;
       }}
       onContentSizeChange={(_, height) => {
         contentHeight.current = height;
@@ -304,16 +329,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
                       onResponderMove={(event) => updateDrag(event.nativeEvent.pageY)}
                       onResponderRelease={finishDrag}
                       onResponderTerminate={finishDrag}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        borderRadius: 6,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 3,
-                      }}
+                      style={dragHandleBoxStyle}
                     >
                       <DragHandleIcon color={theme.textMuted} />
                     </View>
@@ -323,14 +339,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
                       onChangeText={(text) => updateItemText(item.localId, text)}
                       placeholder={`Item ${index + 1}`}
                       placeholderTextColor={theme.textMuted}
-                      style={{
-                        color: theme.text,
-                        borderWidth: 1,
-                        borderColor: theme.inputBorder,
-                        borderRadius: 6,
-                        padding: 6,
-                        flex: 1,
-                      }}
+                      style={itemTextStyle}
                     />
                     <Pressable
                       accessibilityRole="button"
@@ -382,29 +391,13 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
             }}
           >
             <View
-              style={{
-                width: 36,
-                height: 36,
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: 6,
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 3,
-              }}
+              style={dragHandleBoxStyle}
             >
               <DragHandleIcon color={theme.textMuted} />
             </View>
             <Text
               testID="item-drag-preview-text"
-              style={{
-                color: theme.text,
-                borderWidth: 1,
-                borderColor: theme.inputBorder,
-                borderRadius: 6,
-                padding: 6,
-                flex: 1,
-              }}
+              style={itemTextStyle}
             >
               {drag.text}
             </Text>

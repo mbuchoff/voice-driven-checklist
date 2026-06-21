@@ -1,4 +1,5 @@
 import { fireEvent, screen } from '@testing-library/react-native';
+import { ScrollView } from 'react-native';
 
 import { runMigrations } from '@/src/db/migrations';
 import { createTestDatabase } from '@/src/test/createTestDatabase';
@@ -365,6 +366,49 @@ describe('ChecklistEditor', () => {
       });
 
       expect(screen.getByTestId('item-drag-preview').props.style.top).toBe(100);
+    });
+
+    it('autoscrolls when the pointer is near the visible scroll edge below the header', async () => {
+      const scrollTo = jest
+        .spyOn(ScrollView.prototype, 'scrollTo')
+        .mockImplementation(jest.fn());
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'scroll me',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+
+      fireEvent(screen.getByTestId('checklist-editor-scroll'), 'layout', {
+        nativeEvent: { layout: { y: 64, height: 300 } },
+      });
+      fireEvent(screen.getByTestId('checklist-editor-scroll'), 'contentSizeChange', 0, 1000);
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
+        nativeEvent: { layout: { y: 50, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+        nativeEvent: { layout: { y: 100, height: 50 } },
+      });
+
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', {
+        nativeEvent: { pageY: 289 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderMove', {
+        nativeEvent: { pageY: 340 },
+      });
+
+      expect(scrollTo).toHaveBeenCalledWith({ y: 28, animated: false });
+      scrollTo.mockRestore();
     });
 
     it('shows drag handles instead of visible move controls', async () => {
