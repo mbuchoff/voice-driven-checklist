@@ -184,7 +184,7 @@ describe('ChecklistEditor', () => {
       ]);
     });
 
-    it('reorders items using move-up and move-down', async () => {
+    it('reorders items by dragging a handle', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
         title: 'reorder me',
@@ -200,8 +200,24 @@ describe('ChecklistEditor', () => {
         { database },
       );
 
-      fireEvent.press(screen.getByTestId('item-move-down-0')); // a,b,c -> b,a,c
-      fireEvent.press(screen.getByTestId('item-move-up-2')); // b,a,c -> b,c,a
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
+        nativeEvent: { layout: { y: 50, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+        nativeEvent: { layout: { y: 100, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
+        nativeEvent: { pageY: 25 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', {
+        nativeEvent: { pageY: 125 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', {
+        nativeEvent: { pageY: 125 },
+      });
       fireEvent.press(screen.getByTestId('save'));
 
       await screen.findByTestId('save');
@@ -209,7 +225,149 @@ describe('ChecklistEditor', () => {
       expect(reloaded?.items.map((i) => i.text)).toEqual(['b', 'c', 'a']);
     });
 
-    it('disables move-up on the first row and move-down on the last row', async () => {
+    it('shows a floating preview and insertion target while dragging', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'preview me',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
+        nativeEvent: { layout: { y: 50, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+        nativeEvent: { layout: { y: 100, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
+        nativeEvent: { pageY: 25 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', {
+        nativeEvent: { pageY: 125 },
+      });
+
+      expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
+      expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('a');
+      expect(screen.getByTestId('item-drop-target-2')).toBeOnTheScreen();
+
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', {
+        nativeEvent: { pageY: 125 },
+      });
+
+      expect(screen.queryByTestId('item-drag-preview')).toBeNull();
+    });
+
+    it('starts a second drag from the item current row after reordering', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'drag again',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
+        nativeEvent: { layout: { y: 50, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+        nativeEvent: { layout: { y: 100, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', {
+        nativeEvent: { pageY: 125 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderMove', {
+        nativeEvent: { pageY: 20 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderRelease', {
+        nativeEvent: { pageY: 20 },
+      });
+
+      expect(screen.getByTestId('item-text-0').props.value).toBe('c');
+
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
+        nativeEvent: { pageY: 25 },
+      });
+
+      expect(screen.getByTestId('item-drag-preview').props.style.top).toBe(0);
+      expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('c');
+    });
+
+    it('does not reuse temporary drop-gap layouts on later drags', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'drag cleanly',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
+        nativeEvent: { layout: { y: 50, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+        nativeEvent: { layout: { y: 100, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', {
+        nativeEvent: { pageY: 125 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderMove', {
+        nativeEvent: { pageY: 20 },
+      });
+      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+        nativeEvent: { layout: { y: 116, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderRelease', {
+        nativeEvent: { pageY: 20 },
+      });
+
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
+        nativeEvent: { pageY: 25 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', {
+        nativeEvent: { pageY: 125 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', {
+        nativeEvent: { pageY: 125 },
+      });
+
+      expect(screen.getByTestId('item-text-2').props.value).toBe('c');
+
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', {
+        nativeEvent: { pageY: 125 },
+      });
+
+      expect(screen.getByTestId('item-drag-preview').props.style.top).toBe(100);
+    });
+
+    it('shows drag handles instead of visible move controls', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
         title: 'x',
@@ -224,8 +382,10 @@ describe('ChecklistEditor', () => {
         { database },
       );
 
-      expect(screen.getByTestId('item-move-up-0').props.accessibilityState?.disabled).toBe(true);
-      expect(screen.getByTestId('item-move-down-1').props.accessibilityState?.disabled).toBe(true);
+      expect(screen.getByTestId('item-drag-handle-0')).toBeOnTheScreen();
+      expect(screen.getByTestId('item-drag-handle-1')).toBeOnTheScreen();
+      expect(screen.queryByTestId('item-move-up-0')).toBeNull();
+      expect(screen.queryByTestId('item-move-down-1')).toBeNull();
     });
   });
 });
