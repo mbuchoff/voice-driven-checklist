@@ -140,7 +140,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
 
   const autoscrollNearEdge = (pageY: number) => {
     const maxY = Math.max(0, contentHeight.current - viewportHeight.current);
-    if (!viewportHeight.current || !maxY) return;
+    if (!viewportHeight.current || !maxY) return 0;
 
     const threshold = 48;
     const step = 28;
@@ -151,23 +151,26 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
     } else if (viewportHeight.current - viewportY < threshold) {
       nextY = Math.min(maxY, scrollY.current + step);
     }
-    if (nextY === scrollY.current) return;
+    if (nextY === scrollY.current) return 0;
 
+    const delta = nextY - scrollY.current;
     scrollY.current = nextY;
     scrollRef.current?.scrollTo({ y: nextY, animated: false });
+    return delta;
   };
 
   const updateDrag = (pageY: number) => {
     const current = dragRef.current;
     if (!current) return;
 
-    const contentY =
+    const contentYBeforeScroll =
       current.startCenterY + (pageY - current.startPageY) + (scrollY.current - current.startScrollY);
+    const scrollDelta = autoscrollNearEdge(pageY);
+    const contentY = contentYBeforeScroll + scrollDelta;
     const to = dropIndexFor(current.localId, contentY);
     current.to = to;
     current.top = contentY - current.height / 2;
     setDrag(dragStateFrom(current));
-    autoscrollNearEdge(pageY);
   };
 
   const startDrag = (item: EditorItem, index: number, event: GestureResponderEvent) => {
@@ -196,6 +199,11 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
     setDrag(null);
     if (!current) return;
     setItems((prev) => moveItem(prev, current.from, current.to));
+  };
+
+  const cancelDrag = () => {
+    dragRef.current = null;
+    setDrag(null);
   };
 
   const moveItemByAction = (index: number, delta: -1 | 1) => {
@@ -328,7 +336,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
                       onResponderGrant={(event) => startDrag(item, index, event)}
                       onResponderMove={(event) => updateDrag(event.nativeEvent.pageY)}
                       onResponderRelease={finishDrag}
-                      onResponderTerminate={finishDrag}
+                      onResponderTerminate={cancelDrag}
                       style={dragHandleBoxStyle}
                     >
                       <DragHandleIcon color={theme.textMuted} />

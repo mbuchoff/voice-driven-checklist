@@ -411,6 +411,88 @@ describe('ChecklistEditor', () => {
       scrollTo.mockRestore();
     });
 
+    it('updates the drop target after autoscroll before release', async () => {
+      jest.spyOn(ScrollView.prototype, 'scrollTo').mockImplementation(jest.fn());
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'scroll target',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+
+      fireEvent(screen.getByTestId('checklist-editor-scroll'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 300 } },
+      });
+      fireEvent(screen.getByTestId('checklist-editor-scroll'), 'contentSizeChange', 0, 1000);
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
+        nativeEvent: { layout: { y: 300, height: 20 } },
+      });
+      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+        nativeEvent: { layout: { y: 650, height: 50 } },
+      });
+
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
+        nativeEvent: { pageY: 25 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', {
+        nativeEvent: { pageY: 290 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', {
+        nativeEvent: { pageY: 290 },
+      });
+
+      expect(screen.getByTestId('item-text-1').props.value).toBe('a');
+      jest.restoreAllMocks();
+    });
+
+    it('cancels a drag when the responder is terminated', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'cancel drag',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
+        nativeEvent: { layout: { y: 50, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+        nativeEvent: { layout: { y: 100, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
+        nativeEvent: { pageY: 25 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', {
+        nativeEvent: { pageY: 125 },
+      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderTerminate', {
+        nativeEvent: { pageY: 125 },
+      });
+
+      expect(screen.getByTestId('item-text-0').props.value).toBe('a');
+      expect(screen.queryByTestId('item-drag-preview')).toBeNull();
+    });
+
     it('shows drag handles instead of visible move controls', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
