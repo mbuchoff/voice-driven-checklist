@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react-native';
+import { act, fireEvent, screen } from '@testing-library/react-native';
 import { ScrollView } from 'react-native';
 
 import { runMigrations } from '@/src/db/migrations';
@@ -14,7 +14,37 @@ async function setupDb() {
   return db;
 }
 
+let gestureTime = 1;
+
+function dragEvent(pageY: number) {
+  const timestamp = gestureTime;
+  gestureTime += 1;
+  return {
+    nativeEvent: { pageY },
+    touchHistory: {
+      touchBank: [
+        {
+          touchActive: true,
+          currentPageX: 0,
+          currentPageY: pageY,
+          currentTimeStamp: timestamp,
+          previousPageX: 0,
+          previousPageY: pageY,
+          previousTimeStamp: timestamp - 1,
+        },
+      ],
+      indexOfSingleActiveTouch: 0,
+      mostRecentTimeStamp: timestamp,
+      numberActiveTouches: 1,
+    },
+  };
+}
+
 describe('ChecklistEditor', () => {
+  beforeEach(() => {
+    gestureTime = 1;
+  });
+
   describe('create mode', () => {
     it('renders an empty form with a single blank item row by default', async () => {
       const database = await setupDb();
@@ -210,15 +240,9 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
-        nativeEvent: { pageY: 25 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', {
-        nativeEvent: { pageY: 125 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', {
-        nativeEvent: { pageY: 125 },
-      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', dragEvent(25));
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', dragEvent(125));
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', dragEvent(125));
       fireEvent.press(screen.getByTestId('save'));
 
       await screen.findByTestId('save');
@@ -250,20 +274,14 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
-        nativeEvent: { pageY: 25 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', {
-        nativeEvent: { pageY: 125 },
-      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', dragEvent(25));
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', dragEvent(125));
 
       expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
       expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('a');
       expect(screen.getByTestId('item-drop-target-2')).toBeOnTheScreen();
 
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', {
-        nativeEvent: { pageY: 125 },
-      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', dragEvent(125));
 
       expect(screen.queryByTestId('item-drag-preview')).toBeNull();
     });
@@ -292,21 +310,13 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', {
-        nativeEvent: { pageY: 125 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderMove', {
-        nativeEvent: { pageY: 20 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderRelease', {
-        nativeEvent: { pageY: 20 },
-      });
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', dragEvent(125));
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderMove', dragEvent(20));
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderRelease', dragEvent(20));
 
       expect(screen.getByTestId('item-text-0').props.value).toBe('c');
 
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
-        nativeEvent: { pageY: 25 },
-      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', dragEvent(25));
 
       expect(screen.getByTestId('item-drag-preview').props.style.top).toBe(0);
       expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('c');
@@ -336,34 +346,20 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', {
-        nativeEvent: { pageY: 125 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderMove', {
-        nativeEvent: { pageY: 20 },
-      });
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', dragEvent(125));
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderMove', dragEvent(20));
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 116, height: 50 } },
       });
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderRelease', {
-        nativeEvent: { pageY: 20 },
-      });
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderRelease', dragEvent(20));
 
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
-        nativeEvent: { pageY: 25 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', {
-        nativeEvent: { pageY: 125 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', {
-        nativeEvent: { pageY: 125 },
-      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', dragEvent(25));
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', dragEvent(125));
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', dragEvent(125));
 
       expect(screen.getByTestId('item-text-2').props.value).toBe('c');
 
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', {
-        nativeEvent: { pageY: 125 },
-      });
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', dragEvent(125));
 
       expect(screen.getByTestId('item-drag-preview').props.style.top).toBe(100);
     });
@@ -400,12 +396,8 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
 
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', {
-        nativeEvent: { pageY: 289 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderMove', {
-        nativeEvent: { pageY: 340 },
-      });
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', dragEvent(289));
+      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderMove', dragEvent(340));
 
       expect(scrollTo).toHaveBeenCalledWith({ y: 28, animated: false });
       scrollTo.mockRestore();
@@ -441,15 +433,9 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 650, height: 50 } },
       });
 
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
-        nativeEvent: { pageY: 25 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', {
-        nativeEvent: { pageY: 290 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', {
-        nativeEvent: { pageY: 290 },
-      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', dragEvent(25));
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', dragEvent(290));
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', dragEvent(290));
 
       expect(screen.getByTestId('item-text-1').props.value).toBe('a');
       jest.restoreAllMocks();
@@ -479,24 +465,18 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
-        nativeEvent: { pageY: 25 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', {
-        nativeEvent: { pageY: 125 },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderTerminate', {
-        nativeEvent: { pageY: 125 },
-      });
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', dragEvent(25));
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', dragEvent(125));
+      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderTerminate', dragEvent(125));
 
       expect(screen.getByTestId('item-text-0').props.value).toBe('a');
       expect(screen.queryByTestId('item-drag-preview')).toBeNull();
     });
 
-    it('prevents the parent scroll view from taking over an active drag', async () => {
+    it('blocks native scroll from taking over a handle drag', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
-        title: 'keep responder',
+        title: 'keep drag',
         items: [{ text: 'a' }, { text: 'b' }],
       });
       await renderWithDatabase(
@@ -512,25 +492,19 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 0, height: 50 } },
       });
 
-      expect(screen.getByTestId('checklist-editor-scroll').props.disableScrollViewPanResponder).toBe(
-        false,
-      );
+      const handle = screen.getByTestId('item-drag-handle-0');
+      expect(handle.props.onStartShouldSetResponder(dragEvent(25))).toBe(true);
+      expect(handle.props.onMoveShouldSetResponder(dragEvent(125))).toBe(true);
+      expect(handle.props.onResponderTerminationRequest(dragEvent(125))).toBe(false);
 
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', {
-        nativeEvent: { pageY: 25 },
+      let grantResult: unknown;
+      act(() => {
+        grantResult = handle.props.onResponderGrant(dragEvent(25));
       });
+      expect(grantResult).toBe(true);
+      expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
 
-      expect(screen.getByTestId('checklist-editor-scroll').props.disableScrollViewPanResponder).toBe(
-        true,
-      );
-
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', {
-        nativeEvent: { pageY: 25 },
-      });
-
-      expect(screen.getByTestId('checklist-editor-scroll').props.disableScrollViewPanResponder).toBe(
-        false,
-      );
+      fireEvent(handle, 'responderRelease', dragEvent(25));
     });
 
     it('shows drag handles instead of visible move controls', async () => {

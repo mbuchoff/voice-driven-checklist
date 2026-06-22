@@ -1,6 +1,7 @@
 import { Fragment, useRef, useState } from 'react';
 import {
   Keyboard,
+  PanResponder,
   Pressable,
   ScrollView,
   Text,
@@ -207,6 +208,18 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
     setItems((prev) => moveItem(prev, index, index + delta));
   };
 
+  const dragHandlersFor = (item: EditorItem, index: number) =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (event) => startDrag(item, index, event),
+      onPanResponderMove: (event) => updateDrag(event.nativeEvent.pageY),
+      onPanResponderRelease: finishDrag,
+      onPanResponderTerminate: cancelDrag,
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+    }).panHandlers;
+
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollY.current = event.nativeEvent.contentOffset.y;
   };
@@ -257,7 +270,6 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
       contentContainerStyle={{ padding: 16, gap: 16 }}
       keyboardShouldPersistTaps="handled"
       testID="checklist-editor-scroll"
-      disableScrollViewPanResponder={drag !== null}
       onLayout={(event) => {
         const { y, height } = event.nativeEvent.layout;
         viewportTop.current = y;
@@ -329,12 +341,8 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
                         if (event.nativeEvent.actionName === 'decrement') moveItemByAction(index, -1);
                         if (event.nativeEvent.actionName === 'increment') moveItemByAction(index, 1);
                       }}
+                      {...dragHandlersFor(item, index)}
                       testID={`item-drag-handle-${index}`}
-                      onStartShouldSetResponder={() => true}
-                      onResponderGrant={(event) => startDrag(item, index, event)}
-                      onResponderMove={(event) => updateDrag(event.nativeEvent.pageY)}
-                      onResponderRelease={finishDrag}
-                      onResponderTerminate={cancelDrag}
                       style={dragHandleBoxStyle}
                     >
                       <DragHandleIcon color={theme.textMuted} />
