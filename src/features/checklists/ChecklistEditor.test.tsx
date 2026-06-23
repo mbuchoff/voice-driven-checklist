@@ -240,9 +240,10 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', dragEvent(25));
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', dragEvent(125));
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', dragEvent(125));
+      const handle = screen.getByTestId('item-drag-handle-0');
+      fireEvent(handle, 'responderGrant', dragEvent(25));
+      fireEvent(handle, 'responderMove', dragEvent(125));
+      fireEvent(handle, 'responderRelease', dragEvent(125));
       fireEvent.press(screen.getByTestId('save'));
 
       await screen.findByTestId('save');
@@ -274,16 +275,22 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', dragEvent(25));
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', dragEvent(125));
+      const handle = screen.getByTestId('item-drag-handle-0');
+      fireEvent(handle, 'responderGrant', dragEvent(25));
+      fireEvent(handle, 'responderMove', dragEvent(125));
 
       expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
       expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('a');
       expect(screen.getByTestId('item-drop-target-2')).toBeOnTheScreen();
+      expect(screen.getByTestId('item-drop-target-2').props.style.height).toBe(50);
+      expect(screen.getByTestId('item-row-0').props.style.position).toBe('absolute');
+      expect(screen.getByTestId('item-row-0').props.style.opacity).toBe(0);
 
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', dragEvent(125));
+      fireEvent(handle, 'responderRelease', dragEvent(125));
 
       expect(screen.queryByTestId('item-drag-preview')).toBeNull();
+      expect(screen.getByTestId('item-row-2').props.style.position).toBe('relative');
+      expect(screen.getByTestId('item-row-2')).toBeOnTheScreen();
     });
 
     it('starts a second drag from the item current row after reordering', async () => {
@@ -310,9 +317,10 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', dragEvent(125));
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderMove', dragEvent(20));
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderRelease', dragEvent(20));
+      const handle = screen.getByTestId('item-drag-handle-2');
+      fireEvent(handle, 'responderGrant', dragEvent(125));
+      fireEvent(handle, 'responderMove', dragEvent(20));
+      fireEvent(handle, 'responderRelease', dragEvent(20));
 
       expect(screen.getByTestId('item-text-0').props.value).toBe('c');
 
@@ -346,16 +354,15 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', dragEvent(125));
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderMove', dragEvent(20));
-      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
-        nativeEvent: { layout: { y: 116, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderRelease', dragEvent(20));
+      const firstHandle = screen.getByTestId('item-drag-handle-2');
+      fireEvent(firstHandle, 'responderGrant', dragEvent(125));
+      fireEvent(firstHandle, 'responderMove', dragEvent(20));
+      fireEvent(firstHandle, 'responderRelease', dragEvent(20));
 
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', dragEvent(25));
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', dragEvent(125));
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', dragEvent(125));
+      const secondHandle = screen.getByTestId('item-drag-handle-0');
+      fireEvent(secondHandle, 'responderGrant', dragEvent(25));
+      fireEvent(secondHandle, 'responderMove', dragEvent(125));
+      fireEvent(secondHandle, 'responderRelease', dragEvent(125));
 
       expect(screen.getByTestId('item-text-2').props.value).toBe('c');
 
@@ -396,8 +403,9 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
 
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', dragEvent(289));
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderMove', dragEvent(340));
+      const handle = screen.getByTestId('item-drag-handle-2');
+      fireEvent(handle, 'responderGrant', dragEvent(289));
+      fireEvent(handle, 'responderMove', dragEvent(340));
 
       expect(scrollTo).toHaveBeenCalledWith({ y: 28, animated: false });
       scrollTo.mockRestore();
@@ -433,9 +441,10 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 650, height: 50 } },
       });
 
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', dragEvent(25));
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', dragEvent(290));
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderRelease', dragEvent(290));
+      const handle = screen.getByTestId('item-drag-handle-0');
+      fireEvent(handle, 'responderGrant', dragEvent(25));
+      fireEvent(handle, 'responderMove', dragEvent(290));
+      fireEvent(handle, 'responderRelease', dragEvent(290));
 
       expect(screen.getByTestId('item-text-1').props.value).toBe('a');
       jest.restoreAllMocks();
@@ -465,9 +474,10 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', dragEvent(25));
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderMove', dragEvent(125));
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderTerminate', dragEvent(125));
+      const handle = screen.getByTestId('item-drag-handle-0');
+      fireEvent(handle, 'responderGrant', dragEvent(25));
+      fireEvent(handle, 'responderMove', dragEvent(125));
+      fireEvent(handle, 'responderTerminate', dragEvent(125));
 
       expect(screen.getByTestId('item-text-0').props.value).toBe('a');
       expect(screen.queryByTestId('item-drag-preview')).toBeNull();

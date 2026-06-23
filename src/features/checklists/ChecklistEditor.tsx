@@ -230,7 +230,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
         key={`drop-target-${index}`}
         testID={`item-drop-target-${index}`}
         style={{
-          height: 8,
+          height: drag.height,
           borderRadius: 4,
           borderWidth: 1,
           borderColor: theme.primary,
@@ -320,6 +320,7 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
                   testID={`item-row-${index}`}
                   onLayout={(event) => onRowLayout(index, event)}
                   style={{
+                    position: isActive ? 'absolute' : 'relative',
                     borderWidth: 1,
                     borderColor: error ? theme.danger : theme.border,
                     borderRadius: 6,
