@@ -24,6 +24,11 @@ export type RecognitionListenOptions = {
 export type SpeechRecognitionAdapter = {
   isAvailable(): Promise<boolean>;
   requestPermissionsIfNeeded(): Promise<'granted' | 'denied' | 'unavailable'>;
+  /**
+   * Begins a recognition session. Implementations must replace any previous
+   * result/error listeners, and this may be called after a natural recognizer
+   * end without an intervening `stopListening()`.
+   */
   startListening(options: RecognitionListenOptions): Promise<void>;
   stopListening(): Promise<void>;
   dispose(): Promise<void>;
