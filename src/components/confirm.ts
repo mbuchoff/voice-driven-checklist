@@ -5,6 +5,7 @@ export type ConfirmOptions = {
   message: string;
   confirmLabel: string;
   destructive?: boolean;
+  dismissible?: boolean;
 };
 
 /**
@@ -21,6 +22,12 @@ export function confirmAction(options: ConfirmOptions): Promise<boolean> {
   }
 
   return new Promise<boolean>((resolve) => {
+    const alertOptions = options.dismissible
+      ? {
+          cancelable: true,
+          onDismiss: () => resolve(false),
+        }
+      : undefined;
     Alert.alert(options.title, options.message, [
       { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
       {
@@ -28,10 +35,7 @@ export function confirmAction(options: ConfirmOptions): Promise<boolean> {
         style: options.destructive ? 'destructive' : 'default',
         onPress: () => resolve(true),
       },
-    ], {
-      cancelable: true,
-      onDismiss: () => resolve(false),
-    });
+    ], alertOptions);
   });
 }
 

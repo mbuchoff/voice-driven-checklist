@@ -66,10 +66,6 @@ export default function RunRoute() {
       pendingRef: stopConfirmationPendingRef,
     });
   }, [exitRun]);
-  const isStopConfirmationPending = useCallback(
-    () => stopConfirmationPendingRef.current,
-    [],
-  );
 
   const stopRunResourcesInBackground = useCallback(() => {
     void stopRunResources();
@@ -174,7 +170,6 @@ export default function RunRoute() {
       initialAvailability={loadState.initialAvailability}
       onExit={exitRun}
       onRequestStop={confirmAndExitRun}
-      isStopConfirmationPending={isStopConfirmationPending}
       onCompletion={playCompletionSound}
       onVoiceRunStart={startVoiceRun}
       onVoiceRunStop={stopVoiceRunSession}

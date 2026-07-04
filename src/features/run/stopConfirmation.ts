@@ -5,6 +5,7 @@ export const RUN_STOP_CONFIRMATION: ConfirmOptions = {
   message: 'This will end the current checklist run and return to your checklists.',
   confirmLabel: 'Stop',
   destructive: true,
+  dismissible: true,
 };
 
 type RequestRunStopConfirmationOptions = {

@@ -13,7 +13,32 @@ describe('confirmAction', () => {
     });
   });
 
-  it('resolves false when a native confirmation alert is dismissed', async () => {
+  it('keeps native confirmation alerts non-dismissible by default', async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      get: () => 'android',
+    });
+    let nativeButtons: Parameters<typeof Alert.alert>[2];
+    let nativeOptions: Parameters<typeof Alert.alert>[3];
+    jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, _buttons, options) => {
+      nativeButtons = _buttons;
+      nativeOptions = options;
+    });
+
+    const result = confirmAction({
+      title: 'Delete checklist?',
+      message: 'This checklist will be permanently removed.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+
+    expect(nativeOptions?.cancelable).not.toBe(true);
+    expect(nativeOptions?.onDismiss).toBeUndefined();
+    nativeButtons?.[0]?.onPress?.();
+    await expect(result).resolves.toBe(false);
+  });
+
+  it('resolves false when a dismissible native confirmation alert is dismissed', async () => {
     Object.defineProperty(Platform, 'OS', {
       configurable: true,
       get: () => 'android',
@@ -30,6 +55,7 @@ describe('confirmAction', () => {
       message: 'This will end the current checklist run and return to your checklists.',
       confirmLabel: 'Stop',
       destructive: true,
+      dismissible: true,
     });
 
     expect(onDismiss).toEqual(expect.any(Function));
