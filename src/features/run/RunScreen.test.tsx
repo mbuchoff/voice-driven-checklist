@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { BackHandler, Platform } from 'react-native';
 
 import {
   FakeSpeechPlaybackAdapter,
@@ -18,10 +19,19 @@ const snapshot: ChecklistRunSnapshot = {
   ],
 };
 
+const defaultPlatformOS = Platform.OS;
+let mockHardwareBackHandler: (() => boolean | null | undefined) | null = null;
+
 type RenderOptions = Partial<
   Pick<
     RunScreenProps,
-    'onExit' | 'onCompletion' | 'onVoiceRunStart' | 'onVoiceRunStop' | 'initialAvailability'
+    | 'onExit'
+    | 'onRequestStop'
+    | 'onCompletion'
+    | 'onVoiceRunStart'
+    | 'onVoiceRunStop'
+    | 'stopConfirmationPending'
+    | 'initialAvailability'
   >
 >;
 
@@ -29,6 +39,7 @@ function setup(options: RenderOptions = {}) {
   const playback = new FakeSpeechPlaybackAdapter();
   const recognition = new FakeSpeechRecognitionAdapter();
   const onExit = options.onExit ?? jest.fn();
+  const onRequestStop = options.onRequestStop ?? jest.fn();
   const onCompletion = options.onCompletion ?? jest.fn();
   const initialAvailability = options.initialAvailability ?? {
     spokenPlaybackAvailable: true,
@@ -42,13 +53,15 @@ function setup(options: RenderOptions = {}) {
       recognition={recognition}
       initialAvailability={initialAvailability}
       onExit={onExit}
+      onRequestStop={onRequestStop}
+      stopConfirmationPending={options.stopConfirmationPending}
       onCompletion={onCompletion}
       onVoiceRunStart={options.onVoiceRunStart}
       onVoiceRunStop={options.onVoiceRunStop}
     />,
   );
 
-  return { ...utils, playback, recognition, onExit, onCompletion };
+  return { ...utils, playback, recognition, onExit, onRequestStop, onCompletion };
 }
 
 async function flush() {
@@ -57,7 +70,27 @@ async function flush() {
   });
 }
 
+function useAndroidHardwareBack() {
+  Object.defineProperty(Platform, 'OS', {
+    configurable: true,
+    get: () => 'android',
+  });
+  jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, handler) => {
+    mockHardwareBackHandler = handler;
+    return { remove: jest.fn() };
+  });
+}
+
 describe('RunScreen', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+    mockHardwareBackHandler = null;
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      get: () => defaultPlatformOS,
+    });
+  });
+
   describe('initial render', () => {
     it('shows the checklist title, current item, and progress label', async () => {
       setup();
@@ -407,12 +440,43 @@ describe('RunScreen', () => {
       expect(playback.spoken.length).toBe(before + 1); // re-spoke item one
     });
 
-    it('calls onExit when Stop is pressed', async () => {
-      const { onExit } = setup();
+    it('requests confirmation when Stop is pressed', async () => {
+      const { onExit, onRequestStop } = setup();
       await flush();
 
       fireEvent.press(screen.getByTestId('manual-stop'));
-      expect(onExit).toHaveBeenCalledTimes(1);
+      expect(onRequestStop).toHaveBeenCalledTimes(1);
+      expect(onExit).not.toHaveBeenCalled();
+    });
+
+    it('requests confirmation when Android back is pressed during an active run', async () => {
+      useAndroidHardwareBack();
+      const { onExit, onRequestStop } = setup();
+      await flush();
+
+      let handled = false;
+      act(() => {
+        handled = mockHardwareBackHandler?.() ?? false;
+      });
+
+      expect(handled).toBe(true);
+      expect(onRequestStop).toHaveBeenCalledTimes(1);
+      expect(onExit).not.toHaveBeenCalled();
+    });
+
+    it('lets Android back dismiss a pending stop confirmation dialog', async () => {
+      useAndroidHardwareBack();
+      const { onExit, onRequestStop } = setup({ stopConfirmationPending: true });
+      await flush();
+
+      let handled = true;
+      act(() => {
+        handled = mockHardwareBackHandler?.() ?? true;
+      });
+
+      expect(handled).toBe(false);
+      expect(onRequestStop).not.toHaveBeenCalled();
+      expect(onExit).not.toHaveBeenCalled();
     });
   });
 
@@ -435,6 +499,27 @@ describe('RunScreen', () => {
       expect(recognition.isListening()).toBe(false);
       expect(onCompletion).toHaveBeenCalledTimes(1);
       expect(playback.spoken).toEqual(['Item one', 'Item two', 'Item three']);
+    });
+
+    it('returns to the library when Android back is pressed after completion', async () => {
+      useAndroidHardwareBack();
+      const { onExit, onRequestStop } = setup();
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+
+      let handled = false;
+      act(() => {
+        handled = mockHardwareBackHandler?.() ?? false;
+      });
+
+      expect(handled).toBe(true);
+      expect(onExit).toHaveBeenCalledTimes(1);
+      expect(onRequestStop).not.toHaveBeenCalled();
     });
 
     it('stops the listening service after the completion callback resolves', async () => {

@@ -33,6 +33,7 @@ describe('regression: snapshot survives source deletion mid-run', () => {
     const playback = new FakeSpeechPlaybackAdapter();
     const recognition = new FakeSpeechRecognitionAdapter();
     const onExit = jest.fn();
+    const onRequestStop = jest.fn();
     const onCompletion = jest.fn();
 
     render(
@@ -42,6 +43,7 @@ describe('regression: snapshot survives source deletion mid-run', () => {
         recognition={recognition}
         initialAvailability={{ spokenPlaybackAvailable: true, voiceControlAvailable: true }}
         onExit={onExit}
+        onRequestStop={onRequestStop}
         onCompletion={onCompletion}
       />,
     );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { BackHandler, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import type {
   SpeechPlaybackAdapter,
@@ -33,7 +33,9 @@ export type RunScreenProps = {
   playback: SpeechPlaybackAdapter;
   recognition: SpeechRecognitionAdapter;
   initialAvailability: { spokenPlaybackAvailable: boolean; voiceControlAvailable: boolean };
-  onExit: () => void;
+  onExit: () => void | Promise<void>;
+  onRequestStop: () => void | Promise<void>;
+  stopConfirmationPending?: boolean;
   onCompletion?: () => void | Promise<void>;
   onVoiceRunStart?: () => void | Promise<void>;
   onVoiceRunStop?: () => void | Promise<void>;
@@ -50,6 +52,8 @@ export function RunScreen({
   recognition,
   initialAvailability,
   onExit,
+  onRequestStop,
+  stopConfirmationPending = false,
   onCompletion,
   onVoiceRunStart,
   onVoiceRunStop,
@@ -260,6 +264,20 @@ export function RunScreen({
     };
   }, [playback, recognition]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (stopConfirmationPending) return false;
+      if (state.status === 'completed') {
+        void onExit();
+      } else {
+        void onRequestStop();
+      }
+      return true;
+    });
+    return () => sub.remove();
+  }, [state.status, onExit, onRequestStop, stopConfirmationPending]);
+
   const currentItem = state.snapshot?.items[state.currentItemIndex];
   const totalItems = state.snapshot?.items.length ?? 0;
 
@@ -382,7 +400,7 @@ export function RunScreen({
         <Pressable
           accessibilityRole="button"
           testID="manual-stop"
-          onPress={onExit}
+          onPress={onRequestStop}
           style={[controlStyle, { borderColor: theme.danger }]}
         >
           <Text style={{ color: theme.danger }}>Stop</Text>

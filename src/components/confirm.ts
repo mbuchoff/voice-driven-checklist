@@ -28,7 +28,10 @@ export function confirmAction(options: ConfirmOptions): Promise<boolean> {
         style: options.destructive ? 'destructive' : 'default',
         onPress: () => resolve(true),
       },
-    ]);
+    ], {
+      cancelable: true,
+      onDismiss: () => resolve(false),
+    });
   });
 }
 
