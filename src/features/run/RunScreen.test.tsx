@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import {
   FakeSpeechPlaybackAdapter,
@@ -145,6 +145,39 @@ describe('RunScreen', () => {
       expect(playback.spoken).toEqual(['Item one', 'Item two']);
     });
 
+    it('advances on a strict non-final "next" command', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+
+      act(() => recognition.emitResult({ transcript: 'next', isFinal: false }));
+      await flush();
+
+      expect(screen.getByText('Item two')).toBeOnTheScreen();
+      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(playback.spoken).toEqual(['Item one', 'Item two']);
+    });
+
+    it('waits for finalization before accepting loose command phrases', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+
+      act(() => recognition.emitResult({ transcript: 'go to the next one please', isFinal: false }));
+      await flush();
+
+      expect(screen.getByText('Item one')).toBeOnTheScreen();
+      expect(playback.spoken).toEqual(['Item one']);
+
+      act(() => recognition.emitResult({ transcript: 'go to the next one please', isFinal: true }));
+      await flush();
+
+      expect(screen.getByText('Item two')).toBeOnTheScreen();
+      expect(playback.spoken).toEqual(['Item one', 'Item two']);
+    });
+
     it('ignores extra finalized commands from the same listening cycle', async () => {
       const { playback, recognition } = setup();
       await flush();
@@ -153,6 +186,23 @@ describe('RunScreen', () => {
 
       act(() => {
         recognition.emitResult({ transcript: 'next', isFinal: true });
+        recognition.emitResult({ transcript: 'next', isFinal: true });
+      });
+      await flush();
+
+      expect(screen.getByText('Item two')).toBeOnTheScreen();
+      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.queryByText('Item three')).toBeNull();
+    });
+
+    it('ignores a final command repeated after an accepted interim command', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+
+      act(() => {
+        recognition.emitResult({ transcript: 'next', isFinal: false });
         recognition.emitResult({ transcript: 'next', isFinal: true });
       });
       await flush();
@@ -270,7 +320,7 @@ describe('RunScreen', () => {
       });
       await flush();
 
-      expect(recognition.startCount).toBeGreaterThan(startsBefore);
+      await waitFor(() => expect(recognition.startCount).toBeGreaterThan(startsBefore));
       expect(recognition.isListening()).toBe(true);
     });
 
@@ -369,9 +419,14 @@ describe('RunScreen', () => {
       expect(playback.spoken).toEqual(['Item one', 'Item two', 'Item three']);
     });
 
-    it('does not stop the listening service on the completed transition', async () => {
+    it('stops the listening service after the completion callback resolves', async () => {
+      let resolveCompletion!: () => void;
+      const completionFinished = new Promise<void>((resolve) => {
+        resolveCompletion = resolve;
+      });
+      const onCompletion = jest.fn(() => completionFinished);
       const onVoiceRunStop = jest.fn();
-      setup({ onVoiceRunStart: jest.fn(), onVoiceRunStop });
+      setup({ onCompletion, onVoiceRunStart: jest.fn(), onVoiceRunStop });
       await flush();
 
       fireEvent.press(screen.getByTestId('manual-next'));
@@ -379,9 +434,150 @@ describe('RunScreen', () => {
       fireEvent.press(screen.getByTestId('manual-next'));
       await flush();
       fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+
+      expect(onCompletion).toHaveBeenCalledTimes(1);
+      expect(onVoiceRunStop).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveCompletion();
+        await completionFinished;
+      });
+      await flush();
+
+      expect(onVoiceRunStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not let a pending completion callback stop a restarted run', async () => {
+      let resolveCompletion!: () => void;
+      const completionFinished = new Promise<void>((resolve) => {
+        resolveCompletion = resolve;
+      });
+      const onCompletion = jest.fn(() => completionFinished);
+      const onVoiceRunStop = jest.fn();
+      setup({ onCompletion, onVoiceRunStart: jest.fn(), onVoiceRunStop });
+      await flush();
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+
+      fireEvent.press(screen.getByTestId('completion-restart'));
+      await flush();
+      expect(screen.getByText('Item one')).toBeOnTheScreen();
+
+      await act(async () => {
+        resolveCompletion();
+        await completionFinished;
+      });
       await flush();
 
       expect(onVoiceRunStop).not.toHaveBeenCalled();
+    });
+
+    it('waits for pending listening-service startup before stopping it on completion', async () => {
+      let resolveNotification!: () => void;
+      const notificationStarted = new Promise<void>((resolve) => {
+        resolveNotification = resolve;
+      });
+      const onCompletion = jest.fn();
+      const onVoiceRunStop = jest.fn();
+      setup({
+        initialAvailability: { spokenPlaybackAvailable: false, voiceControlAvailable: true },
+        onCompletion,
+        onVoiceRunStart: jest.fn(() => notificationStarted),
+        onVoiceRunStop,
+      });
+      await flush();
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+
+      expect(onCompletion).toHaveBeenCalledTimes(1);
+      expect(onVoiceRunStop).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveNotification();
+        await notificationStarted;
+      });
+      await flush();
+
+      expect(onVoiceRunStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not let stale startup cleanup stop a restarted run', async () => {
+      let resolveNotification!: () => void;
+      const notificationStarted = new Promise<void>((resolve) => {
+        resolveNotification = resolve;
+      });
+      const onVoiceRunStop = jest.fn();
+      setup({
+        initialAvailability: { spokenPlaybackAvailable: false, voiceControlAvailable: true },
+        onVoiceRunStart: jest.fn(() => notificationStarted),
+        onVoiceRunStop,
+      });
+      await flush();
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('completion-restart'));
+      await flush();
+
+      await act(async () => {
+        resolveNotification();
+        await notificationStarted;
+      });
+      await flush();
+
+      expect(screen.getByText('Item one')).toBeOnTheScreen();
+      expect(onVoiceRunStop).not.toHaveBeenCalled();
+    });
+
+    it('waits for an in-flight completion stop before starting a restarted run', async () => {
+      let resolveStop!: () => void;
+      const stopFinished = new Promise<void>((resolve) => {
+        resolveStop = resolve;
+      });
+      const onVoiceRunStart = jest.fn();
+      const onVoiceRunStop = jest.fn(() => stopFinished);
+      setup({ onVoiceRunStart, onVoiceRunStop });
+      await flush();
+
+      expect(onVoiceRunStart).toHaveBeenCalledTimes(1);
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+
+      expect(onVoiceRunStop).toHaveBeenCalledTimes(1);
+
+      fireEvent.press(screen.getByTestId('completion-restart'));
+      await flush();
+
+      expect(screen.getByText('Item one')).toBeOnTheScreen();
+      expect(onVoiceRunStart).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveStop();
+        await stopFinished;
+      });
+      await flush();
+
+      await waitFor(() => expect(onVoiceRunStart).toHaveBeenCalledTimes(2));
     });
 
     it('Restart resets to the first item without reloading', async () => {

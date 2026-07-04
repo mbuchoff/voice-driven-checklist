@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type {
@@ -7,7 +7,7 @@ import type {
 } from '@/src/services/speech/adapters';
 import { useTheme } from '@/src/theme/useTheme';
 
-import { parseCommand } from './commandParser';
+import { parseCommand, parseInterimCommand } from './commandParser';
 import { initialRunState, runReducer } from './runReducer';
 import type { ChecklistRunSnapshot } from './types';
 
@@ -34,9 +34,14 @@ export type RunScreenProps = {
   recognition: SpeechRecognitionAdapter;
   initialAvailability: { spokenPlaybackAvailable: boolean; voiceControlAvailable: boolean };
   onExit: () => void;
-  onCompletion?: () => void;
+  onCompletion?: () => void | Promise<void>;
   onVoiceRunStart?: () => void | Promise<void>;
-  onVoiceRunStop?: () => void;
+  onVoiceRunStop?: () => void | Promise<void>;
+};
+
+type VoiceRunStartup = {
+  token: number;
+  startup: Promise<void>;
 };
 
 export function RunScreen({
@@ -54,6 +59,24 @@ export function RunScreen({
     initialRunState(snapshot, initialAvailability),
   );
   const [voiceServiceReady, setVoiceServiceReady] = useState(!onVoiceRunStart);
+  const voiceRunStartupRef = useRef<VoiceRunStartup | null>(null);
+  const voiceRunStartupTokenRef = useRef(0);
+  const voiceRunStopRef = useRef<Promise<void>>(Promise.resolve());
+
+  const stopVoiceRun = useCallback(() => {
+    const stop = voiceRunStopRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          await onVoiceRunStop?.();
+        } catch {
+          // Stopping is best effort; the route-level resource cleanup can converge
+          // with other lifecycle paths.
+        }
+      });
+    voiceRunStopRef.current = stop;
+    return stop;
+  }, [onVoiceRunStop]);
 
   const controlStyle = {
     paddingVertical: 10,
@@ -111,9 +134,13 @@ export function RunScreen({
         .startListening({
           locale: LOCALE,
           onResult: (result) => {
-            if (cancelled || !result.isFinal) return;
-            dispatch({ type: 'RECOGNIZED_PHRASE', phrase: result.transcript });
-            const cmd = parseCommand(result.transcript);
+            if (cancelled) return;
+            const cmd = result.isFinal
+              ? parseCommand(result.transcript)
+              : parseInterimCommand(result.transcript);
+            if (result.isFinal) {
+              dispatch({ type: 'RECOGNIZED_PHRASE', phrase: result.transcript });
+            }
             if (!cmd) return;
             cancelled = true;
             void recognition.stopListening();
@@ -158,8 +185,8 @@ export function RunScreen({
     state.voiceControlAvailable &&
     (state.status === 'speaking' || state.status === 'listening');
 
-  // Suppress onVoiceRunStop on the completed transition — stopping the FG
-  // service synchronously drops the chime on a locked screen.
+  // Suppress onVoiceRunStop in this cleanup on the completed transition. The
+  // completion effect stops the service after the chime has been started.
   const statusRef = useRef(state.status);
   statusRef.current = state.status;
 
@@ -167,33 +194,63 @@ export function RunScreen({
     setVoiceServiceReady(!onVoiceRunStart);
     if (!voiceRunActive) return;
     let cancelled = false;
-    let started = false;
-    Promise.resolve(onVoiceRunStart?.()).then(
+    const token = voiceRunStartupTokenRef.current + 1;
+    voiceRunStartupTokenRef.current = token;
+    const startup = voiceRunStopRef.current
+      .catch(() => undefined)
+      .then(() => {
+        if (cancelled || voiceRunStartupRef.current?.token !== token) return;
+        return onVoiceRunStart?.();
+      });
+    voiceRunStartupRef.current = { token, startup };
+    startup.then(
       () => {
-        started = true;
-        if (cancelled) {
-          if (statusRef.current !== 'completed') onVoiceRunStop?.();
-          return;
-        }
+        if (cancelled || voiceRunStartupRef.current?.token !== token) return;
         setVoiceServiceReady(true);
       },
       () => {
-        if (!cancelled) dispatch({ type: 'VOICE_UNAVAILABLE' });
+        if (!cancelled && voiceRunStartupRef.current?.token === token) {
+          dispatch({ type: 'VOICE_UNAVAILABLE' });
+        }
       },
     );
     return () => {
       cancelled = true;
-      if (started && statusRef.current !== 'completed') onVoiceRunStop?.();
+      if (statusRef.current === 'completed') return;
+      void startup
+        .catch(() => undefined)
+        .then(() => {
+          if (voiceRunStartupRef.current?.token !== token) return;
+          voiceRunStartupRef.current = null;
+          return stopVoiceRun();
+        });
     };
-  }, [voiceRunActive, onVoiceRunStart, onVoiceRunStop]);
+  }, [voiceRunActive, onVoiceRunStart, stopVoiceRun]);
 
-  // Stop recognition on completion. The FG service is left up so the chime
-  // can open its AudioTrack; the host route stops it on unmount.
+  // Stop recognition on completion, then stop the Android foreground service
+  // after the completion sound callback has had a chance to start playback.
   useEffect(() => {
     if (state.status !== 'completed') return;
-    recognition.stopListening();
-    onCompletion?.();
-  }, [state.status, recognition, onCompletion]);
+    let cancelled = false;
+    const startup = voiceRunStartupRef.current;
+    void recognition.stopListening();
+    void Promise.resolve()
+      .then(() => onCompletion?.())
+      .catch(() => undefined)
+      .then(() => startup?.startup)
+      .catch(() => undefined)
+      .then(() => {
+        if (cancelled) return;
+        if (startup && voiceRunStartupRef.current?.token === startup.token) {
+          voiceRunStartupRef.current = null;
+        }
+        return stopVoiceRun();
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [state.status, recognition, onCompletion, stopVoiceRun]);
 
   // Tear down adapters when the screen unmounts.
   useEffect(() => {
