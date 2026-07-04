@@ -1,10 +1,12 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, BackHandler, Platform, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Platform, Text, View } from 'react-native';
 
+import { confirmAction } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
 import { RunScreen } from '@/src/features/run/RunScreen';
 import { createSnapshot } from '@/src/features/run/snapshot';
+import { requestRunStopConfirmation } from '@/src/features/run/stopConfirmation';
 import type { ChecklistRunSnapshot } from '@/src/features/run/types';
 import { getChecklist } from '@/src/features/checklists/repository';
 import { CompletionSoundPlayer } from '@/src/services/audio/CompletionSoundPlayer';
@@ -35,6 +37,7 @@ export default function RunRoute() {
   // the deterministic fakes when EXPO_PUBLIC_USE_TEST_SPEECH_ADAPTER=true.
   const adapters = useMemo(() => createSpeechAdapters(), []);
   const completionSound = useMemo(() => new CompletionSoundPlayer(), []);
+  const stopConfirmationPendingRef = useRef(false);
 
   useEffect(() => {
     completionSound.prepare();
@@ -55,6 +58,14 @@ export default function RunRoute() {
     await stopRunResources();
     router.replace('/');
   }, [router, stopRunResources]);
+
+  const confirmAndExitRun = useCallback(async () => {
+    await requestRunStopConfirmation({
+      confirm: confirmAction,
+      exitRun,
+      pendingRef: stopConfirmationPendingRef,
+    });
+  }, [exitRun]);
 
   const stopRunResourcesInBackground = useCallback(() => {
     void stopRunResources();
@@ -115,16 +126,6 @@ export default function RunRoute() {
     };
   }, [stopRunResourcesInBackground]);
 
-  // Android hardware-back: discard the run by exiting the screen.
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      void exitRun();
-      return true;
-    });
-    return () => sub.remove();
-  }, [exitRun]);
-
   useEffect(() => setListeningNotificationStopHandler(exitRun), [exitRun]);
 
   const checklistTitle = loadState.kind === 'ready' ? loadState.snapshot.checklistTitle : '';
@@ -168,6 +169,7 @@ export default function RunRoute() {
       recognition={adapters.recognition}
       initialAvailability={loadState.initialAvailability}
       onExit={exitRun}
+      onRequestStop={confirmAndExitRun}
       onCompletion={playCompletionSound}
       onVoiceRunStart={startVoiceRun}
       onVoiceRunStop={stopVoiceRunSession}
