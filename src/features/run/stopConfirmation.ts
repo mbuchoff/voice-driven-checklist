@@ -11,23 +11,19 @@ type RequestRunStopConfirmationOptions = {
   confirm: (options: ConfirmOptions) => Promise<boolean>;
   exitRun: () => void | Promise<void>;
   pendingRef: { current: boolean };
-  setPending?: (pending: boolean) => void;
 };
 
 export async function requestRunStopConfirmation({
   confirm,
   exitRun,
   pendingRef,
-  setPending,
 }: RequestRunStopConfirmationOptions) {
   if (pendingRef.current) return;
   pendingRef.current = true;
-  setPending?.(true);
   try {
     const ok = await confirm(RUN_STOP_CONFIRMATION);
     if (ok) await exitRun();
   } finally {
     pendingRef.current = false;
-    setPending?.(false);
   }
 }

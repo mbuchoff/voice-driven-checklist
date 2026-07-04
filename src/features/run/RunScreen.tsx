@@ -35,7 +35,7 @@ export type RunScreenProps = {
   initialAvailability: { spokenPlaybackAvailable: boolean; voiceControlAvailable: boolean };
   onExit: () => void | Promise<void>;
   onRequestStop: () => void | Promise<void>;
-  stopConfirmationPending?: boolean;
+  isStopConfirmationPending?: () => boolean;
   onCompletion?: () => void | Promise<void>;
   onVoiceRunStart?: () => void | Promise<void>;
   onVoiceRunStop?: () => void | Promise<void>;
@@ -53,7 +53,7 @@ export function RunScreen({
   initialAvailability,
   onExit,
   onRequestStop,
-  stopConfirmationPending = false,
+  isStopConfirmationPending,
   onCompletion,
   onVoiceRunStart,
   onVoiceRunStop,
@@ -267,7 +267,7 @@ export function RunScreen({
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (stopConfirmationPending) return false;
+      if (isStopConfirmationPending?.()) return false;
       if (state.status === 'completed') {
         void onExit();
       } else {
@@ -276,7 +276,7 @@ export function RunScreen({
       return true;
     });
     return () => sub.remove();
-  }, [state.status, onExit, onRequestStop, stopConfirmationPending]);
+  }, [state.status, onExit, onRequestStop, isStopConfirmationPending]);
 
   const currentItem = state.snapshot?.items[state.currentItemIndex];
   const totalItems = state.snapshot?.items.length ?? 0;

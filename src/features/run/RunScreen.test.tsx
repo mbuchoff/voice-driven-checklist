@@ -30,7 +30,7 @@ type RenderOptions = Partial<
     | 'onCompletion'
     | 'onVoiceRunStart'
     | 'onVoiceRunStop'
-    | 'stopConfirmationPending'
+    | 'isStopConfirmationPending'
     | 'initialAvailability'
   >
 >;
@@ -54,7 +54,7 @@ function setup(options: RenderOptions = {}) {
       initialAvailability={initialAvailability}
       onExit={onExit}
       onRequestStop={onRequestStop}
-      stopConfirmationPending={options.stopConfirmationPending}
+      isStopConfirmationPending={options.isStopConfirmationPending}
       onCompletion={onCompletion}
       onVoiceRunStart={options.onVoiceRunStart}
       onVoiceRunStop={options.onVoiceRunStop}
@@ -466,9 +466,28 @@ describe('RunScreen', () => {
 
     it('lets Android back dismiss a pending stop confirmation dialog', async () => {
       useAndroidHardwareBack();
-      const { onExit, onRequestStop } = setup({ stopConfirmationPending: true });
+      const { onExit, onRequestStop } = setup({ isStopConfirmationPending: () => true });
       await flush();
 
+      let handled = true;
+      act(() => {
+        handled = mockHardwareBackHandler?.() ?? true;
+      });
+
+      expect(handled).toBe(false);
+      expect(onRequestStop).not.toHaveBeenCalled();
+      expect(onExit).not.toHaveBeenCalled();
+    });
+
+    it('checks for a pending stop confirmation when Android back is pressed', async () => {
+      useAndroidHardwareBack();
+      let stopConfirmationPending = false;
+      const { onExit, onRequestStop } = setup({
+        isStopConfirmationPending: () => stopConfirmationPending,
+      });
+      await flush();
+
+      stopConfirmationPending = true;
       let handled = true;
       act(() => {
         handled = mockHardwareBackHandler?.() ?? true;

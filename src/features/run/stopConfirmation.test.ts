@@ -52,24 +52,22 @@ describe('requestRunStopConfirmation', () => {
     expect(pendingRef.current).toBe(false);
   });
 
-  it('reports pending state while stop confirmation is open', async () => {
+  it('marks the confirmation pending synchronously while the prompt is open', async () => {
     const confirmation = deferred<boolean>();
     const confirm = jest.fn().mockReturnValue(confirmation.promise);
-    const setPending = jest.fn();
     const pendingRef = { current: false };
 
     const request = requestRunStopConfirmation({
       confirm,
       exitRun: jest.fn(),
       pendingRef,
-      setPending,
     });
 
-    expect(setPending).toHaveBeenCalledWith(true);
+    expect(pendingRef.current).toBe(true);
 
     confirmation.resolve(false);
     await request;
 
-    expect(setPending).toHaveBeenLastCalledWith(false);
+    expect(pendingRef.current).toBe(false);
   });
 });

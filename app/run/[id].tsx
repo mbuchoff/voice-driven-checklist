@@ -38,7 +38,6 @@ export default function RunRoute() {
   const adapters = useMemo(() => createSpeechAdapters(), []);
   const completionSound = useMemo(() => new CompletionSoundPlayer(), []);
   const stopConfirmationPendingRef = useRef(false);
-  const [stopConfirmationPending, setStopConfirmationPending] = useState(false);
 
   useEffect(() => {
     completionSound.prepare();
@@ -65,9 +64,12 @@ export default function RunRoute() {
       confirm: confirmAction,
       exitRun,
       pendingRef: stopConfirmationPendingRef,
-      setPending: setStopConfirmationPending,
     });
   }, [exitRun]);
+  const isStopConfirmationPending = useCallback(
+    () => stopConfirmationPendingRef.current,
+    [],
+  );
 
   const stopRunResourcesInBackground = useCallback(() => {
     void stopRunResources();
@@ -172,7 +174,7 @@ export default function RunRoute() {
       initialAvailability={loadState.initialAvailability}
       onExit={exitRun}
       onRequestStop={confirmAndExitRun}
-      stopConfirmationPending={stopConfirmationPending}
+      isStopConfirmationPending={isStopConfirmationPending}
       onCompletion={playCompletionSound}
       onVoiceRunStart={startVoiceRun}
       onVoiceRunStop={stopVoiceRunSession}
