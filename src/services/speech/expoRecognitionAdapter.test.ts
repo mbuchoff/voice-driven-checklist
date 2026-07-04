@@ -101,7 +101,7 @@ describe('ExpoRecognitionAdapter.startListening', () => {
     expect(Module.start).toHaveBeenCalledWith({
       lang: 'en-US',
       continuous: true,
-      interimResults: false,
+      interimResults: true,
       maxAlternatives: 1,
       contextualStrings: ['next', 'repeat', 'previous'],
       androidIntentOptions: {
@@ -131,7 +131,7 @@ describe('ExpoRecognitionAdapter.startListening', () => {
 
     expect(Module.start).toHaveBeenCalledWith(expect.objectContaining({
       continuous: false,
-      interimResults: false,
+      interimResults: true,
     }));
   });
 
@@ -143,7 +143,7 @@ describe('ExpoRecognitionAdapter.startListening', () => {
 
     expect(Module.start).toHaveBeenCalledWith(expect.objectContaining({
       continuous: false,
-      interimResults: false,
+      interimResults: true,
     }));
   });
 

@@ -50,7 +50,7 @@ export class ExpoRecognitionAdapter implements SpeechRecognitionAdapter {
     ExpoSpeechRecognitionModule.start({
       lang: options.locale,
       continuous: supportsSegmentedContinuousRecognition(),
-      interimResults: false,
+      interimResults: true,
       maxAlternatives: 1,
       contextualStrings: ['next', 'repeat', 'previous'],
       androidIntentOptions: {

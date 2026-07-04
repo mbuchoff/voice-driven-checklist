@@ -1,4 +1,4 @@
-import { parseCommand } from './commandParser';
+import { parseCommand, parseInterimCommand } from './commandParser';
 
 describe('parseCommand', () => {
   it.each(['next', 'NEXT', '  Next  '])('parses %j as "next"', (input) => {
@@ -39,4 +39,38 @@ describe('parseCommand', () => {
       expect(parseCommand(input)).toBeNull();
     },
   );
+});
+
+describe('parseInterimCommand', () => {
+  it.each([
+    ['next', 'next'],
+    ['NEXT', 'next'],
+    ['next item', 'next'],
+    ['next one', 'next'],
+    ['next please', 'next'],
+    ['repeat', 'repeat'],
+    ['repeat that', 'repeat'],
+    ['repeat please', 'repeat'],
+    ['previous', 'previous'],
+    ['previous item', 'previous'],
+    ['previous one', 'previous'],
+    ['previous please', 'previous'],
+  ])('parses strict interim phrase %j as %j', (input, expected) => {
+    expect(parseInterimCommand(input)).toBe(expected);
+  });
+
+  it.each([
+    'go next',
+    'go to the next one please',
+    'next time',
+    'next then repeat',
+    'the next one',
+    'repeat after me',
+    'previously',
+    'previous version',
+    'hello world',
+    '',
+  ])('rejects risky interim phrase %j', (input) => {
+    expect(parseInterimCommand(input)).toBeNull();
+  });
 });

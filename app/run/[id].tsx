@@ -132,6 +132,10 @@ export default function RunRoute() {
     () => startVoiceRunSession(checklistTitle),
     [checklistTitle],
   );
+  const playCompletionSound = useCallback(
+    () => completionSound.play(),
+    [completionSound],
+  );
 
   if (loadState.kind === 'loading') {
     return (
@@ -164,7 +168,7 @@ export default function RunRoute() {
       recognition={adapters.recognition}
       initialAvailability={loadState.initialAvailability}
       onExit={exitRun}
-      onCompletion={() => completionSound.play()}
+      onCompletion={playCompletionSound}
       onVoiceRunStart={startVoiceRun}
       onVoiceRunStop={stopVoiceRunSession}
     />
