@@ -151,9 +151,9 @@ export function RunScreen({
           onError: (error) => {
             if (cancelled) return;
             if (error === 'aborted') {
-              recognition.stopListening().then(() => {
-                if (!cancelled) scheduleRestart(RECOGNITION_END_RESTART_DELAY_MS);
-              });
+              // A natural end can be followed by a late result; keep the
+              // current subscription alive until the restart replaces it.
+              scheduleRestart(RECOGNITION_END_RESTART_DELAY_MS);
               return;
             }
             if (TRANSIENT_RECOGNITION_ERRORS.has(error)) {

@@ -324,6 +324,24 @@ describe('RunScreen', () => {
       expect(recognition.isListening()).toBe(true);
     });
 
+    it('accepts a command that arrives immediately after a non-command phrase ends', async () => {
+      const { playback, recognition } = setup();
+      await flush();
+      playback.completePlayback();
+      await flush();
+
+      act(() => {
+        recognition.emitResult({ transcript: 'hello how are you doing', isFinal: true });
+        recognition.emitError('aborted');
+        recognition.emitResult({ transcript: 'next', isFinal: true });
+      });
+      await flush();
+
+      expect(screen.getByText('Item two')).toBeOnTheScreen();
+      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(playback.spoken).toEqual(['Item one', 'Item two']);
+    });
+
     it('ignores non-final recognition results', async () => {
       const { playback, recognition } = setup();
       await flush();
