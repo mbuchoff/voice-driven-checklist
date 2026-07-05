@@ -12,7 +12,12 @@ export async function startVoiceRunSession(checklistTitle: string): Promise<void
   // before the mic opens, and a failed notification (permission denied) must
   // skip routing rather than leave the audio mode changed.
   await startListeningNotification(checklistTitle);
-  await startAndroidBluetoothAudioRoute();
+  try {
+    await startAndroidBluetoothAudioRoute();
+  } catch (error) {
+    await stopListeningNotification();
+    throw error;
+  }
 }
 
 export async function stopVoiceRunSession(): Promise<void> {

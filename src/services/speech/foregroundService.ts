@@ -79,13 +79,21 @@ export async function stopListeningNotification(): Promise<void> {
   const resolve = stopResolver;
   stopResolver = null;
 
-  try {
-    if (Platform.OS === 'android') await notifee.stopForegroundService();
-  } catch {
-    // The notification may already be gone when several stop paths converge.
-  } finally {
-    resolve?.();
+  if (Platform.OS === 'android') {
+    try {
+      await notifee.stopForegroundService();
+    } catch {
+      // The service may already be gone when several stop paths converge.
+    }
+
+    try {
+      await notifee.cancelNotification(LISTENING_NOTIFICATION_ID);
+    } catch {
+      // The notification may already be gone when several stop paths converge.
+    }
   }
+
+  resolve?.();
 }
 
 async function handleNotificationAction(event: NotificationActionEvent): Promise<void> {

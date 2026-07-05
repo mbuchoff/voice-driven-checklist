@@ -58,6 +58,20 @@ describe('voiceRunSession', () => {
     expect(mockStartAndroidBluetoothAudioRoute).not.toHaveBeenCalled();
   });
 
+  it('stops the foreground service when audio routing cannot start', async () => {
+    mockStartAndroidBluetoothAudioRoute.mockRejectedValueOnce(
+      new Error('route unavailable'),
+    );
+
+    await expect(startVoiceRunSession('Morning checklist')).rejects.toThrow(
+      /route unavailable/i,
+    );
+
+    expect(mockStartListeningNotification).toHaveBeenCalledWith('Morning checklist');
+    expect(mockStartAndroidBluetoothAudioRoute).toHaveBeenCalledTimes(1);
+    expect(mockStopListeningNotification).toHaveBeenCalledTimes(1);
+  });
+
   it('stops both the Bluetooth route and foreground service', async () => {
     await stopVoiceRunSession();
 

@@ -105,6 +105,29 @@ describe('RunScreen', () => {
       expect(playback.spoken).toEqual(['Item one']);
     });
 
+    it('waits for the Android voice run startup before speaking the first item', async () => {
+      let resolveStartup!: () => void;
+      const startupFinished = new Promise<void>((resolve) => {
+        resolveStartup = resolve;
+      });
+      const { playback, recognition } = setup({
+        onVoiceRunStart: jest.fn(() => startupFinished),
+      });
+      await flush();
+
+      expect(playback.spoken).toEqual([]);
+      expect(recognition.startCount).toBe(0);
+
+      await act(async () => {
+        resolveStartup();
+        await startupFinished;
+      });
+      await flush();
+
+      expect(playback.spoken).toEqual(['Item one']);
+      expect(recognition.startCount).toBe(0);
+    });
+
     it('does not start recognition while speaking', async () => {
       const { recognition } = setup();
       await flush();
@@ -907,11 +930,11 @@ describe('RunScreen', () => {
         }),
       });
       await flush();
-      playback.completePlayback();
       await flush();
 
       expect(screen.getByText(/voice control unavailable/i)).toBeOnTheScreen();
       expect(recognition.startCount).toBe(0);
+      expect(playback.spoken).toEqual(['Item one']);
     });
   });
 });

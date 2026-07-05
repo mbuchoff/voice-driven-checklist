@@ -15,11 +15,10 @@ const nativeRoute = requireOptionalNativeModule<AndroidBluetoothAudioRouteModule
 export async function startAndroidBluetoothAudioRoute(): Promise<void> {
   if (!nativeRoute) return;
 
-  try {
-    await nativeRoute.start();
-  } catch {
-    // Best-effort: voice control stays usable on the built-in mic if routing fails.
-    // The native module logs the outcome under the "VoiceChecklistAudioRoute" tag.
+  const routed = await nativeRoute.start();
+  if (!routed) {
+    // The native module logs the detailed route decision under this tag.
+    throw new Error('Android audio route unavailable.');
   }
 }
 

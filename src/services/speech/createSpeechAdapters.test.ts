@@ -27,6 +27,11 @@ jest.mock('expo-speech-recognition', () => ({
   },
 }));
 
+jest.mock('./androidRoutedPlayback', () => ({
+  AndroidRoutedPlaybackAdapter: class AndroidRoutedPlaybackAdapter {},
+  isAndroidRoutedPlaybackAvailable: jest.fn(() => false),
+}));
+
 const ORIGINAL = process.env.EXPO_PUBLIC_USE_TEST_SPEECH_ADAPTER;
 
 afterEach(() => {
@@ -60,5 +65,19 @@ describe('createSpeechAdapters', () => {
     expect(handle).toBeDefined();
     expect(typeof handle?.completePlayback).toBe('function');
     expect(typeof handle?.emitPhrase).toBe('function');
+  });
+
+  it('uses routed Android playback when the native module exposes speech playback', () => {
+    delete process.env.EXPO_PUBLIC_USE_TEST_SPEECH_ADAPTER;
+    const routedPlayback = jest.requireMock('./androidRoutedPlayback') as {
+      AndroidRoutedPlaybackAdapter: new () => unknown;
+      isAndroidRoutedPlaybackAvailable: jest.Mock;
+    };
+    routedPlayback.isAndroidRoutedPlaybackAvailable.mockReturnValue(true);
+
+    const { playback, recognition } = createSpeechAdapters();
+
+    expect(playback).toBeInstanceOf(routedPlayback.AndroidRoutedPlaybackAdapter);
+    expect(recognition).toBeInstanceOf(ExpoRecognitionAdapter);
   });
 });

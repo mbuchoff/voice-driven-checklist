@@ -1,4 +1,8 @@
 import type { SpeechPlaybackAdapter, SpeechRecognitionAdapter } from './adapters';
+import {
+  AndroidRoutedPlaybackAdapter,
+  isAndroidRoutedPlaybackAvailable,
+} from './androidRoutedPlayback';
 import { ExpoPlaybackAdapter } from './expoPlaybackAdapter';
 import { ExpoRecognitionAdapter } from './expoRecognitionAdapter';
 import { FakeSpeechPlaybackAdapter, FakeSpeechRecognitionAdapter } from './fakes';
@@ -20,7 +24,11 @@ export function createSpeechAdapters(): SpeechAdapters {
     return { playback, recognition };
   }
   return {
-    playback: new ExpoPlaybackAdapter(),
+    // Android routed playback is used for every run so spoken items never use
+    // the phone earpiece, including when voice control is unavailable.
+    playback: isAndroidRoutedPlaybackAvailable()
+      ? new AndroidRoutedPlaybackAdapter()
+      : new ExpoPlaybackAdapter(),
     recognition: new ExpoRecognitionAdapter(),
   };
 }
