@@ -88,10 +88,15 @@ export function RunScreen({
     borderRadius: 6,
   } as const;
 
+  const spokenPlaybackReady = !state.voiceControlAvailable || voiceServiceReady;
+
   // Drive spoken playback whenever the run is in the `speaking` state. Bumps
   // to `playbackTick` (e.g. REPEAT) cause the same item to be re-spoken.
+  // When voice control is available, wait for voice-run startup so Android
+  // applies the audio route before TTS; without voice control, routed playback
+  // self-arms that route before speaking.
   useEffect(() => {
-    if (state.status !== 'speaking' || !state.snapshot) return;
+    if (state.status !== 'speaking' || !state.snapshot || !spokenPlaybackReady) return;
     const item = state.snapshot.items[state.currentItemIndex];
     let cancelled = false;
     playback
@@ -111,6 +116,7 @@ export function RunScreen({
     state.snapshot,
     state.currentItemIndex,
     state.playbackTick,
+    spokenPlaybackReady,
     playback,
   ]);
 

@@ -7,6 +7,7 @@ let mockForegroundObserver: ((event: ForegroundEvent) => void) | null = null;
 let mockBackgroundObserver: ((event: ForegroundEvent) => Promise<void>) | null = null;
 const mockUnsubscribe = jest.fn();
 const mockNotifee = {
+  cancelNotification: jest.fn(async () => undefined),
   createChannel: jest.fn(async () => 'voice-checklist-listening'),
   displayNotification: jest.fn(async () => 'voice-checklist-listening'),
   onBackgroundEvent: jest.fn((observer: (event: ForegroundEvent) => Promise<void>) => {
@@ -52,6 +53,7 @@ function loadService() {
 beforeEach(() => {
   mockForegroundObserver = null;
   mockBackgroundObserver = null;
+  mockNotifee.cancelNotification.mockClear();
   mockUnsubscribe.mockClear();
   mockNotifee.createChannel.mockClear();
   mockNotifee.displayNotification.mockClear();
@@ -125,6 +127,29 @@ describe('foreground speech service', () => {
 
     expect(resolved).toBe(true);
     expect(mockNotifee.stopForegroundService).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels the listening notification when the foreground service stops', async () => {
+    const { stopListeningNotification } = await loadService();
+
+    await stopListeningNotification();
+
+    expect(mockNotifee.cancelNotification).toHaveBeenCalledWith(
+      'voice-checklist-listening',
+    );
+  });
+
+  it('still cancels the listening notification when the service is already stopped', async () => {
+    mockNotifee.stopForegroundService.mockRejectedValueOnce(
+      new Error('service missing'),
+    );
+    const { stopListeningNotification } = await loadService();
+
+    await stopListeningNotification();
+
+    expect(mockNotifee.cancelNotification).toHaveBeenCalledWith(
+      'voice-checklist-listening',
+    );
   });
 
   it('routes the notification Stop action to the active run callback', async () => {

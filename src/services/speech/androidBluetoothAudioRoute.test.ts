@@ -39,7 +39,18 @@ describe('androidBluetoothAudioRoute', () => {
     await expect(stopAndroidBluetoothAudioRoute()).resolves.toBeUndefined();
   });
 
-  it('stays usable when the native route rejects', async () => {
+  it('rejects when the native module cannot route away from the phone earpiece', async () => {
+    const nativeModule = {
+      start: jest.fn(async () => false),
+      stop: jest.fn(async () => undefined),
+    };
+    const { startAndroidBluetoothAudioRoute } =
+      loadRoute(nativeModule);
+
+    await expect(startAndroidBluetoothAudioRoute()).rejects.toThrow(/audio route unavailable/i);
+  });
+
+  it('rejects when the native route rejects', async () => {
     const nativeModule = {
       start: jest.fn(async () => {
         throw new Error('route unavailable');
@@ -51,7 +62,7 @@ describe('androidBluetoothAudioRoute', () => {
     const { startAndroidBluetoothAudioRoute, stopAndroidBluetoothAudioRoute } =
       loadRoute(nativeModule);
 
-    await expect(startAndroidBluetoothAudioRoute()).resolves.toBeUndefined();
+    await expect(startAndroidBluetoothAudioRoute()).rejects.toThrow(/route unavailable/i);
     await expect(stopAndroidBluetoothAudioRoute()).resolves.toBeUndefined();
 
     expect(nativeModule.start).toHaveBeenCalledTimes(1);
