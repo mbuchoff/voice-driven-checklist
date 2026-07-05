@@ -19,9 +19,8 @@ class RoutedSpeechEngineTest {
       fake
     }
     val promise = TestPromise()
-    var settled = 0
 
-    engine.speak("Item one", "en-US", promise) { settled += 1 }
+    engine.speak("Item one", "en-US", promise)
     assertTrue(fake.spoken.isEmpty())
 
     initialize(TextToSpeech.SUCCESS)
@@ -34,24 +33,21 @@ class RoutedSpeechEngineTest {
     fake.listener.onDone(spoken.utteranceId)
 
     assertTrue(promise.resolved)
-    assertEquals(1, settled)
   }
 
   @Test
-  fun stopResolvesQueuedSpeechAndReleasesItsRoute() {
+  fun stopResolvesQueuedSpeech() {
     val fake = FakeSpeechSynthesizer()
     val engine = RoutedSpeechEngine { listener, _ ->
       fake.listener = listener
       fake
     }
     val promise = TestPromise()
-    var settled = 0
 
-    engine.speak("Item one", "en-US", promise) { settled += 1 }
+    engine.speak("Item one", "en-US", promise)
     engine.stop()
 
     assertTrue(promise.resolved)
-    assertEquals(1, settled)
     assertTrue(fake.spoken.isEmpty())
   }
 
@@ -65,13 +61,11 @@ class RoutedSpeechEngineTest {
       fake
     }
     val promise = TestPromise()
-    var settled = 0
 
-    engine.speak("Item one", "en-US", promise) { settled += 1 }
+    engine.speak("Item one", "en-US", promise)
     initialize(TextToSpeech.ERROR)
 
     assertEquals(TTS_ERROR_CODE, promise.rejectedCode)
-    assertEquals(1, settled)
     assertTrue(fake.spoken.isEmpty())
   }
 
@@ -85,7 +79,7 @@ class RoutedSpeechEngineTest {
       fake
     }
 
-    engine.speak("Item one", "en-US", TestPromise()) {}
+    engine.speak("Item one", "en-US", TestPromise())
     initialize(TextToSpeech.SUCCESS)
 
     assertEquals(listOf("route-warmup:0.0", "speak:Item one"), fake.speechEvents)
@@ -102,18 +96,14 @@ class RoutedSpeechEngineTest {
     }
     val firstPromise = TestPromise()
     val secondPromise = TestPromise()
-    var firstSettled = 0
-    var secondSettled = 0
 
-    engine.speak("First", "en-US", firstPromise) { firstSettled += 1 }
-    engine.speak("Second", "en-US", secondPromise) { secondSettled += 1 }
+    engine.speak("First", "en-US", firstPromise)
+    engine.speak("Second", "en-US", secondPromise)
     initialize(TextToSpeech.SUCCESS)
 
     assertTrue(firstPromise.resolved)
-    assertEquals(1, firstSettled)
     assertEquals(listOf("Second"), fake.spoken.map { it.text })
     assertFalse(secondPromise.settled)
-    assertEquals(0, secondSettled)
   }
 
   @Test
@@ -127,18 +117,14 @@ class RoutedSpeechEngineTest {
     }
     val firstPromise = TestPromise()
     val secondPromise = TestPromise()
-    var firstSettled = 0
-    var secondSettled = 0
 
-    engine.speak("First", "en-US", firstPromise) { firstSettled += 1 }
+    engine.speak("First", "en-US", firstPromise)
     initialize(TextToSpeech.SUCCESS)
-    engine.speak("Second", "en-US", secondPromise) { secondSettled += 1 }
+    engine.speak("Second", "en-US", secondPromise)
 
     assertTrue(firstPromise.resolved)
-    assertEquals(1, firstSettled)
     assertEquals(listOf("First", "Second"), fake.spoken.map { it.text })
     assertFalse(secondPromise.settled)
-    assertEquals(0, secondSettled)
   }
 }
 

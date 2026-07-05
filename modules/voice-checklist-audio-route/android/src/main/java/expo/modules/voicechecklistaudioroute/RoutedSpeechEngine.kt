@@ -2,7 +2,6 @@ package expo.modules.voicechecklistaudioroute
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.AudioManager
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -57,10 +56,9 @@ internal class RoutedSpeechEngine(
   }
 
   @Synchronized
-  fun speak(text: String, locale: String, promise: Promise, onSettled: () -> Unit) {
+  fun speak(text: String, locale: String, promise: Promise) {
     if (text.length > maxSpeechInputLength) {
       promise.reject(TTS_ERROR_CODE, "Speech input text is too long.", null)
-      onSettled()
       return
     }
 
@@ -69,7 +67,6 @@ internal class RoutedSpeechEngine(
       text = text,
       locale = locale,
       promise = promise,
-      onSettled = onSettled,
     )
 
     when {
@@ -145,7 +142,7 @@ internal class RoutedSpeechEngine(
     }
 
     ready = true
-    logInfo("routed TTS initialized usage=VOICE_COMMUNICATION")
+    logInfo("routed TTS initialized usage=MEDIA")
     resolvePendingSpeechAvailabilityLocked(true)
     while (pendingSpeech.isNotEmpty()) {
       speakLocked(pendingSpeech.remove())
@@ -178,7 +175,7 @@ internal class RoutedSpeechEngine(
       return
     }
     val result = tts.speak(speech.text, speech.id)
-    logInfo("speakRouted result=$result stream=VOICE_CALL textLength=${speech.text.length}")
+    logInfo("speakRouted result=$result textLength=${speech.text.length}")
     if (result == TextToSpeech.ERROR) {
       rejectActiveSpeechLocked(speech.id, "Android text-to-speech rejected the utterance.")
     }
@@ -188,7 +185,6 @@ internal class RoutedSpeechEngine(
   private fun completeSpeech(utteranceId: String) {
     activeSpeech.remove(utteranceId)?.let { speech ->
       speech.promise.resolve()
-      speech.onSettled()
     }
   }
 
@@ -202,7 +198,6 @@ internal class RoutedSpeechEngine(
     activeSpeech.clear()
     speeches.forEach { speech ->
       speech.promise.resolve()
-      speech.onSettled()
     }
   }
 
@@ -210,20 +205,17 @@ internal class RoutedSpeechEngine(
     while (pendingSpeech.isNotEmpty()) {
       val speech = pendingSpeech.remove()
       speech.promise.resolve()
-      speech.onSettled()
     }
   }
 
   private fun rejectActiveSpeechLocked(utteranceId: String, message: String) {
     activeSpeech.remove(utteranceId)?.let { speech ->
       speech.promise.reject(TTS_ERROR_CODE, message, null)
-      speech.onSettled()
     }
   }
 
   private fun rejectSpeech(speech: RoutedSpeech, message: String) {
     speech.promise.reject(TTS_ERROR_CODE, message, null)
-    speech.onSettled()
   }
 
   private fun rejectPendingSpeechLocked(message: String) {
@@ -244,7 +236,6 @@ private data class RoutedSpeech(
   val text: String,
   val locale: String,
   val promise: Promise,
-  val onSettled: () -> Unit,
 )
 
 internal interface RoutedSpeechSynthesizer {
@@ -290,7 +281,7 @@ private class AndroidRoutedSpeechSynthesizer(
   init {
     textToSpeech.setAudioAttributes(
       AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+        .setUsage(AudioAttributes.USAGE_MEDIA)
         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
         .build()
     )
@@ -331,7 +322,6 @@ private class AndroidRoutedSpeechSynthesizer(
 
   private fun routedSpeechParams(volume: Float? = null) =
     Bundle().apply {
-      putString(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_VOICE_CALL.toString())
       if (volume != null) {
         putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume)
       }
