@@ -7,8 +7,9 @@ const workflow = readFileSync(
 );
 
 describe('Android release workflow', () => {
-  it('allows release validation from the WIP branch', () => {
-    expect(workflow).toContain('branches: [main, wip/android-play-ci]');
+  it('runs automatically from main and supports manual dispatches', () => {
+    expect(workflow).toContain('branches: [main]');
+    expect(workflow).toMatch(/^  workflow_dispatch:$/m);
   });
 
   it('keeps pending releases in the concurrency queue', () => {

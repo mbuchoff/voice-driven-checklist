@@ -2,7 +2,7 @@ name: Android Release
 
 on:
   push:
-    branches: [main, wip/android-play-ci]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
