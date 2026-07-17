@@ -52,7 +52,13 @@ Two facts shape the design:
    - `ANDROID_KEY_ALIAS` — `upload`
    - `ANDROID_KEY_PASSWORD` — *same passphrase as the store password*
    - `PLAY_SERVICE_ACCOUNT_JSON` — full contents of the service-account JSON
-3. The app listing already exists on Play with ≥ 1 manual upload (codes 1, 2), so Google's
+3. **Declare the microphone foreground service in Play Console:** under **App content → Foreground
+   service permissions**, select **Microphone** and the background-audio/voice-command use case.
+   Explain that listening starts only after the user starts a checklist, voice commands are processed
+   without recording or retaining audio, an ongoing notification provides a Stop action, and deferring
+   or interrupting the service disables hands-free checklist control. Supply a publicly accessible
+   demo video showing the start action, ongoing notification, working voice commands, and Stop action.
+4. The app listing already exists on Play with ≥ 1 manual upload (codes 1, 2), so Google's
    "first upload must be via Console" gate is already cleared — API uploads for codes ≥ 3 are accepted.
 
 ## Changes
@@ -222,13 +228,24 @@ Tests are co-located `*.test.js`, picked up by the `jest-expo` preset.
 
 **CI end-to-end:**
 
-- After adding all five secrets, trigger via **Run workflow** (`workflow_dispatch`) or push to `main`.
-  Because `run_number` starts at 1, the first two runs build/sign/artifact fine but **fail the
-  "Upload to Play" step with a duplicate-versionCode error — expected.** The third run (code 3)
-  publishes to Internal testing.
-- Confirm the build in **Play Console → Testing → Internal testing** (versionCode 3) and install via
-  the internal-testing opt-in link.
+- After adding all five secrets and completing the foreground-service declaration, trigger via
+  **Run workflow** (`workflow_dispatch`) or push to `main`.
+- A workflow run whose `run_number` is already present in Play builds/signs/artifacts successfully
+  but fails the upload with a duplicate-versionCode error. Trigger a later run; do not allocate or
+  upload a competing version code manually.
+- Confirm the successful run's version code in **Play Console → Testing → Internal testing** and
+  install via the internal-testing opt-in link.
 - After CI cutover, request every release through a push to `main` or **Run workflow**. Do not allocate
   a separate version code and upload a locally-built bundle.
 - Monitor CI without `checks:read` scope (per environment notes):
   `gh api "repos/mbuchoff/voice-driven-checklist/actions/runs?head_sha=<sha>" --jq '.workflow_runs[] | {name, status, conclusion}'`.
+
+**Observed branch validation (July 2026):**
+
+- Runs 1 and 2 built, signed, and preserved their artifacts, then Play rejected their already-used
+  version codes.
+- Runs 3 and 4 built, signed, preserved their artifacts, authenticated to Play, and uploaded their
+  AABs, then Play rejected the edit commit because the foreground-service declaration had not been
+  submitted.
+- Implementation is not live-verified until a later GitHub Actions run completes successfully and
+  the resulting version code appears on the Internal testing track.

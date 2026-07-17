@@ -177,8 +177,11 @@ the existing `*.jks` line). Do not commit any secret.
 - Creating the Google Play service account / JSON key and Play Console permissions.
 - Adding the five GitHub Actions secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
   `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, `PLAY_SERVICE_ACCOUNT_JSON`).
-- Any Play Console UI action. The first two CI runs (versionCode 1, 2) are expected to fail at the
-  upload step because those codes already exist on Play; runs ≥ 3 publish.
+- Any Play Console UI action, including the required **App content → Foreground service permissions**
+  declaration for microphone-based background voice commands and its demo video.
+- A run whose `versionCode` already exists on Play is expected to fail at upload. A unique version
+  code is still not sufficient if an App content declaration or other Play policy requirement is
+  incomplete.
 - Direct manual allocation of a new version code or upload of a locally-built release. After CI
   cutover, human-requested releases use `workflow_dispatch` so the workflow remains the only version
   code authority.
@@ -187,5 +190,6 @@ the existing `*.jks` line). Do not commit any secret.
 
 Report: files created/modified, the `npm test` output, any anchor drift you hit in the generated
 `build.gradle` (with how you resolved it), the exact `r0adkll/upload-google-play` SHA you pinned, and a
-reminder of the human-owned prerequisites still outstanding (secrets + service account). Do not commit
-unless the user explicitly asks; if you do, branch first and don't skip hooks.
+reminder of the human-owned prerequisites still outstanding (secrets, service account, and Play App
+content declarations). Do not commit unless the user explicitly asks; if you do, branch first and
+don't skip hooks.

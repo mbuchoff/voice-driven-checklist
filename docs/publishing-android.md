@@ -187,6 +187,24 @@ Once your Play account is verified, in [Play Console](https://play.google.com/co
    - **Content rating** — fill out the questionnaire; all answers are "no" for this app. Expect IARC 3+.
    - **Target audience** — age 13+.
    - **Data safety** — "no data collected or shared" (full guidance in `docs/store-listing.md`).
+   - **Foreground service permissions** — declare **Microphone** for background audio access / voice
+     commands without saving. Use this functionality description:
+
+     > Voice Checklist uses a microphone foreground service only during a checklist run explicitly
+     > started by the user. It listens for the commands "next," "repeat," and "previous" and passes
+     > microphone audio directly to Android's speech recognition service. The app does not record or
+     > retain audio. While listening, it displays an ongoing notification with a Stop action. The
+     > service stops when the user stops or completes the checklist.
+
+     Use this user-impact explanation:
+
+     > If the task is deferred, voice commands are unavailable when the checklist begins and the user
+     > cannot operate the checklist hands-free. If interrupted, active speech recognition stops and
+     > spoken commands are missed until the checklist run is restarted.
+
+     Provide a publicly accessible or unlisted demo video that shows selecting a checklist, tapping
+     Start, granting any requested permissions, the ongoing listening notification, the UI responding
+     to "next," "repeat," and "previous," and the notification's Stop action.
    - **Government apps** — No.
    - **News apps** — No.
    - **COVID-19 contact tracing** — No.
