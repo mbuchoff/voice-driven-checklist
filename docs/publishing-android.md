@@ -1,8 +1,11 @@
-# Publishing to Google Play (local build)
+# Publishing to Google Play
 
-Step-by-step for shipping a new `.aab` to the Play Store from your
-Mac, without any cloud build service. First publish walks through
-Play Console setup too; subsequent updates are just steps 4–6.
+The first-publish and local verification steps below document the original
+Mac build process. Once `.github/workflows/android-release.yml` is enabled,
+all new releases—including manually requested releases—must run through
+GitHub Actions so `github.run_number` remains the single Android
+`versionCode` authority. Use **Run workflow** for a manual release; do not
+assign a separate version code and upload a locally-built bundle.
 
 ## 0. One-time: Play Console account
 
@@ -118,6 +121,10 @@ pinning them into a config plugin later if prebuild becomes routine.
 
 ## 3. Bump the version for each release
 
+This step applies only before the GitHub Actions release pipeline is enabled.
+After CI cutover, the workflow supplies `versionCode`; do not set or advance it
+through the local publishing path.
+
 In `app.json`, before each release, bump:
 
 ```json
@@ -180,6 +187,24 @@ Once your Play account is verified, in [Play Console](https://play.google.com/co
    - **Content rating** — fill out the questionnaire; all answers are "no" for this app. Expect IARC 3+.
    - **Target audience** — age 13+.
    - **Data safety** — "no data collected or shared" (full guidance in `docs/store-listing.md`).
+   - **Foreground service permissions** — declare **Microphone** for background audio access / voice
+     commands without saving. Use this functionality description:
+
+     > Voice Checklist uses a microphone foreground service only during a checklist run explicitly
+     > started by the user. It listens for the commands "next," "repeat," and "previous" and passes
+     > microphone audio directly to Android's speech recognition service. The app does not record or
+     > retain audio. While listening, it displays an ongoing notification with a Stop action. The
+     > service stops when the user stops or completes the checklist.
+
+     Use this user-impact explanation:
+
+     > If the task is deferred, voice commands are unavailable when the checklist begins and the user
+     > cannot operate the checklist hands-free. If interrupted, active speech recognition stops and
+     > spoken commands are missed until the checklist run is restarted.
+
+     Provide a publicly accessible or unlisted demo video that shows selecting a checklist, tapping
+     Start, granting any requested permissions, the ongoing listening notification, the UI responding
+     to "next," "repeat," and "previous," and the notification's Stop action.
    - **Government apps** — No.
    - **News apps** — No.
    - **COVID-19 contact tracing** — No.
@@ -197,10 +222,13 @@ Once your Play account is verified, in [Play Console](https://play.google.com/co
 
 ## 6. Subsequent updates
 
-1. Bump `version` and `versionCode` in `app.json` (step 3).
-2. `./gradlew bundleRelease` (step 4).
-3. Play Console → Testing/Production → Create release → upload new
-   `.aab` → release notes → roll out.
+1. Push the release commit to `main`, or open the repository's GitHub Actions
+   page and choose **Android Release → Run workflow** for a manually requested
+   release.
+2. The workflow assigns `versionCode`, builds and signs the bundle, preserves
+   it as a run artifact, and uploads it to Internal testing.
+3. Confirm the release in **Play Console → Testing → Internal testing**.
 
-That's it. No services, no accounts beyond Play Console and your
-Google identity.
+Do not create a second local build with a separately chosen `versionCode`.
+That would compete with the workflow's run-number sequence and can make later
+CI uploads unusable.
