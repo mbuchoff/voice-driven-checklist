@@ -1,8 +1,7 @@
 # CI/CD: Build & publish the Android app to Google Play
 
-> Implementation plan. The companion **[codex-handoff.md](./codex-handoff.md)** turns this
-> into step-by-step execution instructions for an implementing agent. The manual process this
-> automates is **[../publishing-android.md](../publishing-android.md)**.
+> Design and rollout record for automated Android publishing. The implementation is the source of
+> truth; ongoing operator instructions live in **[../publishing-android.md](../publishing-android.md)**.
 
 ## Context
 
@@ -191,15 +190,12 @@ committed by accident. (`*.jks` is already ignored.)
 Tests are co-located `*.test.js`, picked up by the `jest-expo` preset.
 
 1. `plugins/withReleaseSigningConfig.test.js` — **write first, watch it fail.** Feed a fixture of the
-   real generated `android/app/build.gradle` (see codex-handoff.md for the exact snippet) and assert:
+   real generated `android/app/build.gradle` and assert:
    (a) the `release` signingConfig with the four `VOICE_CHECKLIST_UPLOAD_*` lines is present;
    (b) the `release` buildType now references `signingConfigs.release`; (c) the `debug` buildType still
    references `signingConfigs.debug`; (d) applying twice is a no-op (idempotent). Then implement.
 2. `app.config.test.js` — **write first.** `ANDROID_VERSION_CODE=42` → resolved
    `android.versionCode === 42`; unset → falls back to `1`. Then implement `app.config.js`.
-3. `.github/workflows/android-release.test.js` — assert the workflow retains pending releases with
-   `queue: max`, protecting the deployment contract from reverting to GitHub's single-pending-run
-   default.
 
 ## Security follow-ups (recommended)
 
@@ -215,7 +211,7 @@ Tests are co-located `*.test.js`, picked up by the `jest-expo` preset.
 
 **Local (fast, no Play):**
 
-- `npm test` — the three new test files pass; full suite stays green.
+- `npm test` — the signing-plugin and app-config tests pass; full suite stays green.
 - `ANDROID_VERSION_CODE=999 npx expo prebuild --platform android --no-install --clean`, then confirm
   in the regenerated `android/app/build.gradle`: `versionCode 999`, the `release` signingConfig block
   exists, and the release buildType shows `signingConfig signingConfigs.release`.
