@@ -247,5 +247,10 @@ Tests are co-located `*.test.js`, picked up by the `jest-expo` preset.
 - Runs 3 and 4 built, signed, preserved their artifacts, authenticated to Play, and uploaded their
   AABs, then Play rejected the edit commit because the foreground-service declaration had not been
   submitted.
-- Implementation is not live-verified until a later GitHub Actions run completes successfully and
-  the resulting version code appears on the Internal testing track.
+- Run 5 ([GitHub Actions](https://github.com/mbuchoff/voice-driven-checklist/actions/runs/30408708134))
+  built and signed versionCode 5, preserved the 66,051,775-byte `app-release-5` artifact, uploaded the
+  AAB to the Internal testing track, and successfully committed Play edit
+  `12322505403009547685`. This live-verifies manual dispatch from a non-default branch and the complete
+  Play release path.
+- The automatic `main` trigger becomes active when the implementation PR is merged. Merging remains a
+  separate, user-authorized action.
