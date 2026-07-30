@@ -39,12 +39,18 @@ Features
   control or the speech engine is unavailable.
 • Follows your system appearance — the UI switches automatically
   between light and dark mode based on your Android settings.
-• Offline — all your checklists are stored locally on your device.
-  No account, no sign-up, no data uploaded.
+• Local by design — all checklist content stays on your device and
+  remains available offline.
+• Your choice — use the app without an account or optionally continue
+  with Google for identity and account management. Google sign-in does
+  not upload or synchronize checklist content in this release.
 
 Privacy
-• Voice Checklist does not collect or transmit any personal data to
-  the developer.
+• Checklist titles and items stay on your device and are not uploaded
+  to the developer, Google, or Amazon Cognito.
+• Optional Google sign-in processes your name, email address, and a
+  Cognito user ID only for authentication and account management.
+• No advertising, analytics, tracking, or sale of personal data.
 • The microphone is used only while a checklist is running, to pass
   audio to Android's speech recognition service for the three
   supported voice commands. Audio is not recorded, stored, or sent
@@ -89,13 +95,38 @@ this but a real page is preferred):
 https://github.com/mbuchoff/voice-driven-checklist/blob/main/docs/PRIVACY.md
 ```
 
+## Account deletion URL
+
+Use this URL in **App content → Data deletion** and in the store listing where
+an account-deletion link is requested:
+
+```text
+https://mbuchoff.github.io/voice-driven-checklist/delete-account/
+```
+
+The in-app path is **Checklists → Account settings gear → Delete Google
+account**. Both paths delete the Cognito profile while preserving checklist
+content that exists only on the device.
+
 ## Data safety declaration
 
 Answers for the Play Console Data Safety form:
 
-- **Does your app collect or share any of the required user data types?** No.
-- **Is all of the user data collected by your app encrypted in transit?** Not applicable (no data collected).
-- **Do you provide a way for users to request that their data be deleted?** Not applicable.
+- **Does your app collect or share any of the required user data types?** Yes,
+  optional collection for Google sign-in.
+- **Personal info → Name:** Collected, optional; account management and app
+  functionality; not used for advertising.
+- **Personal info → Email address:** Collected, optional; account management
+  and app functionality; not used for advertising.
+- **Device or other IDs → User IDs:** Collected, optional. This is the Cognito
+  subject used for account management and app functionality.
+- **Shared:** No. Google and Amazon Cognito process authentication data as
+  identity/service providers; it is not transferred for advertising or sold.
+- **Is all collected user data encrypted in transit?** Yes.
+- **Can users request deletion?** Yes. Provide both the in-app path and
+  `https://mbuchoff.github.io/voice-driven-checklist/delete-account/`.
+- **Checklist content:** Not collected and not shared. It remains in the local
+  SQLite database even in Google mode.
 
 **Audio:** Although the app uses the microphone, the audio is processed
 by the platform's on-device / cloud speech recognition service and is
@@ -120,7 +151,9 @@ Expected rating: **IARC 3+ (Everyone)**.
 
 ## App access
 
-- **Is all or part of your app restricted behind a login?** No.
+- **Is all or part of your app restricted behind a login?** No. Every checklist
+  feature is available in **Use on this device** mode. Google sign-in is
+  optional.
 
 ## Ads
 

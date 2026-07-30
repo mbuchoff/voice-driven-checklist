@@ -1,50 +1,35 @@
-# Welcome to your Expo app 👋
+# Voice Checklist
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Voice Checklist is an Expo/React Native app for creating and running
+hands-free checklists on Android and web.
 
-## Get started
+Checklist content is stored in on-device SQLite. Users can choose fully local
+mode or optional Google identity through Amazon Cognito; Google sign-in does
+not upload or synchronize checklist content.
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Development
 
 ```bash
-npm run reset-project
+npm install
+npm test
+npm run lint
+npm run typecheck
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Start Android with `npm run android`, or start the development web origin with:
 
-## Learn more
+```bash
+npx expo start --web --port 8082
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Google sign-in is optional in development. To enable it, copy `.env.example`
+to `.env.local` and add the development Cognito public values. See
+[Google authentication configuration](docs/authentication.md) for callbacks,
+client behavior, release variables, and security boundaries.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Privacy and publishing
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- [Privacy policy](docs/PRIVACY.md)
+- [Account deletion instructions](docs/delete-account.md)
+- [Google Play listing and Data Safety guidance](docs/store-listing.md)
+- [Android publishing guide](docs/publishing-android.md)
