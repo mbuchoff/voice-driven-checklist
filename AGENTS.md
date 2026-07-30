@@ -2,6 +2,19 @@
 
 Operational notes for agents working on this repo inside the devcontainer. Codebase conventions live in the code itself; this file is only for environment quirks and workflows that aren't obvious.
 
+## GitHub authentication
+
+This repository belongs to the `mbuchoff` GitHub account. The container's
+default `GH_TOKEN` authenticates as `michaelbParcelshield` and cannot create
+pull requests here. For `gh` operations against this repository, pass the
+account-specific token process-locally:
+
+```bash
+GH_TOKEN="$GITHUB_PAT_MBUCHOFF" gh <command>
+```
+
+Never print or persist the token value.
+
 ## Verifying UI changes
 
 - **Android:** use `adb` against a physical device. iOS is not supported in this environment.
