@@ -22,3 +22,18 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+
+  android-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with: { node-version: 20, cache: npm }
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: 17, cache: gradle }
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+      - run: yes | sdkmanager "ndk;27.1.12297006" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0"
+      - run: npm ci
+      - run: npx expo prebuild --platform android --no-install
+      - run: ./gradlew assembleDebug --no-daemon
+        working-directory: android
