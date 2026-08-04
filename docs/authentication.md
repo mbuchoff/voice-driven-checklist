@@ -1,7 +1,9 @@
 # Google authentication configuration
 
 Voice Checklist uses Amazon Cognito federated to Google. Identity resources are
-managed outside this application repository.
+defined in the versioned OpenTofu stack at `infra/aws/auth`. See that
+directory's README for Google Cloud setup, separate environment state,
+validation, planning, approval, and app configuration.
 
 ## Required Cognito behavior
 
