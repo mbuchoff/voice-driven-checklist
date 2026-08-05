@@ -1,6 +1,6 @@
 import { render, waitFor } from '@testing-library/react-native';
 
-import AuthCallbackRoute from './callback';
+import AuthCallbackRoute from '../../../app/auth/callback';
 
 const mockNavigateBack = jest.fn();
 
