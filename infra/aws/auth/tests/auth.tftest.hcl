@@ -122,6 +122,18 @@ run "managed_google_login_contract" {
     )
     error_message = "The user pool must federate to Google for the minimum identity scopes."
   }
+
+  assert {
+    condition = alltrue([
+      aws_cognito_identity_provider.google.provider_details.attributes_url == "https://people.googleapis.com/v1/people/me?personFields=",
+      aws_cognito_identity_provider.google.provider_details.attributes_url_add_attributes == "true",
+      aws_cognito_identity_provider.google.provider_details.authorize_url == "https://accounts.google.com/o/oauth2/v2/auth",
+      aws_cognito_identity_provider.google.provider_details.oidc_issuer == "https://accounts.google.com",
+      aws_cognito_identity_provider.google.provider_details.token_request_method == "POST",
+      aws_cognito_identity_provider.google.provider_details.token_url == "https://www.googleapis.com/oauth2/v4/token",
+    ])
+    error_message = "The Google provider must declare the endpoint defaults that Cognito persists."
+  }
 }
 
 run "rejects_unknown_environment" {
