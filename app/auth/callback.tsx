@@ -1,5 +1,7 @@
 import * as WebBrowser from 'expo-web-browser';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
+import { ActivityIndicator, Platform, Text, View } from 'react-native';
 
 import { useTheme } from '@/src/theme/useTheme';
 
@@ -7,6 +9,12 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function AuthCallbackRoute() {
   const theme = useTheme();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') router.back();
+  }, [router]);
+
   return (
     <View
       style={{
