@@ -72,8 +72,8 @@ If you cannot access the app, follow the instructions at
 developer targets completion of verified email deletion requests within seven
 days.
 
-Switching to **Use on this device** signs out and clears the local credential;
-it does not delete the Cognito account.
+Choosing **Switch to local mode** signs out and clears the local credential; it
+does not delete the Cognito account.
 
 ## Microphone and speech recognition
 

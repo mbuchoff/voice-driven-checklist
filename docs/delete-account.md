@@ -18,8 +18,8 @@ is stored only on each device and is not held in the account.
 4. Confirm the deletion.
 
 After Cognito confirms deletion, the app clears the local sign-in credential
-and cached name/email, switches to **Use on this device**, and preserves the
-checklists already stored on that device.
+and cached name/email, switches to local mode, and preserves the checklists
+already stored on that device.
 
 ## Request deletion without app access
 

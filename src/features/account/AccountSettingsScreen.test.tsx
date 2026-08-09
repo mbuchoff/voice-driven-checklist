@@ -1,8 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 
 import type { AccountContextValue } from './AccountProvider';
-import { AccountSettingsContent } from './AccountSettingsScreen';
+import {
+  ACCOUNT_DELETION_URL,
+  AccountSettingsContent,
+  PRIVACY_POLICY_URL,
+} from './AccountSettingsScreen';
 import type { AccountState } from './types';
 
 function accountValue(
@@ -48,17 +52,47 @@ describe('AccountSettingsContent', () => {
 
     render(<AccountSettingsContent account={account} />);
 
-    expect(screen.getByText('Ada Lovelace')).toBeOnTheScreen();
-    expect(screen.getByText('ada@example.com')).toBeOnTheScreen();
+    expect(
+      screen.getByText('Ada Lovelace - ada@example.com'),
+    ).toBeOnTheScreen();
+    expect(
+      screen.queryByRole('header', { name: 'Account' }),
+    ).not.toBeOnTheScreen();
     expect(
       screen.getByRole('button', { name: /switch google account/i }),
     ).toBeOnTheScreen();
     expect(
-      screen.getByRole('button', { name: /use on this device/i }),
+      screen.getByRole('button', { name: /switch to local mode/i }),
     ).toBeOnTheScreen();
     expect(
       screen.getByRole('button', { name: /delete voice checklist account/i }),
     ).toBeOnTheScreen();
+  });
+
+  it('opens policy links with the React Native Linking receiver', async () => {
+    const openUrlSpy = jest
+      .spyOn(Linking, 'openURL')
+      .mockImplementation(function (this: typeof Linking) {
+        if (this !== Linking) {
+          throw new TypeError("Cannot read property '_validateURL' of undefined");
+        }
+        return Promise.resolve();
+      });
+    const account = accountValue({ status: 'local' });
+    render(<AccountSettingsContent account={account} />);
+
+    fireEvent.press(screen.getByRole('link', { name: /privacy policy/i }));
+    fireEvent.press(
+      screen.getByRole('link', { name: /account deletion help/i }),
+    );
+
+    await waitFor(() => {
+      expect(openUrlSpy).toHaveBeenCalledWith(PRIVACY_POLICY_URL);
+      expect(openUrlSpy).toHaveBeenCalledWith(ACCOUNT_DELETION_URL);
+    });
+    expect(openUrlSpy.mock.contexts).toEqual([Linking, Linking]);
+    expect(screen.queryByRole('alert')).not.toBeOnTheScreen();
+    openUrlSpy.mockRestore();
   });
 
   it('offers sign-in again for an invalid or expired session', () => {
@@ -77,6 +111,9 @@ describe('AccountSettingsContent', () => {
     expect(screen.getByRole('alert')).toBeOnTheScreen();
     expect(
       screen.getByRole('button', { name: /sign in again/i }),
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByRole('button', { name: /switch to local mode/i }),
     ).toBeOnTheScreen();
   });
 
@@ -103,6 +140,9 @@ describe('AccountSettingsContent', () => {
       expect(screen.getByRole('button', { name: /retry/i })).toBeEnabled();
     });
     expect(screen.getByText('ada@example.com')).toBeOnTheScreen();
+    expect(
+      screen.getByRole('button', { name: /switch to local mode/i }),
+    ).toBeOnTheScreen();
   });
 
   it('only deletes the Cognito account after destructive confirmation', async () => {
@@ -166,7 +206,9 @@ describe('AccountSettingsContent', () => {
     buttons.find((button) => /delete/i.test(button.text ?? ''))?.onPress?.();
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeOnTheScreen());
-    expect(screen.getByText('Ada Lovelace')).toBeOnTheScreen();
+    expect(
+      screen.getByText('Ada Lovelace - ada@example.com'),
+    ).toBeOnTheScreen();
     alertSpy.mockRestore();
   });
 });

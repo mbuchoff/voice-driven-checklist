@@ -27,7 +27,7 @@ export function AccountSettingsScreen() {
 
 export function AccountSettingsContent({
   account,
-  openUrl = Linking.openURL,
+  openUrl = (url) => Linking.openURL(url),
 }: {
   account: AccountContextValue;
   openUrl?: (url: string) => Promise<unknown>;
@@ -35,6 +35,12 @@ export function AccountSettingsContent({
   const theme = useTheme();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const googleIdentity =
+    account.state.status === 'google'
+      ? [account.state.identity.displayName, account.state.identity.email]
+          .filter(Boolean)
+          .join(' - ')
+      : null;
 
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true);
@@ -71,12 +77,6 @@ export function AccountSettingsContent({
       contentContainerStyle={{ padding: 20, gap: 16 }}
     >
       <View style={{ gap: 6 }}>
-        <Text
-          accessibilityRole="header"
-          style={{ color: theme.text, fontSize: 24, fontWeight: '700' }}
-        >
-          Account
-        </Text>
         {account.state.status === 'local' ? (
           <>
             <Text style={{ color: theme.text, fontSize: 17, fontWeight: '600' }}>
@@ -87,18 +87,14 @@ export function AccountSettingsContent({
             </Text>
           </>
         ) : account.state.status === 'google' ? (
-          <>
-            {account.state.identity.displayName ? (
-              <Text style={{ color: theme.text, fontSize: 17, fontWeight: '600' }}>
-                {account.state.identity.displayName}
-              </Text>
-            ) : null}
-            {account.state.identity.email ? (
-              <Text style={{ color: theme.textMuted }}>
-                {account.state.identity.email}
-              </Text>
-            ) : null}
-          </>
+          googleIdentity ? (
+            <Text
+              numberOfLines={1}
+              style={{ color: theme.text, fontSize: 17, fontWeight: '600' }}
+            >
+              {googleIdentity}
+            </Text>
+          ) : null
         ) : (
           <Text style={{ color: theme.textMuted }}>Account details are loading.</Text>
         )}
@@ -141,7 +137,7 @@ export function AccountSettingsContent({
           />
           <ActionButton
             disabled={busy}
-            label="Use on this device"
+            label="Switch to local mode"
             onPress={() => void run(account.selectLocal)}
           />
           <ActionButton
@@ -168,7 +164,7 @@ export function AccountSettingsContent({
           />
           <ActionButton
             disabled={busy}
-            label="Use on this device"
+            label="Switch to local mode"
             onPress={() => void run(account.selectLocal)}
           />
         </>
@@ -184,7 +180,7 @@ export function AccountSettingsContent({
           />
           <ActionButton
             disabled={busy}
-            label="Use on this device"
+            label="Switch to local mode"
             onPress={() => void run(account.selectLocal)}
           />
         </>
