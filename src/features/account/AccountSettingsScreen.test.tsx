@@ -57,7 +57,7 @@ describe('AccountSettingsContent', () => {
       screen.getByRole('button', { name: /use on this device/i }),
     ).toBeOnTheScreen();
     expect(
-      screen.getByRole('button', { name: /delete google account/i }),
+      screen.getByRole('button', { name: /delete voice checklist account/i }),
     ).toBeOnTheScreen();
   });
 
@@ -123,9 +123,15 @@ describe('AccountSettingsContent', () => {
     render(<AccountSettingsContent account={account} />);
 
     fireEvent.press(
-      screen.getByRole('button', { name: /delete google account/i }),
+      screen.getByRole('button', { name: /delete voice checklist account/i }),
     );
     expect(deleteAccount).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Delete Voice Checklist account?',
+      expect.stringMatching(/does not delete your Google account/i),
+      expect.any(Array),
+      undefined,
+    );
     const buttons = alertSpy.mock.calls[0][2] ?? [];
     buttons.find((button) => /delete/i.test(button.text ?? ''))?.onPress?.();
 
@@ -154,7 +160,7 @@ describe('AccountSettingsContent', () => {
     render(<AccountSettingsContent account={account} />);
 
     fireEvent.press(
-      screen.getByRole('button', { name: /delete google account/i }),
+      screen.getByRole('button', { name: /delete voice checklist account/i }),
     );
     const buttons = alertSpy.mock.calls[0][2] ?? [];
     buttons.find((button) => /delete/i.test(button.text ?? ''))?.onPress?.();

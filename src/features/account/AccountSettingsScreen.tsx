@@ -54,9 +54,9 @@ export function AccountSettingsContent({
 
   const confirmDelete = async () => {
     const confirmed = await confirmAction({
-      title: 'Delete Google account?',
+      title: 'Delete Voice Checklist account?',
       message:
-        'This deletes the Voice Checklist profile used for Google sign-in. Checklists on this device will be preserved.',
+        'This deletes the Voice Checklist profile used for Google sign-in. It does not delete your Google account. Checklists on this device will be preserved.',
       confirmLabel: 'Delete account',
       destructive: true,
     });
@@ -147,7 +147,7 @@ export function AccountSettingsContent({
           <ActionButton
             destructive
             disabled={busy}
-            label="Delete Google account"
+            label="Delete Voice Checklist account"
             onPress={() => void confirmDelete()}
           />
         </>

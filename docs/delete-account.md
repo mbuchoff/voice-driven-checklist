@@ -13,7 +13,8 @@ is stored only on each device and is not held in the account.
 
 1. Open Voice Checklist.
 2. Open the **Account settings** gear from the Checklists screen.
-3. Choose **Delete Google account**.
+3. Choose **Delete Voice Checklist account**. This does not delete your Google
+   account.
 4. Confirm the deletion.
 
 After Cognito confirms deletion, the app clears the local sign-in credential

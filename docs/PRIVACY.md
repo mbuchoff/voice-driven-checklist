@@ -61,10 +61,11 @@ data is encrypted in transit using HTTPS.
 
 ## Account deletion
 
-In the app, open **Account settings** and choose **Delete Google account**.
-After confirmation, the app asks Cognito to delete the account, clears the
-local sign-in credential and cached profile, and switches to local mode.
-Checklists stored on the device are preserved.
+In the app, open **Account settings** and choose **Delete Voice Checklist
+account**. This does not delete your Google account. After confirmation, the
+app asks Cognito to delete the Voice Checklist account, clears the local sign-in
+credential and cached profile, and switches to local mode. Checklists stored on
+the device are preserved.
 
 If you cannot access the app, follow the instructions at
 <https://mbuchoff.github.io/voice-driven-checklist/delete-account/>. The
