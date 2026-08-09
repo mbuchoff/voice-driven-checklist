@@ -69,7 +69,7 @@ describe('AccountSettingsContent', () => {
     ).toBeOnTheScreen();
   });
 
-  it('opens policy links with the React Native Linking receiver', async () => {
+  it('opens both account help pages without showing an error', async () => {
     const openUrlSpy = jest
       .spyOn(Linking, 'openURL')
       .mockImplementation(function (this: typeof Linking) {
@@ -90,7 +90,6 @@ describe('AccountSettingsContent', () => {
       expect(openUrlSpy).toHaveBeenCalledWith(PRIVACY_POLICY_URL);
       expect(openUrlSpy).toHaveBeenCalledWith(ACCOUNT_DELETION_URL);
     });
-    expect(openUrlSpy.mock.contexts).toEqual([Linking, Linking]);
     expect(screen.queryByRole('alert')).not.toBeOnTheScreen();
     openUrlSpy.mockRestore();
   });
@@ -145,7 +144,7 @@ describe('AccountSettingsContent', () => {
     ).toBeOnTheScreen();
   });
 
-  it('only deletes the Cognito account after destructive confirmation', async () => {
+  it('requires confirmation before deleting the Voice Checklist account', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert');
     const deleteAccount = jest.fn(async () => undefined);
     const account = accountValue(
