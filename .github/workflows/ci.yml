@@ -16,6 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Verify production Cognito configuration
+        env:
+          EXPO_PUBLIC_COGNITO_REGION: ${{ vars.COGNITO_REGION }}
+          EXPO_PUBLIC_COGNITO_USER_POOL_ID: ${{ vars.COGNITO_USER_POOL_ID }}
+          EXPO_PUBLIC_COGNITO_DOMAIN: ${{ vars.COGNITO_DOMAIN }}
+          EXPO_PUBLIC_COGNITO_ANDROID_CLIENT_ID: ${{ vars.COGNITO_ANDROID_CLIENT_ID }}
+        run: scripts/verify-production-cognito-config.sh
       - uses: actions/setup-node@v6
         with: { node-version: 20, cache: npm }
       - run: npm ci
