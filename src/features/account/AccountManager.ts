@@ -17,6 +17,7 @@ export class AccountManager {
   private accessToken: string | null = null;
   private idToken: string | null = null;
   private initialization: Promise<void> | null = null;
+  private accountActions: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<StateListener>();
 
   constructor(
@@ -43,10 +44,12 @@ export class AccountManager {
   private async initializeOnce(): Promise<void> {
     const preference = await this.preferences.load();
     if (preference.mode === 'unselected') {
+      await this.clearStoredCredentials();
       this.setState({ status: 'unselected' });
       return;
     }
     if (preference.mode === 'local') {
+      await this.clearStoredCredentials();
       this.setState({ status: 'local' });
       return;
     }
@@ -54,15 +57,20 @@ export class AccountManager {
     await this.restoreGoogleSession(preference.identity);
   }
 
-  async selectLocal(): Promise<void> {
-    const previousPreference = preferenceFromState(this.currentState);
-    const previousRefreshToken = await this.refreshTokens.get();
+  selectLocal(): Promise<void> {
+    return this.runAccountAction(() => this.selectLocalOnce());
+  }
 
-    await this.refreshTokens.delete();
+  private async selectLocalOnce(): Promise<void> {
+    const previousPreference = preferenceFromState(this.currentState);
+    const previousSubject = googleSubject(this.currentState);
+    const previousRefreshToken = previousSubject
+      ? await this.refreshTokens.get(previousSubject)
+      : null;
+
     try {
       await this.preferences.save({ mode: 'local' });
     } catch (error) {
-      await restoreRefreshToken(this.refreshTokens, previousRefreshToken);
       if (previousPreference) {
         await this.preferences.save(previousPreference);
       }
@@ -70,6 +78,7 @@ export class AccountManager {
     }
 
     this.clearMemoryTokens();
+    await this.clearStoredCredentials();
     this.setState({ status: 'local' });
 
     if (previousRefreshToken) {
@@ -79,7 +88,11 @@ export class AccountManager {
     }
   }
 
-  async signIn(): Promise<AccountActionResult> {
+  signIn(): Promise<AccountActionResult> {
+    return this.runAccountAction(() => this.signInOnce());
+  }
+
+  private async signInOnce(): Promise<AccountActionResult> {
     const result = await this.cognito.signIn();
     if (result.type === 'cancelled') return 'cancelled';
 
@@ -89,16 +102,28 @@ export class AccountManager {
     }
 
     const previousPreference = preferenceFromState(this.currentState);
-    const previousRefreshToken = await this.refreshTokens.get();
+    const previousSubject = googleSubject(this.currentState);
+    const newSubject = result.identity.sub;
+    const previousRefreshToken = previousSubject
+      ? await this.refreshTokens.get(previousSubject)
+      : null;
+    const previousTokenForNewSubject =
+      previousSubject === newSubject
+        ? previousRefreshToken
+        : await this.refreshTokens.get(newSubject);
 
     try {
-      await this.refreshTokens.set(refreshToken);
+      await this.refreshTokens.set(newSubject, refreshToken);
       await this.preferences.save({
         mode: 'google',
         identity: result.identity,
       });
     } catch (error) {
-      await restoreRefreshToken(this.refreshTokens, previousRefreshToken);
+      await restoreRefreshToken(
+        this.refreshTokens,
+        newSubject,
+        previousTokenForNewSubject,
+      );
       if (previousPreference) {
         await this.preferences.save(previousPreference);
       }
@@ -108,6 +133,7 @@ export class AccountManager {
       throw error;
     }
 
+    await this.clearOtherStoredCredentials(newSubject);
     this.rememberTokens(result.tokens);
     this.setState(activeGoogleState(result.identity));
     if (previousRefreshToken && previousRefreshToken !== refreshToken) {
@@ -118,7 +144,11 @@ export class AccountManager {
     return 'completed';
   }
 
-  async retryAuthentication(): Promise<AccountActionResult> {
+  retryAuthentication(): Promise<AccountActionResult> {
+    return this.runAccountAction(() => this.retryAuthenticationOnce());
+  }
+
+  private async retryAuthenticationOnce(): Promise<AccountActionResult> {
     if (
       this.currentState.status === 'google' &&
       this.currentState.sessionStatus === 'temporarily-unavailable'
@@ -126,10 +156,14 @@ export class AccountManager {
       await this.restoreGoogleSession(this.currentState.identity);
       return 'completed';
     }
-    return this.signIn();
+    return this.signInOnce();
   }
 
-  async deleteAccount(): Promise<void> {
+  deleteAccount(): Promise<void> {
+    return this.runAccountAction(() => this.deleteAccountOnce());
+  }
+
+  private async deleteAccountOnce(): Promise<void> {
     if (
       this.currentState.status !== 'google' ||
       this.currentState.sessionStatus !== 'active' ||
@@ -138,16 +172,46 @@ export class AccountManager {
       throw new Error('Sign in again before deleting this Google account.');
     }
 
-    await this.cognito.deleteUser(this.accessToken);
-    await this.refreshTokens.delete();
+    const identity = this.currentState.identity;
+    const subject = identity.sub;
+    const refreshToken = await this.refreshTokens.get(subject);
+
     await this.preferences.save({ mode: 'local' });
+    try {
+      await this.refreshTokens.deleteAll();
+    } catch (error) {
+      await restoreRefreshToken(this.refreshTokens, subject, refreshToken);
+      await this.preferences.save({ mode: 'google', identity });
+      throw error;
+    }
+
+    try {
+      await this.cognito.deleteUser(this.accessToken);
+    } catch (error) {
+      await restoreRefreshToken(this.refreshTokens, subject, refreshToken);
+      await this.preferences.save({ mode: 'google', identity });
+      throw error;
+    }
+
     this.clearMemoryTokens();
     this.setState({ status: 'local' });
   }
 
   private async restoreGoogleSession(identity: GoogleIdentity): Promise<void> {
-    const refreshToken = await this.refreshTokens.get();
+    let refreshToken: string | null;
+    try {
+      refreshToken = await this.refreshTokens.get(identity.sub);
+    } catch {
+      this.clearMemoryTokens();
+      this.setState({
+        status: 'google',
+        identity,
+        sessionStatus: 'temporarily-unavailable',
+      });
+      return;
+    }
     if (!refreshToken) {
+      await this.clearStoredCredentials();
       this.clearMemoryTokens();
       this.setState({
         status: 'google',
@@ -160,9 +224,10 @@ export class AccountManager {
     try {
       const tokens = await this.cognito.refresh(refreshToken);
       if (tokens.refreshToken && tokens.refreshToken !== refreshToken) {
-        await this.refreshTokens.set(tokens.refreshToken);
+        await this.refreshTokens.set(identity.sub, tokens.refreshToken);
       }
       this.rememberTokens(tokens);
+      await this.clearOtherStoredCredentials(identity.sub);
       this.setState(activeGoogleState(identity));
     } catch (error) {
       this.clearMemoryTokens();
@@ -170,7 +235,11 @@ export class AccountManager {
         error instanceof CognitoSessionError &&
         error.kind === 'reauth-required'
       ) {
-        await this.refreshTokens.delete();
+        try {
+          await this.refreshTokens.deleteAll();
+        } catch {
+          // The invalid token cannot restore a session; retry cleanup later.
+        }
         this.setState({
           status: 'google',
           identity,
@@ -185,6 +254,31 @@ export class AccountManager {
         sessionStatus: 'temporarily-unavailable',
       });
     }
+  }
+
+  private async clearStoredCredentials(): Promise<void> {
+    try {
+      await this.refreshTokens.deleteAll();
+    } catch {
+      // Local and unselected modes remain usable while cleanup retries next start.
+    }
+  }
+
+  private async clearOtherStoredCredentials(subject: string): Promise<void> {
+    try {
+      await this.refreshTokens.deleteAllExcept(subject);
+    } catch {
+      // The current session is usable while stale credential cleanup retries later.
+    }
+  }
+
+  private runAccountAction<T>(action: () => Promise<T>): Promise<T> {
+    const result = this.accountActions.then(action, action);
+    this.accountActions = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   private rememberTokens(tokens: OAuthTokens): void {
@@ -211,6 +305,10 @@ function activeGoogleState(identity: GoogleIdentity): AccountState {
   };
 }
 
+function googleSubject(state: AccountState): string | null {
+  return state.status === 'google' ? state.identity.sub : null;
+}
+
 function preferenceFromState(
   state: AccountState,
 ): PersistedAccountPreference | null {
@@ -223,11 +321,12 @@ function preferenceFromState(
 
 async function restoreRefreshToken(
   store: RefreshTokenStore,
+  subject: string,
   refreshToken: string | null,
 ): Promise<void> {
   if (refreshToken) {
-    await store.set(refreshToken);
+    await store.set(subject, refreshToken);
   } else {
-    await store.delete();
+    await store.delete(subject);
   }
 }
