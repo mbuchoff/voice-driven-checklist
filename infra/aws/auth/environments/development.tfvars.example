@@ -1,0 +1,7 @@
+environment           = "development"
+aws_region            = "us-east-1"
+cognito_domain_prefix = "voice-checklist-dev-replace-me"
+google_client_id      = "replace-me.apps.googleusercontent.com"
+
+# Supply google_client_secret through the TF_VAR_google_client_secret
+# environment variable. Never place it in this file.

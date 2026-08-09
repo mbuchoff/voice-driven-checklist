@@ -44,6 +44,13 @@
       "expo-sqlite",
       "expo-audio",
       [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
+      ],
+      "expo-web-browser",
+      [
         "expo-speech-recognition",
         {
           "microphonePermission": "Voice Checklist needs the microphone to hear spoken commands during checklist playback.",

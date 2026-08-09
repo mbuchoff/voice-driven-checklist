@@ -50,3 +50,13 @@ modules/*/android/build/
 .claude/
 .playwright-mcp/
 
+# OpenTofu working data and sensitive local inputs
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+*.tfbackend
+!*.tfbackend.example
+crash.log
