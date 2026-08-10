@@ -53,6 +53,25 @@ describe('LibraryScreen', () => {
     expect(screen.getByText(/0 items/i)).toBeOnTheScreen();
   });
 
+  it('uses the prototype icon language while retaining the native delete action', async () => {
+    const database = await setupDb();
+    const checklist = await createChecklist(database, {
+      title: 'Morning routine',
+      items: [{ text: 'Wake up' }],
+    });
+
+    await renderWithDatabase(
+      <LibraryScreen onCreate={jest.fn()} onEdit={jest.fn()} onStart={jest.fn()} />,
+      { database },
+    );
+    await waitFor(() => screen.getByText('Morning routine'));
+
+    expect(screen.getByTestId('brand-icon')).toBeOnTheScreen();
+    expect(screen.getByTestId('settings-icon')).toBeOnTheScreen();
+    expect(screen.getByTestId(`delete-icon-${checklist.id}`)).toBeOnTheScreen();
+    expect(screen.queryByText(/[✓⚙＋✎⌫▷]/)).toBeNull();
+  });
+
   it('uses singular wording for a checklist with exactly one item', async () => {
     const database = await setupDb();
     await createChecklist(database, { title: 'Solo', items: [{ text: 'just one' }] });

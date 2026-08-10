@@ -10,13 +10,17 @@ import {
 import Animated, {
   cancelAnimation,
   interpolate,
+  useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Circle } from 'react-native-svg';
 
+import { Icon, type IconName } from '@/src/components/Icon';
+import { ScreenBackground } from '@/src/components/ScreenBackground';
 import type { CueAction } from '@/src/services/audio/cues';
 import type {
   SpeechPlaybackAdapter,
@@ -51,6 +55,7 @@ const RECOGNITION_RESTART_DELAY_MS = 500;
 const RECOGNITION_END_RESTART_DELAY_MS = 0;
 const CUE_TO_SPEECH_DELAY_MS = 175;
 const STOP_HOLD_DURATION_MS = 1200;
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export type RunScreenProps = {
   snapshot: ChecklistRunSnapshot;
@@ -409,67 +414,77 @@ export function RunScreen({
   if (state.status === 'completed') {
     return (
       <SafeAreaView
-        style={{ flex: 1, backgroundColor: '#23614e', padding: 24 }}
+        style={{ flex: 1, backgroundColor: '#173d31', padding: 24 }}
       >
+        <ScreenBackground variant="completion" />
         <CompletionConfetti />
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <View
             style={{
-              width: 94,
-              height: 94,
-              borderRadius: 30,
-              backgroundColor: '#f6a184',
+              width: 96,
+              height: 96,
+              borderTopLeftRadius: 34,
+              borderTopRightRadius: 34,
+              borderBottomRightRadius: 34,
+              borderBottomLeftRadius: 12,
+              borderWidth: 1,
+              borderColor: 'rgba(255, 255, 255, 0.25)',
+              backgroundColor: '#f3a284',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: 18,
+              marginBottom: 30,
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.22)',
             }}
           >
-            <Text style={{ color: '#164638', fontSize: 48, fontWeight: '700' }}>✓</Text>
+            <Icon name="check" color="#183d31" size={47} strokeWidth={2.5} />
           </View>
-          <Text style={{ color: '#ffc0aa', fontSize: 13, fontWeight: '900', letterSpacing: 1.8 }}>
+          <Text style={{ color: '#f4bca6', fontSize: 12, fontWeight: '800', letterSpacing: 1.56, marginBottom: 8 }}>
             CHECKLIST COMPLETE
           </Text>
-          <Text style={{ color: '#fffaf1', fontSize: 40, lineHeight: 44, fontWeight: '900' }}>
+          <Text style={{ color: '#fffaf1', fontSize: 40, lineHeight: 39, fontWeight: '700', letterSpacing: -2.2, marginBottom: 12 }}>
             Nicely done.
           </Text>
-          <Text style={{ color: '#c3d2cc', fontSize: 17, lineHeight: 24, textAlign: 'center' }}>
+          <Text style={{ color: 'rgba(255, 250, 241, 0.66)', fontSize: 16, lineHeight: 25, textAlign: 'center', marginBottom: 36 }}>
             All {totalItems} steps in “{state.snapshot?.checklistTitle}” are checked off.
           </Text>
-        </View>
-        <View style={{ gap: 10 }}>
-          <Pressable
-            accessibilityRole="button"
-            testID="completion-restart"
-            onPress={() => {
-              speechDelayRef.current = 0;
-              dispatch({ type: 'RESTART' });
-            }}
-            style={{
-              minHeight: 52,
-              backgroundColor: '#f6a184',
-              borderRadius: 15,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ color: '#164638', fontWeight: '900', fontSize: 17 }}>↻  Run it again</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            testID="completion-return"
-            onPress={onExit}
-            style={{
-              minHeight: 50,
-              borderWidth: 1,
-              borderColor: '#5b7e72',
-              backgroundColor: '#315f52',
-              borderRadius: 15,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ color: '#fffaf1', fontWeight: '800', fontSize: 17 }}>Back to my checklists</Text>
-          </Pressable>
+          <View style={{ width: '100%', gap: 10 }}>
+            <Pressable
+              accessibilityRole="button"
+              testID="completion-restart"
+              onPress={() => {
+                speechDelayRef.current = 0;
+                dispatch({ type: 'RESTART' });
+              }}
+              style={{
+                minHeight: 52,
+                backgroundColor: '#f3a284',
+                borderRadius: 15,
+                flexDirection: 'row',
+                gap: 8,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Icon name="repeat" color="#173d31" size={18} />
+              <Text style={{ color: '#173d31', fontWeight: '700', fontSize: 16 }}>Run it again</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              testID="completion-return"
+              onPress={onExit}
+              style={{
+                minHeight: 50,
+                borderWidth: 1,
+                borderColor: 'rgba(255, 255, 255, 0.16)',
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                borderRadius: 15,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: '#fffaf1', fontWeight: '700', fontSize: 16 }}>Back to my checklists</Text>
+            </Pressable>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -477,10 +492,11 @@ export function RunScreen({
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.runBackground }}>
-      <RunTexture color={theme.text} />
+      <ScreenBackground variant="run" />
+      <RunTexture color={theme.runText} />
 
-      <View style={{ height: 76, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center' }}>
-        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={{ height: 76, paddingHorizontal: 20, position: 'relative', flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Stop run"
@@ -512,40 +528,63 @@ export function RunScreen({
                 stopControlStyle,
               ]}
             >
-              <HoldProgressRing progress={stopHoldProgress} color={theme.accent} />
-              <Text style={{ color: theme.text, fontSize: holdingStop ? 34 : 27, fontWeight: '300' }}>×</Text>
+              <HoldProgressRing
+                progress={stopHoldProgress}
+                color={theme.accent}
+                trackColor={theme.runBorder}
+              />
+              <Icon
+                name="close"
+                color={theme.runText}
+                size={holdingStop ? 26 : 20}
+                testID="stop-run-icon"
+              />
             </Animated.View>
           </Pressable>
           {holdingStop ? (
             <Text
               style={{
-                color: theme.onPrimary,
+                color: '#17382e',
                 backgroundColor: theme.accent,
                 borderRadius: 9,
                 paddingHorizontal: 12,
                 paddingVertical: 6,
-                fontWeight: '900',
+                fontWeight: '800',
+                fontSize: 12,
               }}
             >
               Keep holding
             </Text>
           ) : null}
         </View>
-        {!holdingStop ? (
-          <Text
-            numberOfLines={1}
-            style={{ color: theme.text, fontSize: 16, fontWeight: '800', textAlign: 'center', maxWidth: '46%' }}
-          >
-            {state.snapshot?.checklistTitle}
-          </Text>
-        ) : null}
-        <View style={{ flex: 1 }} />
+        <View
+          pointerEvents="none"
+          testID="run-title-frame"
+          style={{
+            position: 'absolute',
+            left: 80,
+            right: 80,
+            top: 0,
+            bottom: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {!holdingStop ? (
+            <Text
+              numberOfLines={1}
+              style={{ color: theme.runText, fontSize: 14, fontWeight: '700', textAlign: 'center', width: '100%' }}
+            >
+              {state.snapshot?.checklistTitle}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       <ProgressOrbit
         current={state.currentItemIndex + 1}
         total={totalItems}
-        color={theme.text}
+        color={theme.runText}
         mutedColor={theme.runBorder}
         accentColor={theme.accent}
         surfaceColor={theme.runSurface}
@@ -571,7 +610,7 @@ export function RunScreen({
               currentIndex={state.currentItemIndex}
               text={item.text}
               androidApi={androidApi}
-              textColor={theme.text}
+              textColor={theme.runText}
             />
           ))}
         </Animated.View>
@@ -607,15 +646,15 @@ export function RunScreen({
               width: 42,
               height: 42,
               borderRadius: 21,
-              backgroundColor: theme.accentSoft,
+              backgroundColor: theme.mode === 'light' ? 'rgba(239, 145, 111, 0.2)' : 'rgba(239, 145, 111, 0.14)',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: theme.accent, fontSize: 22 }}>◉</Text>
+            <Icon name="mic" color={theme.accent} size={20} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text testID="status-banner" style={{ color: theme.text, fontWeight: '800' }}>
+            <Text testID="status-banner" style={{ color: theme.runText, fontWeight: '700', fontSize: 13 }}>
               {state.status === 'speaking' && 'Speaking…'}
               {state.status === 'listening' && 'Listening'}
               {state.status === 'manual' && state.voiceControlAvailable && 'Manual controls'}
@@ -626,7 +665,7 @@ export function RunScreen({
                   ? 'transcript-panel'
                   : undefined
               }
-              style={{ color: theme.textMuted, fontSize: 12 }}
+              style={{ color: theme.runTextMuted, fontSize: 12 }}
               numberOfLines={1}
             >
               {state.latestRecognizedPhrase.length > 0
@@ -640,8 +679,8 @@ export function RunScreen({
           <RunControl
             testID="manual-previous"
             label="Previous"
-            symbol="‹"
-            color={theme.text}
+            icon="arrowLeft"
+            color={theme.runText}
             background={theme.runSurface}
             border={theme.runBorder}
             onPress={() => runAction('previous')}
@@ -659,13 +698,16 @@ export function RunScreen({
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: theme.onPrimary, fontWeight: '900' }}>Next  ›</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+              <Text style={{ color: '#17382e', fontWeight: '800', fontSize: 12 }}>Next</Text>
+              <Icon name="arrowRight" color="#17382e" size={18} />
+            </View>
           </Pressable>
           <RunControl
             testID="manual-repeat"
             label="Repeat"
-            symbol="↻"
-            color={theme.text}
+            icon="repeat"
+            color={theme.runText}
             background={theme.runSurface}
             border={theme.runBorder}
             onPress={() => runAction('repeat')}
@@ -762,9 +804,10 @@ function RunItem({
       <Text
         style={{
           color: textColor,
-          fontSize: 31,
-          lineHeight: 35,
-          fontWeight: '900',
+          fontSize: text.length >= 55 ? 24 : 34,
+          lineHeight: text.length >= 55 ? 26 : 34,
+          fontWeight: '700',
+          letterSpacing: text.length >= 55 ? -0.7 : -1.7,
           textAlign: 'center',
         }}
       >
@@ -789,43 +832,54 @@ function ProgressOrbit({
   accentColor: string;
   surfaceColor: string;
 }) {
-  const segments = 24;
-  const completedSegments = Math.ceil((current / Math.max(total, 1)) * segments);
+  const size = 116;
+  const strokeWidth = 9;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = current / Math.max(total, 1);
   return (
     <View style={{ alignItems: 'center', paddingTop: 6 }}>
       <View
         style={{
-          width: 94,
-          height: 94,
-          borderRadius: 47,
-          backgroundColor: surfaceColor,
-          borderWidth: 8,
-          borderColor: mutedColor,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
           alignItems: 'center',
           justifyContent: 'center',
           boxShadow: '0 4px 10px rgba(20, 50, 40, 0.12)',
         }}
       >
-        {Array.from({ length: segments }, (_, index) => (
-          <View
-            key={index}
-            style={{
-              position: 'absolute',
-              width: 3,
-              height: 8,
-              borderRadius: 2,
-              backgroundColor: index < completedSegments ? accentColor : 'transparent',
-              top: 35,
-              left: 37.5,
-              transform: [
-                { rotate: `${index * (360 / segments)}deg` },
-                { translateY: -41 },
-              ],
-            }}
+        <Svg
+          testID="run-progress-arc"
+          pointerEvents="none"
+          width={size}
+          height={size}
+          style={{ position: 'absolute' }}
+        >
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill={surfaceColor}
+            stroke={mutedColor}
+            strokeWidth={strokeWidth}
           />
-        ))}
-        <Text style={{ color, fontSize: 35, lineHeight: 38, fontWeight: '900' }}>{current}</Text>
-        <Text style={{ color, opacity: 0.65, fontSize: 10, fontWeight: '800' }}>OF {total}</Text>
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke={accentColor}
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${circumference} ${circumference}`}
+            strokeDashoffset={circumference * (1 - progress)}
+            strokeLinecap="butt"
+            rotation={-90}
+            origin={`${size / 2}, ${size / 2}`}
+          />
+        </Svg>
+        <Text style={{ color, fontSize: 38, lineHeight: 38, fontWeight: '700' }}>{current}</Text>
+        <Text style={{ color, opacity: 0.64, fontSize: 9, fontWeight: '700', letterSpacing: 0.7 }}>OF {total}</Text>
       </View>
       <Text style={{ position: 'absolute', opacity: 0 }}>
         Item {current} of {total}
@@ -837,64 +891,46 @@ function ProgressOrbit({
 function HoldProgressRing({
   progress,
   color,
+  trackColor,
 }: {
   progress: SharedValue<number>;
   color: string;
+  trackColor: string;
 }) {
-  return (
-    <View pointerEvents="none" style={{ position: 'absolute', inset: 0 }}>
-      {Array.from({ length: 18 }, (_, index) => (
-        <HoldProgressSegment
-          key={index}
-          index={index}
-          progress={progress}
-          color={color}
-        />
-      ))}
-    </View>
-  );
-}
-
-function HoldProgressSegment({
-  index,
-  progress,
-  color,
-}: {
-  index: number;
-  progress: SharedValue<number>;
-  color: string;
-}) {
-  const style = useAnimatedStyle(() => ({
-    opacity: progress.value >= (index + 1) / 18 ? 1 : 0,
+  const circumference = 2 * Math.PI * 24;
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: circumference * (1 - progress.value),
   }));
+
   return (
-    <Animated.View
-      style={[
-        {
-          position: 'absolute',
-          width: 3,
-          height: 8,
-          borderRadius: 2,
-          backgroundColor: color,
-          top: '50%',
-          left: '50%',
-          marginLeft: -1.5,
-          marginTop: -4,
-          transform: [
-            { rotate: `${index * 20}deg` },
-            { translateY: -29 },
-          ],
-        },
-        style,
-      ]}
-    />
+    <View
+      pointerEvents="none"
+      style={{ position: 'absolute', top: -4, right: -4, bottom: -4, left: -4 }}
+    >
+      <Svg testID="stop-progress-arc" width="100%" height="100%" viewBox="0 0 52 52">
+        <Circle cx="26" cy="26" r="24" fill="none" stroke={trackColor} strokeWidth="3" />
+        <AnimatedCircle
+          animatedProps={animatedProps}
+          cx="26"
+          cy="26"
+          r="24"
+          fill="none"
+          stroke={color}
+          strokeWidth="3"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeLinecap="round"
+          rotation={-90}
+          origin="26, 26"
+        />
+      </Svg>
+    </View>
   );
 }
 
 function RunControl({
   testID,
   label,
-  symbol,
+  icon,
   color,
   background,
   border,
@@ -902,7 +938,7 @@ function RunControl({
 }: {
   testID: string;
   label: string;
-  symbol: string;
+  icon: IconName;
   color: string;
   background: string;
   border: string;
@@ -925,8 +961,8 @@ function RunControl({
         justifyContent: 'center',
       }}
     >
-      <Text style={{ color, fontSize: 22, lineHeight: 22 }}>{symbol}</Text>
-      <Text style={{ color, fontSize: 11, fontWeight: '800' }}>{label}</Text>
+      <Icon name={icon} color={color} size={18} />
+      <Text style={{ color, fontSize: 9, fontWeight: '700' }}>{label}</Text>
     </Pressable>
   );
 }

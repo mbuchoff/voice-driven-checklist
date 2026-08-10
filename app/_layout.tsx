@@ -37,7 +37,7 @@ function ThemedNavigation() {
         <Stack.Screen name="checklists/new" options={{ headerShown: false }} />
         <Stack.Screen name="checklists/[id]/edit" options={{ headerShown: false }} />
         <Stack.Screen name="run/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
+        <Stack.Screen name="settings/index" options={{ headerShown: false }} />
         <Stack.Screen name="settings/account" options={{ title: 'Manage accounts' }} />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
       </Stack>

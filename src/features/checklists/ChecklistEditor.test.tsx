@@ -79,6 +79,18 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
     });
 
+    it('uses the prototype icons for adding and deleting steps', async () => {
+      const database = await setupDb();
+      await renderWithDatabase(
+        <ChecklistEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
+        { database },
+      );
+
+      expect(screen.getByTestId('add-step-icon')).toBeOnTheScreen();
+      expect(screen.getByTestId('delete-step-icon-0')).toBeOnTheScreen();
+      expect(screen.queryByText(/[♲＋]/)).toBeNull();
+    });
+
     it('focuses and scrolls every newly added multiline step above the visible keyboard', async () => {
       const scrollToEnd = jest
         .spyOn(ScrollView.prototype, 'scrollToEnd')

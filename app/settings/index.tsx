@@ -18,6 +18,7 @@ export default function SettingsRoute() {
 
   return (
     <SettingsScreen
+      onBack={() => router.back()}
       onManageAccounts={() => router.push('/settings/account')}
       previewSound={(sound, action) => {
         cues.prepare(sound);

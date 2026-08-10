@@ -128,6 +128,33 @@ describe('RunScreen', () => {
       expect(screen.getAllByRole('button')).toHaveLength(4);
     });
 
+    it('uses font-independent vector geometry for the stop icon', async () => {
+      setup();
+      await flush();
+
+      expect(screen.queryByText('×')).toBeNull();
+      expect(screen.getByTestId('stop-run-icon')).toBeOnTheScreen();
+    });
+
+    it('renders continuous arcs for checklist and stop progress', async () => {
+      setup();
+      await flush();
+
+      expect(screen.getByTestId('run-progress-arc')).toBeOnTheScreen();
+      expect(screen.getByTestId('stop-progress-arc')).toBeOnTheScreen();
+    });
+
+    it('centers the title independently of the stop control width', async () => {
+      setup();
+      await flush();
+
+      const titleFrame = StyleSheet.flatten(
+        screen.getByTestId('run-title-frame').props.style,
+      );
+      expect(titleFrame.position).toBe('absolute');
+      expect(titleFrame.left).toBe(titleFrame.right);
+    });
+
     it('begins playback of the first item when playback is available', async () => {
       const { playback } = setup();
       await flush();

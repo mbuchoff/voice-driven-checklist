@@ -20,6 +20,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
 
+import { Icon } from '@/src/components/Icon';
+import { ScreenBackground } from '@/src/components/ScreenBackground';
 import { useDatabase } from '@/src/db/DatabaseProvider';
 import { useTheme } from '@/src/theme/useTheme';
 
@@ -328,6 +330,7 @@ export function ChecklistEditor({
       testID="editor-safe-area"
       style={{ flex: 1, backgroundColor: theme.background }}
     >
+      <ScreenBackground variant="editor" />
       <View
         testID="editor-actions"
         style={{
@@ -348,14 +351,14 @@ export function ChecklistEditor({
           onPress={onCancel}
           style={{ minWidth: 72, minHeight: 44, justifyContent: 'center' }}
         >
-          <Text style={{ color: theme.primary, fontWeight: '800' }}>Cancel</Text>
+          <Text style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>Cancel</Text>
         </Pressable>
         <Text
           style={{
             color: theme.textMuted,
             fontSize: 12,
             letterSpacing: 1.5,
-            fontWeight: '800',
+            fontWeight: '700',
             textAlign: 'center',
             flex: 1,
           }}
@@ -375,13 +378,13 @@ export function ChecklistEditor({
             justifyContent: 'center',
           }}
         >
-          <Text style={{ color: theme.onPrimary, fontWeight: '800' }}>Save</Text>
+          <Text style={{ color: theme.onPrimary, fontWeight: '700', fontSize: 13 }}>Save</Text>
         </Pressable>
       </View>
 
       <ScrollView
           ref={scrollRef}
-          style={{ flex: 1, backgroundColor: theme.background }}
+          style={{ flex: 1, backgroundColor: 'transparent' }}
           contentContainerStyle={{
             padding: 20,
             paddingBottom: 48 + keyboardClearance,
@@ -407,7 +410,7 @@ export function ChecklistEditor({
             <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '800', letterSpacing: 1.5 }}>
               BUILD YOUR FLOW
             </Text>
-            <Text style={{ color: theme.text, fontSize: 34, lineHeight: 37, fontWeight: '900' }}>
+            <Text style={{ color: theme.text, fontSize: 34, lineHeight: 36, fontWeight: '700', letterSpacing: -1.7 }}>
               Shape the routine
             </Text>
             <Text style={{ color: theme.textMuted, fontSize: 15, lineHeight: 20 }}>
@@ -417,14 +420,14 @@ export function ChecklistEditor({
 
           <View style={{ gap: 7 }}>
             <View style={{ flexDirection: 'row' }}>
-              <Text style={{ color: theme.text, fontWeight: '800', flex: 1 }}>Checklist name</Text>
-              <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '700' }}>Required</Text>
+              <Text style={{ color: theme.text, fontWeight: '700', fontSize: 13, flex: 1 }}>Checklist name</Text>
+              <Text style={{ color: theme.textFaint, fontSize: 12, fontWeight: '500' }}>Required</Text>
             </View>
             <TextInput
               testID="title-input"
               value={title}
               onChangeText={setTitle}
-              placeholder="Checklist name"
+              placeholder="e.g. Leaving home"
               placeholderTextColor={theme.textMuted}
               style={{
                 color: theme.text,
@@ -436,7 +439,7 @@ export function ChecklistEditor({
                 paddingVertical: 14,
                 minHeight: 58,
                 fontSize: 18,
-                fontWeight: '700',
+                fontWeight: '600',
               }}
             />
             {titleError ? (
@@ -448,10 +451,10 @@ export function ChecklistEditor({
 
           <View style={{ gap: 9 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={{ color: theme.text, fontWeight: '800', flex: 1 }}>
+              <Text style={{ color: theme.text, fontWeight: '700', fontSize: 13, flex: 1 }}>
                 Steps · {items.length}
               </Text>
-              <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '700' }}>
+              <Text style={{ color: theme.textFaint, fontSize: 12, fontWeight: '500' }}>
                 Edit or reorder anytime
               </Text>
             </View>
@@ -513,13 +516,16 @@ export function ChecklistEditor({
                           style={{
                             width: 30,
                             height: 30,
-                            borderRadius: 9,
+                            borderTopLeftRadius: 10,
+                            borderTopRightRadius: 10,
+                            borderBottomRightRadius: 10,
+                            borderBottomLeftRadius: 4,
                             backgroundColor: theme.surfaceAlt,
                             alignItems: 'center',
                             justifyContent: 'center',
                           }}
                         >
-                          <Text style={{ color: theme.primary, fontWeight: '800' }}>{index + 1}</Text>
+                          <Text style={{ color: theme.primaryDark, fontWeight: '800', fontSize: 12 }}>{index + 1}</Text>
                         </View>
                         <View style={{ flex: 1 }}>
                           <TextInput
@@ -560,7 +566,12 @@ export function ChecklistEditor({
                           hitSlop={8}
                           style={{ width: 34, height: 44, alignItems: 'center', justifyContent: 'center' }}
                         >
-                          <Text style={{ color: theme.textMuted, fontSize: 17 }}>♲</Text>
+                          <Icon
+                            name="trash"
+                            color={theme.textFaint}
+                            size={16}
+                            testID={`delete-step-icon-${index}`}
+                          />
                         </Pressable>
                       </View>
                     </GestureDetector>
@@ -598,13 +609,16 @@ export function ChecklistEditor({
                   style={{
                     width: 30,
                     height: 30,
-                    borderRadius: 9,
+                    borderTopLeftRadius: 10,
+                    borderTopRightRadius: 10,
+                    borderBottomRightRadius: 10,
+                    borderBottomLeftRadius: 4,
                     backgroundColor: theme.surfaceAlt,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <Text style={{ color: theme.primary, fontWeight: '800' }}>{drag.from + 1}</Text>
+                  <Text style={{ color: theme.primaryDark, fontWeight: '800', fontSize: 12 }}>{drag.from + 1}</Text>
                 </View>
                 <Text testID="item-drag-preview-text" style={{ color: theme.text, fontSize: 16, flex: 1 }}>
                   {drag.text}
@@ -619,18 +633,19 @@ export function ChecklistEditor({
               style={{
                 minHeight: 56,
                 borderWidth: 1,
-                borderColor: theme.border,
+                borderColor: theme.textFaint,
                 borderStyle: 'dashed',
                 borderRadius: 17,
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexDirection: 'row',
                 gap: 8,
-                marginTop: 2,
+                marginTop: 10,
+                backgroundColor: theme.surfaceSoft,
               }}
             >
-              <Text style={{ color: theme.primary, fontSize: 21 }}>＋</Text>
-              <Text style={{ color: theme.primary, fontWeight: '800' }}>Add another step</Text>
+              <Icon name="plus" color={theme.primary} size={18} testID="add-step-icon" />
+              <Text style={{ color: theme.primary, fontWeight: '700', fontSize: 14 }}>Add another step</Text>
             </Pressable>
           </View>
       </ScrollView>

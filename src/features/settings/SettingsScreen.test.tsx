@@ -51,11 +51,13 @@ function accountValue(
 async function renderSettings({
   account = accountValue({ status: 'local' }),
   store = new MemoryDevicePreferenceStore(),
+  onBack = jest.fn(),
   onManageAccounts = jest.fn(),
   previewSound = jest.fn(),
 }: {
   account?: AccountContextValue;
   store?: MemoryDevicePreferenceStore;
+  onBack?: () => void;
   onManageAccounts?: () => void;
   previewSound?: (sound: 'chime' | 'wood' | 'ping', action: 'next') => void;
 } = {}) {
@@ -66,6 +68,7 @@ async function renderSettings({
       <DevicePreferencesProvider store={store}>
         <SettingsContent
           account={account}
+          onBack={onBack}
           onManageAccounts={onManageAccounts}
           previewSound={previewSound}
         />
@@ -74,6 +77,7 @@ async function renderSettings({
     )),
     account,
     database,
+    onBack,
     onManageAccounts,
     previewSound,
     store,
@@ -96,6 +100,19 @@ describe('SettingsContent', () => {
     expect(screen.getByRole('header', { name: /backup.*restore/i })).toBeOnTheScreen();
     expect(screen.getByRole('header', { name: /switch account/i })).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: /preview completion/i })).toBeNull();
+  });
+
+  it('uses the prototype header and icon language', async () => {
+    const onBack = jest.fn();
+    await renderSettings({ onBack });
+
+    fireEvent.press(screen.getByRole('button', { name: /back to my checklists/i }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('settings-safe-area')).toBeOnTheScreen();
+    expect(screen.getByTestId('theme-system-icon')).toBeOnTheScreen();
+    expect(screen.getByTestId('theme-light-icon')).toBeOnTheScreen();
+    expect(screen.getByTestId('theme-dark-icon')).toBeOnTheScreen();
+    expect(screen.queryByText(/[▣☀◔◖]/)).toBeNull();
   });
 
   it('persists an explicit theme choice and marks it selected', async () => {
