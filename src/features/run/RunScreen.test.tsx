@@ -7,6 +7,7 @@ import {
 } from '@/src/services/speech/fakes';
 
 import { RunScreen, type RunScreenProps } from './RunScreen';
+import { RUN_ITEM_GAP } from './runPresentation';
 import type { ChecklistRunSnapshot } from './types';
 
 const snapshot: ChecklistRunSnapshot = {
@@ -179,6 +180,35 @@ describe('RunScreen', () => {
         screen.getByTestId('run-item-1').props.style,
       );
       expect(currentStyle.filter).toEqual([{ blur: 0 }]);
+    });
+
+    it('centers variable-height rows on the same track positions', async () => {
+      setup({
+        snapshot: {
+          ...snapshot,
+          items: [
+            {
+              id: 'long',
+              text: 'A long step that wraps across several lines on a phone screen',
+              order: 0,
+            },
+            { id: 'short', text: 'Short step', order: 1 },
+          ],
+        },
+      });
+      await flush();
+
+      const firstStyle = StyleSheet.flatten(
+        screen.getByTestId('run-item-0').props.style,
+      );
+      const secondStyle = StyleSheet.flatten(
+        screen.getByTestId('run-item-1', { includeHiddenElements: true }).props
+          .style,
+      );
+      expect(firstStyle.top).toBe(0);
+      expect(secondStyle.top).toBe(RUN_ITEM_GAP);
+      expect(firstStyle.transform).toContainEqual({ translateY: '-50%' });
+      expect(secondStyle.transform).toContainEqual({ translateY: '-50%' });
     });
 
     it('waits for the Android voice run startup before speaking the first item', async () => {

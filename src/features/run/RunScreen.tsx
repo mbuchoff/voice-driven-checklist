@@ -711,6 +711,7 @@ function RunItem({
         [presentation.opacity, 1],
       ),
       transform: [
+        { translateY: '-50%' as const },
         {
           scale: interpolate(
             emphasis.value,
@@ -752,7 +753,7 @@ function RunItem({
       style={[
         {
           position: 'absolute',
-          top: index * RUN_ITEM_GAP - 68,
+          top: index * RUN_ITEM_GAP,
           left: 0,
           right: 0,
           minHeight: 136,
