@@ -121,6 +121,13 @@ describe('RunScreen', () => {
       expect(screen.getByText(/item 1 of 3/i)).toBeOnTheScreen();
     });
 
+    it('exposes only stop and the three run actions as buttons', async () => {
+      setup();
+      await flush();
+
+      expect(screen.getAllByRole('button')).toHaveLength(4);
+    });
+
     it('begins playback of the first item when playback is available', async () => {
       const { playback } = setup();
       await flush();
@@ -614,6 +621,7 @@ describe('RunScreen', () => {
       jest.useFakeTimers();
 
       fireEvent(screen.getByTestId('stop-run'), 'pressIn');
+      expect(screen.queryByText(snapshot.checklistTitle)).toBeNull();
       expect(screen.getByText(/keep holding/i)).toBeOnTheScreen();
       act(() => jest.advanceTimersByTime(600));
       fireEvent(screen.getByTestId('stop-run'), 'pressOut');
@@ -622,6 +630,7 @@ describe('RunScreen', () => {
       expect(onStopHoldComplete).not.toHaveBeenCalled();
       expect(onRequestStop).not.toHaveBeenCalled();
       expect(screen.queryByText(/keep holding/i)).toBeNull();
+      expect(screen.getByText(snapshot.checklistTitle)).toBeOnTheScreen();
       jest.useRealTimers();
     });
 

@@ -531,12 +531,14 @@ export function RunScreen({
             </Text>
           ) : null}
         </View>
-        <Text
-          numberOfLines={1}
-          style={{ color: theme.text, fontSize: 16, fontWeight: '800', textAlign: 'center', maxWidth: '46%' }}
-        >
-          {state.snapshot?.checklistTitle}
-        </Text>
+        {!holdingStop ? (
+          <Text
+            numberOfLines={1}
+            style={{ color: theme.text, fontSize: 16, fontWeight: '800', textAlign: 'center', maxWidth: '46%' }}
+          >
+            {state.snapshot?.checklistTitle}
+          </Text>
+        ) : null}
         <View style={{ flex: 1 }} />
       </View>
 
@@ -632,14 +634,6 @@ export function RunScreen({
                 : 'Say next, repeat, or previous'}
             </Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Try next"
-            onPress={() => runAction('next')}
-            style={{ borderWidth: 1, borderColor: theme.runBorder, borderRadius: 12, padding: 10 }}
-          >
-            <Text style={{ color: theme.text, fontWeight: '800', fontSize: 12 }}>Try “next”</Text>
-          </Pressable>
         </View>
 
         <View style={{ flexDirection: 'row', gap: 10 }}>
