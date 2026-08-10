@@ -186,6 +186,7 @@ describe('ChecklistEditor', () => {
       );
 
       fireEvent.changeText(screen.getByTestId('title-input'), '  Groceries  ');
+      fireEvent.press(screen.getByTestId('item-edit-0'));
       fireEvent.changeText(screen.getByTestId('item-text-0'), '  Milk  ');
       fireEvent.press(screen.getByTestId('add-item'));
       fireEvent.changeText(screen.getByTestId('item-text-1'), '  Bread  ');
@@ -210,6 +211,7 @@ describe('ChecklistEditor', () => {
         <ChecklistEditor onSaved={onSaved} onCancel={jest.fn()} />,
         { database },
       );
+      fireEvent.press(screen.getByTestId('item-edit-0'));
       fireEvent.changeText(screen.getByTestId('item-text-0'), 'valid');
       fireEvent.press(screen.getByTestId('save'));
 
@@ -226,6 +228,7 @@ describe('ChecklistEditor', () => {
       );
       fireEvent.changeText(screen.getByTestId('title-input'), 'Title');
       fireEvent.press(screen.getByTestId('add-item'));
+      fireEvent.press(screen.getByTestId('item-edit-0'));
       fireEvent.changeText(screen.getByTestId('item-text-0'), 'valid');
       // Leave item-text-1 blank.
       fireEvent.press(screen.getByTestId('save'));
@@ -320,6 +323,7 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-text-1').props.value).toBe('two');
 
       fireEvent.changeText(screen.getByTestId('title-input'), 'Renamed');
+      fireEvent.press(screen.getByTestId('item-edit-0'));
       fireEvent.changeText(screen.getByTestId('item-text-0'), 'uno');
       fireEvent.press(screen.getByTestId('save'));
 
@@ -634,6 +638,36 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('checklist-editor-scroll').props.scrollEnabled).toBe(false);
 
       finishRowDrag(gesture);
+    });
+
+    it('enters native text editing only after a quick tap on an idle step', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'keep drag',
+        items: [{ text: 'hold this text' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+
+      expect(screen.getByTestId('item-text-0').props.editable).toBe(false);
+      expect(screen.getByTestId('item-text-0').props.pointerEvents).toBe(
+        'none',
+      );
+
+      fireEvent.press(screen.getByTestId('item-edit-0'));
+      expect(screen.getByTestId('item-text-0').props.editable).toBe(true);
+      expect(screen.getByTestId('item-text-0').props.pointerEvents).toBe(
+        'auto',
+      );
+
+      fireEvent(screen.getByTestId('item-text-0'), 'blur');
+      expect(screen.getByTestId('item-text-0').props.editable).toBe(false);
     });
 
     it('uses the whole row and accessible adjustments without visible move controls', async () => {

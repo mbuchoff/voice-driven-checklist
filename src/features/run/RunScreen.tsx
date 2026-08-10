@@ -805,7 +805,7 @@ function RunItem({
         style={{
           color: textColor,
           fontSize: text.length >= 55 ? 24 : 34,
-          lineHeight: text.length >= 55 ? 26 : 34,
+          lineHeight: text.length >= 55 ? 29 : 39,
           fontWeight: '700',
           letterSpacing: text.length >= 55 ? -0.7 : -1.7,
           textAlign: 'center',

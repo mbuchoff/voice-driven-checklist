@@ -245,6 +245,27 @@ describe('RunScreen', () => {
       expect(secondStyle.transform).toContainEqual({ translateY: '-50%' });
     });
 
+    it('leaves vertical space for descenders in the current step text', async () => {
+      setup({
+        snapshot: {
+          ...snapshot,
+          items: [
+            {
+              id: 'glass',
+              text: 'Drink a full glass of water',
+              order: 0,
+            },
+          ],
+        },
+      });
+      await flush();
+
+      const textStyle = StyleSheet.flatten(
+        screen.getByText('Drink a full glass of water').props.style,
+      );
+      expect(textStyle.lineHeight).toBeGreaterThan(textStyle.fontSize);
+    });
+
     it('waits for the Android voice run startup before speaking the first item', async () => {
       let resolveStartup!: () => void;
       const startupFinished = new Promise<void>((resolve) => {

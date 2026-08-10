@@ -467,6 +467,7 @@ export function ChecklistEditor({
               return items.map((item, index) => {
                 const error = itemErrors[item.localId];
                 const isActive = drag?.localId === item.localId;
+                const isEditing = focusItemId === item.localId;
                 const dropTarget = isActive
                   ? null
                   : renderDropTarget(dropIndex);
@@ -475,9 +476,7 @@ export function ChecklistEditor({
                 return (
                   <Fragment key={item.localId}>
                     {dropTarget}
-                    <GestureDetector
-                      gesture={gestureFor(item)}
-                    >
+                    <GestureDetector gesture={gestureFor(item)}>
                       <View
                         testID={`item-row-${index}`}
                         nativeID={item.localId}
@@ -528,30 +527,37 @@ export function ChecklistEditor({
                           <Text style={{ color: theme.primaryDark, fontWeight: '800', fontSize: 12 }}>{index + 1}</Text>
                         </View>
                         <View style={{ flex: 1 }}>
-                          <TextInput
-                            testID={`item-text-${index}`}
-                            value={item.text}
-                            multiline
-                            scrollEnabled={false}
-                            autoFocus={focusItemId === item.localId}
-                            onBlur={() => {
-                              setFocusItemId((current) =>
-                                current === item.localId ? null : current,
-                              );
-                            }}
-                            onChangeText={(text) => updateItemText(item.localId, text)}
-                            placeholder={`Step ${index + 1}`}
-                            placeholderTextColor={theme.textMuted}
-                            textAlignVertical="center"
-                            style={{
-                              color: theme.text,
-                              minHeight: 44,
-                              paddingHorizontal: 6,
-                              paddingVertical: 8,
-                              fontSize: 16,
-                              lineHeight: 21,
-                            }}
-                          />
+                          <Pressable
+                            testID={`item-edit-${index}`}
+                            onPress={() => setFocusItemId(item.localId)}
+                          >
+                            <TextInput
+                              testID={`item-text-${index}`}
+                              value={item.text}
+                              multiline
+                              scrollEnabled={false}
+                              editable={isEditing}
+                              pointerEvents={isEditing ? 'auto' : 'none'}
+                              autoFocus={isEditing}
+                              onBlur={() => {
+                                setFocusItemId((current) =>
+                                  current === item.localId ? null : current,
+                                );
+                              }}
+                              onChangeText={(text) => updateItemText(item.localId, text)}
+                              placeholder={`Step ${index + 1}`}
+                              placeholderTextColor={theme.textMuted}
+                              textAlignVertical="center"
+                              style={{
+                                color: theme.text,
+                                minHeight: 44,
+                                paddingHorizontal: 6,
+                                paddingVertical: 8,
+                                fontSize: 16,
+                                lineHeight: 21,
+                              }}
+                            />
+                          </Pressable>
                           {error ? (
                             <Text testID={`item-error-${index}`} style={{ color: theme.danger, paddingHorizontal: 6 }}>
                               {error}
