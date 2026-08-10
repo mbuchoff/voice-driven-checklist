@@ -76,6 +76,21 @@ describe('LibraryScreen', () => {
     expect(onCreate).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the custom header below Android system insets', async () => {
+    const database = await setupDb();
+    await renderWithDatabase(
+      <LibraryScreen onCreate={jest.fn()} onEdit={jest.fn()} onStart={jest.fn()} />,
+      { database },
+    );
+
+    expect(screen.getByTestId('library-safe-area').props.edges.top).toBe(
+      'additive',
+    );
+    expect(
+      screen.getByRole('button', { name: /settings/i }),
+    ).toBeOnTheScreen();
+  });
+
   it('keeps backup and restore out of the library surface', async () => {
     const database = await setupDb();
     await renderWithDatabase(

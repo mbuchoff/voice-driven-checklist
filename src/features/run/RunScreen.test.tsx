@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { BackHandler, Platform } from 'react-native';
+import { BackHandler, Platform, StyleSheet } from 'react-native';
 
 import {
   FakeSpeechPlaybackAdapter,
@@ -20,6 +20,7 @@ const snapshot: ChecklistRunSnapshot = {
 };
 
 const defaultPlatformOS = Platform.OS;
+const defaultPlatformVersion = Platform.Version;
 let mockHardwareBackHandler: (() => boolean | null | undefined) | null = null;
 
 type RenderOptions = Partial<
@@ -103,6 +104,10 @@ describe('RunScreen', () => {
       configurable: true,
       get: () => defaultPlatformOS,
     });
+    Object.defineProperty(Platform, 'Version', {
+      configurable: true,
+      get: () => defaultPlatformVersion,
+    });
   });
 
   describe('initial render', () => {
@@ -153,6 +158,27 @@ describe('RunScreen', () => {
       expect(screen.getByTestId('run-item-1').props.accessibilityState).toMatchObject({
         selected: true,
       });
+    });
+
+    it('clears native blur when a background item becomes current', async () => {
+      Object.defineProperty(Platform, 'OS', {
+        configurable: true,
+        get: () => 'android',
+      });
+      Object.defineProperty(Platform, 'Version', {
+        configurable: true,
+        get: () => 36,
+      });
+      setup();
+      await flush();
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+
+      const currentStyle = StyleSheet.flatten(
+        screen.getByTestId('run-item-1').props.style,
+      );
+      expect(currentStyle.filter).toEqual([{ blur: 0 }]);
     });
 
     it('waits for the Android voice run startup before speaking the first item', async () => {

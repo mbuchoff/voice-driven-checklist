@@ -1,9 +1,8 @@
 import { Fragment, useEffect, useRef, useState, type ComponentRef } from 'react';
 import {
+  Dimensions,
   Keyboard,
-  KeyboardAvoidingView,
   LayoutAnimation,
-  Platform,
   Pressable,
   Text,
   TextInput,
@@ -18,6 +17,7 @@ import {
   GestureDetector,
   ScrollView,
 } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
 
 import { useDatabase } from '@/src/db/DatabaseProvider';
@@ -113,19 +113,34 @@ export function ChecklistEditor({
   const [titleError, setTitleError] = useState<string | null>(null);
   const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [keyboardClearance, setKeyboardClearance] = useState(0);
 
   const scrollFocusedItemIntoView = () => {
-    if (!focusItemId) return;
+    if (!focusItemId || keyboardClearance <= 0) return;
     scrollRef.current?.scrollToEnd({ animated: true });
   };
 
   useEffect(() => {
-    const subscription = Keyboard.addListener(
-      'keyboardDidShow',
-      scrollFocusedItemIntoView,
-    );
-    return () => subscription.remove();
-  });
+    const shown = Keyboard.addListener('keyboardDidShow', (event) => {
+      const clearance = Math.max(
+        0,
+        Dimensions.get('screen').height - event.endCoordinates.screenY,
+      );
+      setKeyboardClearance(clearance);
+      if (focusItemId) {
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollToEnd({ animated: true });
+        });
+      }
+    });
+    const hidden = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardClearance(0);
+    });
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, [focusItemId]);
 
   const updateItemText = (localId: string, text: string) => {
     setItems((current) =>
@@ -308,7 +323,11 @@ export function ChecklistEditor({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <SafeAreaView
+      edges={['top', 'left', 'right']}
+      testID="editor-safe-area"
+      style={{ flex: 1, backgroundColor: theme.background }}
+    >
       <View
         testID="editor-actions"
         style={{
@@ -360,14 +379,14 @@ export function ChecklistEditor({
         </Pressable>
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: theme.background }}
-        behavior={Platform.OS === 'android' ? 'height' : 'padding'}
-      >
-        <ScrollView
+      <ScrollView
           ref={scrollRef}
-          style={{ backgroundColor: theme.background }}
-          contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 20 }}
+          style={{ flex: 1, backgroundColor: theme.background }}
+          contentContainerStyle={{
+            padding: 20,
+            paddingBottom: 48 + keyboardClearance,
+            gap: 20,
+          }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           scrollEnabled={!drag}
@@ -509,7 +528,6 @@ export function ChecklistEditor({
                             multiline
                             scrollEnabled={false}
                             autoFocus={focusItemId === item.localId}
-                            onFocus={scrollFocusedItemIntoView}
                             onBlur={() => {
                               setFocusItemId((current) =>
                                 current === item.localId ? null : current,
@@ -615,8 +633,7 @@ export function ChecklistEditor({
               <Text style={{ color: theme.primary, fontWeight: '800' }}>Add another step</Text>
             </Pressable>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }

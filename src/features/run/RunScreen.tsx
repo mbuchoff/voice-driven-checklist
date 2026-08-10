@@ -720,20 +720,28 @@ function RunItem({
         },
       ],
     };
-    if (presentation.blurRadius === 0) return common;
+    if (androidApi < 31) return common;
     return {
       ...common,
       filter: [
         {
-          blur: interpolate(
-            emphasis.value,
-            [0, 1],
-            [presentation.blurRadius, 0],
-          ),
+          blur:
+            presentation.blurRadius === 0
+              ? 0
+              : interpolate(
+                  emphasis.value,
+                  [0, 1],
+                  [presentation.blurRadius, 0],
+                ),
         },
       ],
     };
-  }, [presentation.blurRadius, presentation.opacity, presentation.scale]);
+  }, [
+    androidApi,
+    presentation.blurRadius,
+    presentation.opacity,
+    presentation.scale,
+  ]);
 
   return (
     <Animated.View

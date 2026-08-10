@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { confirmAction } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
@@ -59,10 +60,15 @@ export function LibraryScreen({
   };
 
   return (
-    <ScrollView
-      style={{ backgroundColor: theme.background }}
-      contentContainerStyle={{ padding: 20, paddingTop: 24, paddingBottom: 40, gap: 14 }}
+    <SafeAreaView
+      edges={['top', 'left', 'right']}
+      testID="library-safe-area"
+      style={{ flex: 1, backgroundColor: theme.background }}
     >
+      <ScrollView
+        style={{ flex: 1, backgroundColor: theme.background }}
+        contentContainerStyle={{ padding: 20, paddingTop: 24, paddingBottom: 40, gap: 14 }}
+      >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <View
           style={{
@@ -236,6 +242,7 @@ export function LibraryScreen({
           Checklists stay on this device.
         </Text>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }

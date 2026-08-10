@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, within } from '@testing-library/react-native';
-import { ScrollView } from 'react-native';
+import { Keyboard, ScrollView } from 'react-native';
 import { State, type GestureType } from 'react-native-gesture-handler';
 
 import { runMigrations } from '@/src/db/migrations';
@@ -79,10 +79,11 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
     });
 
-    it('focuses every newly added multiline step and scrolls it above the keyboard', async () => {
+    it('focuses and scrolls every newly added multiline step above the visible keyboard', async () => {
       const scrollToEnd = jest
         .spyOn(ScrollView.prototype, 'scrollToEnd')
         .mockImplementation(jest.fn());
+      const keyboardListener = jest.spyOn(Keyboard, 'addListener');
       const database = await setupDb();
       await renderWithDatabase(
         <ChecklistEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
@@ -92,18 +93,44 @@ describe('ChecklistEditor', () => {
       fireEvent.press(screen.getByTestId('add-item'));
       expect(screen.getByTestId('item-text-1').props.multiline).toBe(true);
       expect(screen.getByTestId('item-text-1').props.autoFocus).toBe(true);
-      fireEvent(screen.getByTestId('item-text-1'), 'focus');
+
+      const keyboardShown = keyboardListener.mock.calls.find(
+        ([event]) => event === 'keyboardDidShow',
+      );
+      expect(keyboardShown).toBeDefined();
+      act(() => {
+        keyboardShown?.[1]({ endCoordinates: { screenY: 400 } } as never);
+      });
+      fireEvent(
+        screen.getByTestId('checklist-editor-scroll'),
+        'contentSizeChange',
+        100,
+        2_000,
+      );
+
+      expect(
+        screen.getByTestId('checklist-editor-scroll').props
+          .contentContainerStyle.paddingBottom,
+      ).toBeGreaterThan(48);
+      expect(scrollToEnd).toHaveBeenCalled();
+      scrollToEnd.mockClear();
 
       fireEvent.press(screen.getByTestId('add-item'));
       expect(screen.getByTestId('item-text-1').props.autoFocus).toBe(false);
       expect(screen.getByTestId('item-text-2').props.autoFocus).toBe(true);
-      fireEvent(screen.getByTestId('item-text-2'), 'focus');
+      fireEvent(
+        screen.getByTestId('checklist-editor-scroll'),
+        'contentSizeChange',
+        100,
+        2_200,
+      );
+      expect(scrollToEnd).toHaveBeenCalled();
 
       fireEvent(screen.getByTestId('item-text-2'), 'blur');
       expect(screen.getByTestId('item-text-2').props.autoFocus).toBe(false);
 
-      expect(scrollToEnd).toHaveBeenCalledTimes(2);
       scrollToEnd.mockRestore();
+      keyboardListener.mockRestore();
     });
 
     it('keeps Cancel and Save outside the scrolling checklist content', async () => {
@@ -119,6 +146,23 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('editor-actions')).toBeOnTheScreen();
       expect(screen.getByTestId('save')).toBeOnTheScreen();
       expect(screen.getByTestId('cancel')).toBeOnTheScreen();
+    });
+
+    it('keeps the sticky actions below Android system insets', async () => {
+      const database = await setupDb();
+      await renderWithDatabase(
+        <ChecklistEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
+        { database },
+      );
+
+      expect(screen.getByTestId('editor-safe-area').props.edges.top).toBe(
+        'additive',
+      );
+      expect(
+        within(screen.getByTestId('editor-safe-area')).getByTestId(
+          'editor-actions',
+        ),
+      ).toBeOnTheScreen();
     });
 
     it('persists a new checklist with trimmed title and trimmed item text on save', async () => {

@@ -1,6 +1,7 @@
 const { afterEach, describe, expect, it } = require('@jest/globals');
 
 const resolveConfig = require('./app.config');
+const staticConfig = require('./app.json');
 
 describe('app config', () => {
   afterEach(() => {
@@ -18,6 +19,12 @@ describe('app config', () => {
     const config = resolveConfig({ config: { android: {} } });
 
     expect(config.android.versionCode).toBe(42);
+  });
+
+  it('resizes the Android viewport when the keyboard opens', () => {
+    expect(staticConfig.expo.android.softwareKeyboardLayoutMode).toBe(
+      'resize',
+    );
   });
 
   it('falls back to version code 1 and preserves unrelated config', () => {

@@ -79,9 +79,7 @@ These were exercised via automated tests (`npm test`) rather than the manual wal
 
 Bug: in the editor, when the focused row was near the bottom of the screen, the on-screen keyboard hid the focused `TextInput` itself. The user could type without seeing the text being entered.
 
-Accepted fix: use Android's native panning behavior instead of JS keyboard geometry. `app.json` sets `android.softwareKeyboardLayoutMode` to `pan`, which generates `android:windowSoftInputMode="adjustPan"`, and `ChecklistEditor` stays a plain `ScrollView` with `keyboardShouldPersistTaps="handled"`. When a low item field receives focus, Android pans the window so the focused `TextInput` is visible above Gboard's suggestion bar.
-
-Accepted limitation: row controls below the focused field (`Move up / Move down / Delete`) may be covered by the keyboard while typing. Dismiss the keyboard before using those controls. This is preferable here to the previous JS `measureInWindow` workaround with a device-tuned margin.
+Accepted fix: resize the Android viewport when the keyboard opens, then give the editor's plain `ScrollView` bottom clearance equal to the keyboard's measured screen overlay. When Add another step focuses a newly mounted row, the editor scrolls to the end after that clearance is applied. This keeps the first and subsequent new rows, Add another step, and the sticky Save action visible without a device-tuned margin.
 
 The walkthrough was driven via `adb` against a debug build with Metro running:
 
@@ -106,7 +104,7 @@ This walkthrough is the verification of `src/features/checklists/ChecklistEditor
 7. **`adjustPan` plus static bottom padding.** Result: unnecessary. Extra `paddingBottom` changed the pre-focus scroll position but did not improve the accepted focused-input behavior.
 8. **`react-native-keyboard-controller` `KeyboardAwareScrollView`.** Result: rejected for this stack. Expo installed `react-native-keyboard-controller@1.20.7`; the app rebuilt, but the library produced dev warnings under Expo SDK 55 / RN 0.83 / Fabric, including ignored edge-to-edge provider props and native listener fallback logs. The editor scroll/focus behavior was unreliable enough that the existing walkthrough automation could not complete, and manual probing showed focus/scroll behavior that was not a trustworthy replacement for the verified implementation. The spike dependency and `KeyboardProvider` wrapper were removed.
 
-The accepted shipping fix is `adjustPan` plus the plain editor `ScrollView`, not the manual `Keyboard` listener / `measureInWindow` workaround.
+The current shipping fix is `adjustResize` plus the plain editor `ScrollView` and measured keyboard clearance. The original `adjustPan` behavior remains documented above because it explained the earlier focused-field fix, but it no longer satisfies the sticky safe-area header and repeated Add workflow together.
 
 ## Notes from this verification pass
 
