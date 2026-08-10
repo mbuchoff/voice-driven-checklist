@@ -3,6 +3,21 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { FirstRunScreen } from './FirstRunScreen';
 
 describe('FirstRunScreen', () => {
+  it('uses the branded safe-area shell for first launch', () => {
+    render(
+      <FirstRunScreen
+        onSelectLocal={jest.fn()}
+        onContinueWithGoogle={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('first-run-safe-area')).toBeOnTheScreen();
+    expect(screen.getByTestId('first-run-brand-icon')).toBeOnTheScreen();
+    expect(
+      screen.getByRole('header', { name: /choose how to use voice checklist/i }),
+    ).toBeOnTheScreen();
+  });
+
   it('offers accessible local and Google account choices', () => {
     render(
       <FirstRunScreen
