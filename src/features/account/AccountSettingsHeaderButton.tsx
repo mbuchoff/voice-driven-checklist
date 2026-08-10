@@ -11,7 +11,7 @@ export function AccountSettingsHeaderButton({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Account settings"
+      accessibilityLabel="Settings"
       hitSlop={10}
       onPress={onPress}
       style={{ paddingHorizontal: 6, paddingVertical: 4 }}

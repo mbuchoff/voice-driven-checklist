@@ -8,7 +8,7 @@ describe('AccountSettingsHeaderButton', () => {
     render(<AccountSettingsHeaderButton onPress={onPress} />);
 
     fireEvent.press(
-      screen.getByRole('button', { name: /account settings/i }),
+      screen.getByRole('button', { name: /^settings$/i }),
     );
 
     expect(onPress).toHaveBeenCalledTimes(1);

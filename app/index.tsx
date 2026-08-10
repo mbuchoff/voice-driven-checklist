@@ -2,13 +2,10 @@ import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 import { AccountGate } from '@/src/features/account/AccountGate';
-import { useAccount } from '@/src/features/account/AccountProvider';
-import { AccountSettingsHeaderButton } from '@/src/features/account/AccountSettingsHeaderButton';
 import { LibraryScreen } from '@/src/features/checklists/LibraryScreen';
 
 export default function LibraryRoute() {
   const router = useRouter();
-  const account = useAccount();
   const [refreshKey, setRefreshKey] = useState(0);
 
   useFocusEffect(
@@ -17,26 +14,14 @@ export default function LibraryRoute() {
     }, []),
   );
 
-  const settingsAvailable =
-    account.state.status === 'local' || account.state.status === 'google';
-
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerRight: settingsAvailable
-            ? () => (
-                <AccountSettingsHeaderButton
-                  onPress={() => router.push('/settings/account')}
-                />
-              )
-            : undefined,
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
       <AccountGate>
         <LibraryScreen
           refreshKey={refreshKey}
           onCreate={() => router.push('/checklists/new')}
+          onSettings={() => router.push('/settings')}
           onEdit={(id) =>
             router.push({ pathname: '/checklists/[id]/edit', params: { id } })
           }
