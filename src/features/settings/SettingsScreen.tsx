@@ -1,9 +1,11 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/src/components/Icon';
 import { ScreenBackground } from '@/src/components/ScreenBackground';
+import { SettingsCard } from '@/src/components/SettingsCard';
+import { SettingsTopBar } from '@/src/components/SettingsTopBar';
 import { notify } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
 import {
@@ -146,51 +148,11 @@ export function SettingsContent({
       style={{ flex: 1, backgroundColor: theme.background }}
     >
       <ScreenBackground variant="settings" />
-      <View
-        style={{
-          minHeight: 66,
-          paddingHorizontal: 20,
-          paddingBottom: 10,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-          backgroundColor: theme.surfaceSoft,
-          flexDirection: 'row',
-          alignItems: 'flex-end',
-        }}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to my checklists"
-          onPress={onBack}
-          style={{
-            width: 40,
-            height: 40,
-            borderWidth: 1,
-            borderColor: theme.border,
-            borderRadius: 20,
-            backgroundColor: theme.surface,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Icon name="arrowLeft" color={theme.primary} size={19} />
-        </Pressable>
-        <Text
-          style={{
-            position: 'absolute',
-            left: 64,
-            right: 64,
-            bottom: 24,
-            color: theme.text,
-            fontSize: 12,
-            fontWeight: '700',
-            letterSpacing: 1.2,
-            textAlign: 'center',
-          }}
-        >
-          SETTINGS
-        </Text>
-      </View>
+      <SettingsTopBar
+        backLabel="Back to my checklists"
+        onBack={onBack}
+        title="SETTINGS"
+      />
       <ScrollView
         testID="settings-scroll"
         style={{ backgroundColor: 'transparent' }}
@@ -210,7 +172,7 @@ export function SettingsContent({
         </Text>
       </View>
 
-      <SettingsCard theme={theme}>
+      <SettingsCard>
         <SectionHeading eyebrow="APPEARANCE" title="Theme" note="DEFAULT: SYSTEM" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <ChoiceCard
@@ -243,7 +205,7 @@ export function SettingsContent({
         </View>
       </SettingsCard>
 
-      <SettingsCard theme={theme}>
+      <SettingsCard>
         <SectionHeading eyebrow="PLAYBACK" title="Step sounds" note="TAP TO PREVIEW" />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {SOUND_OPTIONS.map((option) => (
@@ -260,7 +222,7 @@ export function SettingsContent({
         </View>
       </SettingsCard>
 
-      <SettingsCard theme={theme}>
+      <SettingsCard>
         <SectionHeading eyebrow="YOUR DATA" title="Backup & restore" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <ActionButton
@@ -278,7 +240,7 @@ export function SettingsContent({
         </View>
       </SettingsCard>
 
-      <SettingsCard theme={theme}>
+      <SettingsCard>
         <SectionHeading eyebrow="ACCOUNT" title="Switch account" note="CHANGES IMMEDIATELY" />
         <View style={{ gap: 8 }}>
           {googleIdentity ? (
@@ -335,30 +297,6 @@ export function SettingsContent({
       ) : null}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function SettingsCard({
-  theme,
-  children,
-}: {
-  theme: ReturnType<typeof useTheme>;
-  children: ReactNode;
-}) {
-  return (
-    <View
-      style={{
-        backgroundColor: theme.surface,
-        borderWidth: 1,
-        borderColor: theme.border,
-        borderRadius: 22,
-        padding: 17,
-        gap: 12,
-        boxShadow: `0 3px 10px ${theme.shadow}`,
-      }}
-    >
-      {children}
-    </View>
   );
 }
 

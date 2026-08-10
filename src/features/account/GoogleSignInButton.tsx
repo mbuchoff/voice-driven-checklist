@@ -1,4 +1,6 @@
-import { Image, Pressable, Text, useColorScheme } from 'react-native';
+import { Image, Pressable, Text } from 'react-native';
+
+import { useTheme } from '@/src/theme/useTheme';
 
 export function GoogleSignInButton({
   onPress,
@@ -9,7 +11,7 @@ export function GoogleSignInButton({
   disabled?: boolean;
   label?: string;
 }) {
-  const dark = useColorScheme() === 'dark';
+  const dark = useTheme().mode === 'dark';
   return (
     <Pressable
       accessibilityRole="button"
