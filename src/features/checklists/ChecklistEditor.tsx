@@ -1,19 +1,23 @@
-import { Fragment, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, type ComponentRef } from 'react';
 import {
   Keyboard,
-  PanResponder,
+  KeyboardAvoidingView,
+  LayoutAnimation,
+  Platform,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
+  Vibration,
   View,
-  type GestureResponderEvent,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  type TextStyle,
-  type ViewStyle,
 } from 'react-native';
+import {
+  Gesture,
+  GestureDetector,
+  ScrollView,
+} from 'react-native-gesture-handler';
 import { v4 as uuidv4 } from 'uuid';
 
 import { useDatabase } from '@/src/db/DatabaseProvider';
@@ -27,11 +31,19 @@ import {
   validateChecklistTitle,
 } from './validation';
 
+const HOLD_TO_REORDER_MS = 350;
+
 type EditorItem = { localId: string; text: string };
 type RowLayout = { y: number; height: number };
-type DragState = { localId: string; text: string; to: number; top: number; height: number };
-type DragContext = DragState & {
+type DragState = {
+  localId: string;
+  text: string;
   from: number;
+  to: number;
+  top: number;
+  height: number;
+};
+type DragContext = DragState & {
   startCenterY: number;
   startPageY: number;
   startScrollY: number;
@@ -49,35 +61,42 @@ function makeBlankItem(): EditorItem {
 
 function initialItems(checklist?: Checklist): EditorItem[] {
   if (checklist && checklist.items.length > 0) {
-    return checklist.items.map((item) => ({ localId: uuidv4(), text: item.text }));
+    return checklist.items.map((item) => ({
+      localId: uuidv4(),
+      text: item.text,
+    }));
   }
   return [makeBlankItem()];
-}
-
-function DragHandleIcon({ color }: { color: string }) {
-  return (
-    <>
-      <View style={{ width: 16, height: 2, backgroundColor: color }} />
-      <View style={{ width: 16, height: 2, backgroundColor: color }} />
-      <View style={{ width: 16, height: 2, backgroundColor: color }} />
-    </>
-  );
 }
 
 function dragStateFrom(context: DragContext): DragState {
   return {
     localId: context.localId,
     text: context.text,
+    from: context.from,
     to: context.to,
     top: context.top,
     height: context.height,
   };
 }
 
-export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: ChecklistEditorProps) {
-  const db = useDatabase();
+function animateRowsAside() {
+  LayoutAnimation.configureNext({
+    duration: 160,
+    create: { type: LayoutAnimation.Types.easeInEaseOut, property: 'opacity' },
+    update: { type: LayoutAnimation.Types.easeInEaseOut },
+    delete: { type: LayoutAnimation.Types.easeInEaseOut, property: 'opacity' },
+  });
+}
+
+export function ChecklistEditor({
+  initialChecklist,
+  onSaved,
+  onCancel,
+}: ChecklistEditorProps) {
+  const database = useDatabase();
   const theme = useTheme();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const rowLayouts = useRef<RowLayout[]>([]);
   const dragRef = useRef<DragContext | null>(null);
   const scrollY = useRef(0);
@@ -85,44 +104,53 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
   const viewportHeight = useRef(0);
   const contentHeight = useRef(0);
   const [title, setTitle] = useState(initialChecklist?.title ?? '');
-  const [items, setItems] = useState<EditorItem[]>(() => initialItems(initialChecklist));
+  const [items, setItems] = useState<EditorItem[]>(() =>
+    initialItems(initialChecklist),
+  );
+  const [focusItemId, setFocusItemId] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
   const [drag, setDrag] = useState<DragState | null>(null);
-  const dragHandleBoxStyle: ViewStyle = {
-    width: 36,
-    height: 36,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-  };
-  const itemTextStyle: TextStyle = {
-    color: theme.text,
-    borderWidth: 1,
-    borderColor: theme.inputBorder,
-    borderRadius: 6,
-    padding: 6,
-    flex: 1,
+
+  const scrollFocusedItemIntoView = () => {
+    if (!focusItemId) return;
+    scrollRef.current?.scrollToEnd({ animated: true });
   };
 
+  useEffect(() => {
+    const subscription = Keyboard.addListener(
+      'keyboardDidShow',
+      scrollFocusedItemIntoView,
+    );
+    return () => subscription.remove();
+  });
+
   const updateItemText = (localId: string, text: string) => {
-    setItems((prev) => prev.map((item) => (item.localId === localId ? { ...item, text } : item)));
+    setItems((current) =>
+      current.map((item) =>
+        item.localId === localId ? { ...item, text } : item,
+      ),
+    );
   };
 
   const addItem = () => {
-    setItems((prev) => [...prev, makeBlankItem()]);
+    const item = makeBlankItem();
+    setFocusItemId(item.localId);
+    setItems((current) => [...current, item]);
   };
 
   const deleteItem = (localId: string) => {
-    setItems((prev) => prev.filter((item) => item.localId !== localId));
+    animateRowsAside();
+    setItems((current) => current.filter((item) => item.localId !== localId));
+    setItemErrors((current) => {
+      const next = { ...current };
+      delete next[localId];
+      return next;
+    });
   };
 
   const onRowLayout = (index: number, event: LayoutChangeEvent) => {
     if (dragRef.current) return;
-
     const { y, height } = event.nativeEvent.layout;
     rowLayouts.current[index] = { y, height };
   };
@@ -143,8 +171,8 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
     const maxY = Math.max(0, contentHeight.current - viewportHeight.current);
     if (!viewportHeight.current || !maxY) return;
 
-    const threshold = 48;
-    const step = 28;
+    const threshold = 56;
+    const step = 32;
     const viewportY = pageY - viewportTop.current;
     let nextY = scrollY.current;
     if (viewportY < threshold) {
@@ -158,24 +186,12 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
     scrollRef.current?.scrollTo({ y: nextY, animated: false });
   };
 
-  const updateDrag = (pageY: number) => {
-    const current = dragRef.current;
-    if (!current) return;
-
-    autoscrollNearEdge(pageY);
-    const contentY =
-      current.startCenterY + (pageY - current.startPageY) + (scrollY.current - current.startScrollY);
-    const to = dropIndexFor(current.localId, contentY);
-    current.to = to;
-    current.top = contentY - current.height / 2;
-    setDrag(dragStateFrom(current));
-  };
-
-  const startDrag = (item: EditorItem, index: number, event: GestureResponderEvent) => {
+  const startDrag = (item: EditorItem, index: number, pageY: number) => {
     const layout = rowLayouts.current[index];
-    if (!layout) return;
+    if (!layout || dragRef.current) return;
 
     Keyboard.dismiss();
+    Vibration.vibrate(15);
     const current: DragContext = {
       localId: item.localId,
       text: item.text,
@@ -184,41 +200,65 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
       top: layout.y,
       height: layout.height,
       startCenterY: layout.y + layout.height / 2,
-      startPageY: event.nativeEvent.pageY,
+      startPageY: pageY,
       startScrollY: scrollY.current,
     };
+    animateRowsAside();
     dragRef.current = current;
+    setDrag(dragStateFrom(current));
+  };
+
+  const updateDrag = (pageY: number) => {
+    const current = dragRef.current;
+    if (!current) return;
+
+    autoscrollNearEdge(pageY);
+    const contentY =
+      current.startCenterY +
+      (pageY - current.startPageY) +
+      (scrollY.current - current.startScrollY);
+    const to = dropIndexFor(current.localId, contentY);
+    if (to !== current.to) animateRowsAside();
+    current.to = to;
+    current.top = contentY - current.height / 2;
     setDrag(dragStateFrom(current));
   };
 
   const finishDrag = () => {
     const current = dragRef.current;
     dragRef.current = null;
-    setDrag(null);
     if (!current) return;
-    setItems((prev) => moveItem(prev, current.from, current.to));
+    animateRowsAside();
+    setDrag(null);
+    setItems((previous) => moveItem(previous, current.from, current.to));
   };
 
   const cancelDrag = () => {
+    if (!dragRef.current) return;
     dragRef.current = null;
+    animateRowsAside();
     setDrag(null);
   };
 
   const moveItemByAction = (index: number, delta: -1 | 1) => {
-    setItems((prev) => moveItem(prev, index, index + delta));
+    animateRowsAside();
+    setItems((previous) => moveItem(previous, index, index + delta));
   };
 
-  const dragHandlersFor = (item: EditorItem, index: number) =>
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (event) => startDrag(item, index, event),
-      onPanResponderMove: (event) => updateDrag(event.nativeEvent.pageY),
-      onPanResponderRelease: finishDrag,
-      onPanResponderTerminate: cancelDrag,
-      onPanResponderTerminationRequest: () => false,
-      onShouldBlockNativeResponder: () => true,
-    }).panHandlers;
+  const gestureFor = (item: EditorItem, index: number) =>
+    Gesture.Pan()
+      .withTestId(`item-hold-gesture-${item.localId}-${index}`)
+      .activateAfterLongPress(HOLD_TO_REORDER_MS)
+      .maxPointers(1)
+      .shouldCancelWhenOutside(false)
+      .blocksExternalGesture(scrollRef as never)
+      .runOnJS(true)
+      .onStart((event) => startDrag(item, index, event.absoluteY))
+      .onUpdate((event) => updateDrag(event.absoluteY))
+      .onEnd(finishDrag)
+      .onFinalize((_event, success) => {
+        if (!success) cancelDrag();
+      });
 
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollY.current = event.nativeEvent.contentOffset.y;
@@ -231,8 +271,9 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
         testID={`item-drop-target-${index}`}
         style={{
           height: drag.height,
-          borderRadius: 4,
-          borderWidth: 1,
+          borderRadius: 18,
+          borderWidth: 2,
+          borderStyle: 'dashed',
           borderColor: theme.primary,
           backgroundColor: theme.surfaceAlt,
         }}
@@ -245,220 +286,326 @@ export function ChecklistEditor({ initialChecklist, onSaved, onCancel }: Checkli
     const validItems: { text: string }[] = [];
     for (const item of items) {
       const result = validateChecklistItemText(item.text);
-      if (!result.ok) {
-        nextItemErrors[item.localId] = result.error;
-      } else {
-        validItems.push({ text: result.value });
-      }
+      if (!result.ok) nextItemErrors[item.localId] = result.error;
+      else validItems.push({ text: result.value });
     }
     setTitleError(titleResult.ok ? null : titleResult.error);
     setItemErrors(nextItemErrors);
-
     if (!titleResult.ok || Object.keys(nextItemErrors).length > 0) return;
 
     const input = { title: titleResult.value, items: validItems };
     const saved = initialChecklist
-      ? await updateChecklist(db, initialChecklist.id, input)
-      : await createChecklist(db, input);
+      ? await updateChecklist(database, initialChecklist.id, input)
+      : await createChecklist(database, input);
     onSaved(saved);
   };
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      style={{ backgroundColor: theme.background }}
-      contentContainerStyle={{ padding: 16, gap: 16 }}
-      keyboardShouldPersistTaps="handled"
-      testID="checklist-editor-scroll"
-      onLayout={(event) => {
-        const { y, height } = event.nativeEvent.layout;
-        viewportTop.current = y;
-        viewportHeight.current = height;
-      }}
-      onContentSizeChange={(_, height) => {
-        contentHeight.current = height;
-      }}
-      onScroll={onScroll}
-      scrollEventThrottle={16}
-    >
-      <View>
-        <Text style={{ color: theme.text, fontWeight: '600', marginBottom: 4 }}>Title</Text>
-        <TextInput
-          testID="title-input"
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Checklist title"
-          placeholderTextColor={theme.textMuted}
-          style={{
-            color: theme.text,
-            borderWidth: 1,
-            borderColor: titleError ? theme.danger : theme.inputBorder,
-            borderRadius: 6,
-            padding: 8,
-          }}
-        />
-        {titleError && (
-          <Text testID="title-error" style={{ color: theme.danger, marginTop: 4 }}>
-            {titleError}
-          </Text>
-        )}
-      </View>
-
-      <View style={{ gap: 8 }}>
-        <Text style={{ color: theme.text, fontWeight: '600' }}>Items</Text>
-        {(() => {
-          let dropIndex = 0;
-          return items.map((item, index) => {
-            const error = itemErrors[item.localId];
-            const isActive = drag?.localId === item.localId;
-            const dropTarget = isActive ? null : renderDropTarget(dropIndex);
-            if (!isActive) dropIndex += 1;
-            return (
-              <Fragment key={item.localId}>
-                {dropTarget}
-                <View
-                  testID={`item-row-${index}`}
-                  onLayout={(event) => onRowLayout(index, event)}
-                  style={{
-                    position: isActive ? 'absolute' : 'relative',
-                    borderWidth: 1,
-                    borderColor: error ? theme.danger : theme.border,
-                    borderRadius: 6,
-                    padding: 8,
-                    gap: 6,
-                    backgroundColor: theme.background,
-                    opacity: isActive ? 0 : 1,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                    <View
-                      accessibilityRole="adjustable"
-                      accessibilityLabel={`Drag item ${index + 1}`}
-                      accessibilityActions={[
-                        { name: 'decrement', label: 'Move up' },
-                        { name: 'increment', label: 'Move down' },
-                      ]}
-                      onAccessibilityAction={(event) => {
-                        if (event.nativeEvent.actionName === 'decrement') moveItemByAction(index, -1);
-                        if (event.nativeEvent.actionName === 'increment') moveItemByAction(index, 1);
-                      }}
-                      {...dragHandlersFor(item, index)}
-                      testID={`item-drag-handle-${index}`}
-                      style={dragHandleBoxStyle}
-                    >
-                      <DragHandleIcon color={theme.textMuted} />
-                    </View>
-                    <TextInput
-                      testID={`item-text-${index}`}
-                      value={item.text}
-                      onChangeText={(text) => updateItemText(item.localId, text)}
-                      placeholder={`Item ${index + 1}`}
-                      placeholderTextColor={theme.textMuted}
-                      style={itemTextStyle}
-                    />
-                    <Pressable
-                      accessibilityRole="button"
-                      testID={`item-delete-${index}`}
-                      onPress={() => deleteItem(item.localId)}
-                      style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        borderRadius: 6,
-                      }}
-                    >
-                      <Text style={{ color: theme.danger }}>Delete</Text>
-                    </Pressable>
-                  </View>
-                  {error && (
-                    <Text testID={`item-error-${index}`} style={{ color: theme.danger }}>
-                      {error}
-                    </Text>
-                  )}
-                </View>
-              </Fragment>
-            );
-          });
-        })()}
-        {renderDropTarget(items.length - 1)}
-        {drag && (
-          <View
-            testID="item-drag-preview"
-            style={{
-              pointerEvents: 'none',
-              position: 'absolute',
-              top: drag.top,
-              left: 0,
-              right: 0,
-              minHeight: drag.height,
-              borderWidth: 2,
-              borderColor: theme.primary,
-              borderRadius: 6,
-              padding: 8,
-              backgroundColor: theme.background,
-              zIndex: 10,
-              elevation: 6,
-              boxShadow: '0 3px 8px rgba(0, 0, 0, 0.18)',
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            <View
-              style={dragHandleBoxStyle}
-            >
-              <DragHandleIcon color={theme.textMuted} />
-            </View>
-            <Text
-              testID="item-drag-preview-text"
-              style={itemTextStyle}
-            >
-              {drag.text}
-            </Text>
-          </View>
-        )}
-        <Pressable
-          accessibilityRole="button"
-          testID="add-item"
-          onPress={addItem}
-          style={{
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderWidth: 1,
-            borderColor: theme.border,
-            borderStyle: 'dashed',
-            borderRadius: 6,
-            alignSelf: 'flex-start',
-          }}
-        >
-          <Text style={{ color: theme.text }}>Add item</Text>
-        </Pressable>
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        <Pressable
-          accessibilityRole="button"
-          testID="save"
-          onPress={handleSave}
-          style={{
-            paddingVertical: 10,
-            paddingHorizontal: 18,
-            backgroundColor: theme.primary,
-            borderRadius: 6,
-          }}
-        >
-          <Text style={{ color: theme.onPrimary, fontWeight: '600' }}>Save</Text>
-        </Pressable>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <View
+        testID="editor-actions"
+        style={{
+          minHeight: 66,
+          paddingHorizontal: 20,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.border,
+          backgroundColor: theme.background,
+          flexDirection: 'row',
+          alignItems: 'center',
+          zIndex: 20,
+          elevation: 8,
+        }}
+      >
         <Pressable
           accessibilityRole="button"
           testID="cancel"
           onPress={onCancel}
-          style={{ paddingVertical: 10, paddingHorizontal: 18, borderWidth: 1, borderColor: theme.border, borderRadius: 6 }}
+          style={{ minWidth: 72, minHeight: 44, justifyContent: 'center' }}
         >
-          <Text style={{ color: theme.text }}>Cancel</Text>
+          <Text style={{ color: theme.primary, fontWeight: '800' }}>Cancel</Text>
+        </Pressable>
+        <Text
+          style={{
+            color: theme.textMuted,
+            fontSize: 12,
+            letterSpacing: 1.5,
+            fontWeight: '800',
+            textAlign: 'center',
+            flex: 1,
+          }}
+        >
+          {initialChecklist ? 'EDIT CHECKLIST' : 'NEW CHECKLIST'}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          testID="save"
+          onPress={() => void handleSave()}
+          style={{
+            minWidth: 72,
+            minHeight: 44,
+            backgroundColor: theme.primary,
+            borderRadius: 13,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ color: theme.onPrimary, fontWeight: '800' }}>Save</Text>
         </Pressable>
       </View>
-    </ScrollView>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: theme.background }}
+        behavior={Platform.OS === 'android' ? 'height' : 'padding'}
+      >
+        <ScrollView
+          ref={scrollRef}
+          style={{ backgroundColor: theme.background }}
+          contentContainerStyle={{ padding: 20, paddingBottom: 48, gap: 20 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          scrollEnabled={!drag}
+          testID="checklist-editor-scroll"
+          onLayout={(event) => {
+            const { y, height } = event.nativeEvent.layout;
+            viewportTop.current = y;
+            viewportHeight.current = height;
+          }}
+          onContentSizeChange={(_, height) => {
+            contentHeight.current = height;
+            scrollFocusedItemIntoView();
+          }}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+        >
+          <View style={{ gap: 3 }}>
+            <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '800', letterSpacing: 1.5 }}>
+              BUILD YOUR FLOW
+            </Text>
+            <Text style={{ color: theme.text, fontSize: 34, lineHeight: 37, fontWeight: '900' }}>
+              Shape the routine
+            </Text>
+            <Text style={{ color: theme.textMuted, fontSize: 15, lineHeight: 20 }}>
+              Short works best, while longer steps should stay readable when you need them.
+            </Text>
+          </View>
+
+          <View style={{ gap: 7 }}>
+            <View style={{ flexDirection: 'row' }}>
+              <Text style={{ color: theme.text, fontWeight: '800', flex: 1 }}>Checklist name</Text>
+              <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '700' }}>Required</Text>
+            </View>
+            <TextInput
+              testID="title-input"
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Checklist name"
+              placeholderTextColor={theme.textMuted}
+              style={{
+                color: theme.text,
+                backgroundColor: theme.surface,
+                borderWidth: 1,
+                borderColor: titleError ? theme.danger : theme.inputBorder,
+                borderRadius: 17,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                minHeight: 58,
+                fontSize: 18,
+                fontWeight: '700',
+              }}
+            />
+            {titleError ? (
+              <Text testID="title-error" style={{ color: theme.danger }}>
+                {titleError}
+              </Text>
+            ) : null}
+          </View>
+
+          <View style={{ gap: 9 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ color: theme.text, fontWeight: '800', flex: 1 }}>
+                Steps · {items.length}
+              </Text>
+              <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '700' }}>
+                Edit or reorder anytime
+              </Text>
+            </View>
+            <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+              Tap a step to edit. Press and hold a row to reorder.
+            </Text>
+
+            {(() => {
+              let dropIndex = 0;
+              return items.map((item, index) => {
+                const error = itemErrors[item.localId];
+                const isActive = drag?.localId === item.localId;
+                const dropTarget = isActive
+                  ? null
+                  : renderDropTarget(dropIndex);
+                if (!isActive) dropIndex += 1;
+
+                return (
+                  <Fragment key={item.localId}>
+                    {dropTarget}
+                    <GestureDetector
+                      key={`${item.localId}-${index}`}
+                      gesture={gestureFor(item, index)}
+                    >
+                      <View
+                        testID={`item-row-${index}`}
+                        nativeID={item.localId}
+                        accessibilityLabel={`Hold row ${index + 1} to reorder`}
+                        onLayout={(event) => onRowLayout(index, event)}
+                        style={{
+                          position: isActive ? 'absolute' : 'relative',
+                          opacity: isActive ? 0 : 1,
+                          minHeight: 64,
+                          borderWidth: 1,
+                          borderColor: error ? theme.danger : theme.border,
+                          borderRadius: 18,
+                          padding: 8,
+                          backgroundColor: theme.surface,
+                          boxShadow: `0 2px 6px ${theme.shadow}`,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <View
+                          accessibilityRole="adjustable"
+                          accessibilityLabel={`Reorder step ${index + 1}`}
+                          accessibilityActions={[
+                            { name: 'decrement', label: 'Move up' },
+                            { name: 'increment', label: 'Move down' },
+                          ]}
+                          onAccessibilityAction={(event) => {
+                            if (event.nativeEvent.actionName === 'decrement') {
+                              moveItemByAction(index, -1);
+                            }
+                            if (event.nativeEvent.actionName === 'increment') {
+                              moveItemByAction(index, 1);
+                            }
+                          }}
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 9,
+                            backgroundColor: theme.surfaceAlt,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Text style={{ color: theme.primary, fontWeight: '800' }}>{index + 1}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <TextInput
+                            testID={`item-text-${index}`}
+                            value={item.text}
+                            multiline
+                            scrollEnabled={false}
+                            autoFocus={focusItemId === item.localId}
+                            onFocus={scrollFocusedItemIntoView}
+                            onChangeText={(text) => updateItemText(item.localId, text)}
+                            placeholder={`Step ${index + 1}`}
+                            placeholderTextColor={theme.textMuted}
+                            textAlignVertical="center"
+                            style={{
+                              color: theme.text,
+                              minHeight: 44,
+                              paddingHorizontal: 6,
+                              paddingVertical: 8,
+                              fontSize: 16,
+                              lineHeight: 21,
+                            }}
+                          />
+                          {error ? (
+                            <Text testID={`item-error-${index}`} style={{ color: theme.danger, paddingHorizontal: 6 }}>
+                              {error}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Delete step ${index + 1}`}
+                          testID={`item-delete-${index}`}
+                          onPress={() => deleteItem(item.localId)}
+                          hitSlop={8}
+                          style={{ width: 34, height: 44, alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <Text style={{ color: theme.textMuted, fontSize: 17 }}>♲</Text>
+                        </Pressable>
+                      </View>
+                    </GestureDetector>
+                  </Fragment>
+                );
+              });
+            })()}
+
+            {renderDropTarget(items.length - 1)}
+
+            {drag ? (
+              <View
+                testID="item-drag-preview"
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  top: drag.top,
+                  left: 0,
+                  right: 0,
+                  minHeight: drag.height,
+                  borderWidth: 2,
+                  borderColor: theme.primary,
+                  borderRadius: 18,
+                  padding: 10,
+                  backgroundColor: theme.surface,
+                  zIndex: 30,
+                  elevation: 12,
+                  boxShadow: `0 8px 18px ${theme.shadow}`,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                }}
+              >
+                <View
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 9,
+                    backgroundColor: theme.surfaceAlt,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: theme.primary, fontWeight: '800' }}>{drag.from + 1}</Text>
+                </View>
+                <Text testID="item-drag-preview-text" style={{ color: theme.text, fontSize: 16, flex: 1 }}>
+                  {drag.text}
+                </Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              accessibilityRole="button"
+              testID="add-item"
+              onPress={addItem}
+              style={{
+                minHeight: 56,
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderStyle: 'dashed',
+                borderRadius: 17,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
+                marginTop: 2,
+              }}
+            >
+              <Text style={{ color: theme.primary, fontSize: 21 }}>＋</Text>
+              <Text style={{ color: theme.primary, fontWeight: '800' }}>Add another step</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }

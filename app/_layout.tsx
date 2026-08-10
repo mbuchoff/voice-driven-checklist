@@ -3,6 +3,7 @@ import 'react-native-get-random-values';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppDatabaseProvider } from '@/src/db/DatabaseProvider';
 import { AppAccountProvider } from '@/src/features/account/AccountProvider';
@@ -14,13 +15,15 @@ registerListeningService();
 
 export default function RootLayout() {
   return (
-    <AppDatabaseProvider>
-      <AppDevicePreferencesProvider>
-        <AppAccountProvider>
-          <ThemedNavigation />
-        </AppAccountProvider>
-      </AppDevicePreferencesProvider>
-    </AppDatabaseProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AppDatabaseProvider>
+        <AppDevicePreferencesProvider>
+          <AppAccountProvider>
+            <ThemedNavigation />
+          </AppAccountProvider>
+        </AppDevicePreferencesProvider>
+      </AppDatabaseProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -31,8 +34,8 @@ function ThemedNavigation() {
     <ThemeProvider value={navigationTheme}>
       <Stack>
         <Stack.Screen name="index" options={{ title: 'Voice Checklist' }} />
-        <Stack.Screen name="checklists/new" options={{ title: 'New Checklist' }} />
-        <Stack.Screen name="checklists/[id]/edit" options={{ title: 'Edit Checklist' }} />
+        <Stack.Screen name="checklists/new" options={{ headerShown: false }} />
+        <Stack.Screen name="checklists/[id]/edit" options={{ headerShown: false }} />
         <Stack.Screen name="run/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
         <Stack.Screen name="settings/account" options={{ title: 'Manage accounts' }} />

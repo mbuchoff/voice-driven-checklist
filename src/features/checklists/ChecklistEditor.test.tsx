@@ -1,5 +1,6 @@
-import { act, fireEvent, screen } from '@testing-library/react-native';
+import { act, fireEvent, screen, within } from '@testing-library/react-native';
 import { ScrollView } from 'react-native';
+import { State, type GestureType } from 'react-native-gesture-handler';
 
 import { runMigrations } from '@/src/db/migrations';
 import { createTestDatabase } from '@/src/test/createTestDatabase';
@@ -8,43 +9,52 @@ import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 import { ChecklistEditor } from './ChecklistEditor';
 import { createChecklist, getChecklist } from './repository';
 
+const { fireGestureHandler, getByGestureTestId } = jest.requireActual(
+  'react-native-gesture-handler/lib/commonjs/jestUtils',
+) as typeof import('react-native-gesture-handler/lib/typescript/jestUtils');
+
 async function setupDb() {
   const db = createTestDatabase();
   await runMigrations(db);
   return db;
 }
 
-let gestureTime = 1;
+function dragRow(index: number, startY: number, endY: number) {
+  const localId = screen.getByTestId(`item-row-${index}`).props.nativeID;
+  act(() => {
+    fireGestureHandler(getByGestureTestId(`item-hold-gesture-${localId}-${index}`), [
+      { state: State.BEGAN, absoluteY: startY },
+      { state: State.ACTIVE, absoluteY: startY },
+      { state: State.ACTIVE, absoluteY: endY },
+      { state: State.END, absoluteY: endY },
+    ]);
+  });
+}
 
-function dragEvent(pageY: number) {
-  const timestamp = gestureTime;
-  gestureTime += 1;
-  return {
-    nativeEvent: { pageY },
-    touchHistory: {
-      touchBank: [
-        {
-          touchActive: true,
-          currentPageX: 0,
-          currentPageY: pageY,
-          currentTimeStamp: timestamp,
-          previousPageX: 0,
-          previousPageY: pageY,
-          previousTimeStamp: timestamp - 1,
-        },
-      ],
-      indexOfSingleActiveTouch: 0,
-      mostRecentTimeStamp: timestamp,
-      numberActiveTouches: 1,
-    },
-  };
+function beginRowDrag(index: number, startY: number, currentY: number): GestureType {
+  const localId = screen.getByTestId(`item-row-${index}`).props.nativeID;
+  const gesture = getByGestureTestId(`item-hold-gesture-${localId}-${index}`);
+  act(() => {
+    gesture.handlers.onStart?.({ absoluteY: startY } as never);
+    gesture.handlers.onUpdate?.({ absoluteY: currentY } as never);
+  });
+  return gesture;
+}
+
+function finishRowDrag(gesture: GestureType) {
+  act(() => {
+    gesture.handlers.onEnd?.({} as never, true);
+    gesture.handlers.onFinalize?.({} as never, true);
+  });
+}
+
+function cancelRowDrag(gesture: GestureType) {
+  act(() => {
+    gesture.handlers.onFinalize?.({} as never, false);
+  });
 }
 
 describe('ChecklistEditor', () => {
-  beforeEach(() => {
-    gestureTime = 1;
-  });
-
   describe('create mode', () => {
     it('renders an empty form with a single blank item row by default', async () => {
       const database = await setupDb();
@@ -67,6 +77,45 @@ describe('ChecklistEditor', () => {
 
       fireEvent.press(screen.getByTestId('add-item'));
       expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
+    });
+
+    it('focuses every newly added multiline step and scrolls it above the keyboard', async () => {
+      const scrollToEnd = jest
+        .spyOn(ScrollView.prototype, 'scrollToEnd')
+        .mockImplementation(jest.fn());
+      const database = await setupDb();
+      await renderWithDatabase(
+        <ChecklistEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
+        { database },
+      );
+
+      fireEvent.press(screen.getByTestId('add-item'));
+      expect(screen.getByTestId('item-text-1').props.multiline).toBe(true);
+      expect(screen.getByTestId('item-text-1').props.autoFocus).toBe(true);
+      fireEvent(screen.getByTestId('item-text-1'), 'focus');
+
+      fireEvent.press(screen.getByTestId('add-item'));
+      expect(screen.getByTestId('item-text-1').props.autoFocus).toBe(false);
+      expect(screen.getByTestId('item-text-2').props.autoFocus).toBe(true);
+      fireEvent(screen.getByTestId('item-text-2'), 'focus');
+
+      expect(scrollToEnd).toHaveBeenCalledTimes(2);
+      scrollToEnd.mockRestore();
+    });
+
+    it('keeps Cancel and Save outside the scrolling checklist content', async () => {
+      const database = await setupDb();
+      await renderWithDatabase(
+        <ChecklistEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
+        { database },
+      );
+
+      const scroll = within(screen.getByTestId('checklist-editor-scroll'));
+      expect(scroll.queryByTestId('save')).toBeNull();
+      expect(scroll.queryByTestId('cancel')).toBeNull();
+      expect(screen.getByTestId('editor-actions')).toBeOnTheScreen();
+      expect(screen.getByTestId('save')).toBeOnTheScreen();
+      expect(screen.getByTestId('cancel')).toBeOnTheScreen();
     });
 
     it('persists a new checklist with trimmed title and trimmed item text on save', async () => {
@@ -157,6 +206,40 @@ describe('ChecklistEditor', () => {
   });
 
   describe('edit mode', () => {
+    it('activates reordering from the whole row without a visible drag handle', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'hold row',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
+        nativeEvent: { layout: { y: 50, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+        nativeEvent: { layout: { y: 100, height: 50 } },
+      });
+
+      expect(screen.queryByTestId('item-drag-handle-0')).toBeNull();
+      expect(screen.getByTestId('item-row-0').props.accessibilityLabel).toMatch(
+        /hold.*reorder/i,
+      );
+
+      dragRow(0, 25, 125);
+
+      expect(screen.getByTestId('item-text-2').props.value).toBe('a');
+    });
     it('pre-fills the form from the initial checklist and updates it on save', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
@@ -215,7 +298,7 @@ describe('ChecklistEditor', () => {
       ]);
     });
 
-    it('reorders items by dragging a handle', async () => {
+    it('persists items reordered by holding and dragging a row', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
         title: 'reorder me',
@@ -240,10 +323,7 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      const handle = screen.getByTestId('item-drag-handle-0');
-      fireEvent(handle, 'responderGrant', dragEvent(25));
-      fireEvent(handle, 'responderMove', dragEvent(125));
-      fireEvent(handle, 'responderRelease', dragEvent(125));
+      dragRow(0, 25, 125);
       fireEvent.press(screen.getByTestId('save'));
 
       await screen.findByTestId('save');
@@ -275,9 +355,7 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      const handle = screen.getByTestId('item-drag-handle-0');
-      fireEvent(handle, 'responderGrant', dragEvent(25));
-      fireEvent(handle, 'responderMove', dragEvent(125));
+      const gesture = beginRowDrag(0, 25, 125);
 
       expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
       expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('a');
@@ -286,7 +364,7 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-row-0').props.style.position).toBe('absolute');
       expect(screen.getByTestId('item-row-0').props.style.opacity).toBe(0);
 
-      fireEvent(handle, 'responderRelease', dragEvent(125));
+      finishRowDrag(gesture);
 
       expect(screen.queryByTestId('item-drag-preview')).toBeNull();
       expect(screen.getByTestId('item-row-2').props.style.position).toBe('relative');
@@ -317,14 +395,11 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      const handle = screen.getByTestId('item-drag-handle-2');
-      fireEvent(handle, 'responderGrant', dragEvent(125));
-      fireEvent(handle, 'responderMove', dragEvent(20));
-      fireEvent(handle, 'responderRelease', dragEvent(20));
+      dragRow(2, 125, 20);
 
       expect(screen.getByTestId('item-text-0').props.value).toBe('c');
 
-      fireEvent(screen.getByTestId('item-drag-handle-0'), 'responderGrant', dragEvent(25));
+      beginRowDrag(0, 25, 25);
 
       expect(screen.getByTestId('item-drag-preview').props.style.top).toBe(0);
       expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('c');
@@ -354,19 +429,13 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      const firstHandle = screen.getByTestId('item-drag-handle-2');
-      fireEvent(firstHandle, 'responderGrant', dragEvent(125));
-      fireEvent(firstHandle, 'responderMove', dragEvent(20));
-      fireEvent(firstHandle, 'responderRelease', dragEvent(20));
+      dragRow(2, 125, 20);
 
-      const secondHandle = screen.getByTestId('item-drag-handle-0');
-      fireEvent(secondHandle, 'responderGrant', dragEvent(25));
-      fireEvent(secondHandle, 'responderMove', dragEvent(125));
-      fireEvent(secondHandle, 'responderRelease', dragEvent(125));
+      dragRow(0, 25, 125);
 
       expect(screen.getByTestId('item-text-2').props.value).toBe('c');
 
-      fireEvent(screen.getByTestId('item-drag-handle-2'), 'responderGrant', dragEvent(125));
+      beginRowDrag(2, 125, 125);
 
       expect(screen.getByTestId('item-drag-preview').props.style.top).toBe(100);
     });
@@ -403,11 +472,9 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
 
-      const handle = screen.getByTestId('item-drag-handle-2');
-      fireEvent(handle, 'responderGrant', dragEvent(289));
-      fireEvent(handle, 'responderMove', dragEvent(340));
+      beginRowDrag(2, 289, 340);
 
-      expect(scrollTo).toHaveBeenCalledWith({ y: 28, animated: false });
+      expect(scrollTo).toHaveBeenCalledWith({ y: 32, animated: false });
       scrollTo.mockRestore();
     });
 
@@ -441,10 +508,7 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 650, height: 50 } },
       });
 
-      const handle = screen.getByTestId('item-drag-handle-0');
-      fireEvent(handle, 'responderGrant', dragEvent(25));
-      fireEvent(handle, 'responderMove', dragEvent(290));
-      fireEvent(handle, 'responderRelease', dragEvent(290));
+      dragRow(0, 25, 290);
 
       expect(screen.getByTestId('item-text-1').props.value).toBe('a');
       jest.restoreAllMocks();
@@ -474,16 +538,14 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      const handle = screen.getByTestId('item-drag-handle-0');
-      fireEvent(handle, 'responderGrant', dragEvent(25));
-      fireEvent(handle, 'responderMove', dragEvent(125));
-      fireEvent(handle, 'responderTerminate', dragEvent(125));
+      const gesture = beginRowDrag(0, 25, 125);
+      cancelRowDrag(gesture);
 
       expect(screen.getByTestId('item-text-0').props.value).toBe('a');
       expect(screen.queryByTestId('item-drag-preview')).toBeNull();
     });
 
-    it('blocks native scroll from taking over a handle drag', async () => {
+    it('waits for a hold before disabling native scroll for the row drag', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
         title: 'keep drag',
@@ -502,22 +564,20 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 0, height: 50 } },
       });
 
-      const handle = screen.getByTestId('item-drag-handle-0');
-      expect(handle.props.onStartShouldSetResponder(dragEvent(25))).toBe(true);
-      expect(handle.props.onMoveShouldSetResponder(dragEvent(125))).toBe(true);
-      expect(handle.props.onResponderTerminationRequest(dragEvent(125))).toBe(false);
+      const localId = screen.getByTestId('item-row-0').props.nativeID;
+      const gesture = getByGestureTestId(`item-hold-gesture-${localId}-0`);
+      expect(gesture.config.activateAfterLongPress).toBe(350);
+      expect(screen.getByTestId('checklist-editor-scroll').props.scrollEnabled).toBe(true);
 
-      let grantResult: unknown;
-      act(() => {
-        grantResult = handle.props.onResponderGrant(dragEvent(25));
-      });
-      expect(grantResult).toBe(true);
+      beginRowDrag(0, 25, 25);
+
       expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
+      expect(screen.getByTestId('checklist-editor-scroll').props.scrollEnabled).toBe(false);
 
-      fireEvent(handle, 'responderRelease', dragEvent(25));
+      finishRowDrag(gesture);
     });
 
-    it('shows drag handles instead of visible move controls', async () => {
+    it('uses the whole row and accessible adjustments without visible move controls', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
         title: 'x',
@@ -532,8 +592,12 @@ describe('ChecklistEditor', () => {
         { database },
       );
 
-      expect(screen.getByTestId('item-drag-handle-0')).toBeOnTheScreen();
-      expect(screen.getByTestId('item-drag-handle-1')).toBeOnTheScreen();
+      expect(screen.queryByTestId('item-drag-handle-0')).toBeNull();
+      expect(screen.getByLabelText(/reorder step 1/i).props.accessibilityActions).toEqual([
+        { name: 'decrement', label: 'Move up' },
+        { name: 'increment', label: 'Move down' },
+      ]);
+      expect(screen.getByLabelText(/reorder step 2/i)).toBeOnTheScreen();
       expect(screen.queryByTestId('item-move-up-0')).toBeNull();
       expect(screen.queryByTestId('item-move-down-1')).toBeNull();
     });
