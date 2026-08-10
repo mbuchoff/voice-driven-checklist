@@ -9,7 +9,9 @@ import { createSnapshot } from '@/src/features/run/snapshot';
 import { requestRunStopConfirmation } from '@/src/features/run/stopConfirmation';
 import type { ChecklistRunSnapshot } from '@/src/features/run/types';
 import { getChecklist } from '@/src/features/checklists/repository';
-import { CompletionSoundPlayer } from '@/src/services/audio/CompletionSoundPlayer';
+import { useDevicePreferences } from '@/src/features/settings/DevicePreferencesProvider';
+import { CueSoundPlayer } from '@/src/services/audio/CueSoundPlayer';
+import type { CueAction } from '@/src/services/audio/cues';
 import { createSpeechAdapters } from '@/src/services/speech/createSpeechAdapters';
 import {
   setListeningNotificationStopHandler,
@@ -30,19 +32,21 @@ type LoadState =
 export default function RunRoute() {
   const router = useRouter();
   const db = useDatabase();
+  const { preferences } = useDevicePreferences();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   // Speech adapters live for the lifetime of the route. createSpeechAdapters
   // returns either real expo-speech / expo-speech-recognition wrappers, or
   // the deterministic fakes when EXPO_PUBLIC_USE_TEST_SPEECH_ADAPTER=true.
   const adapters = useMemo(() => createSpeechAdapters(), []);
-  const completionSound = useMemo(() => new CompletionSoundPlayer(), []);
+  const cueSound = useMemo(() => new CueSoundPlayer(), []);
   const stopConfirmationPendingRef = useRef(false);
 
   useEffect(() => {
-    completionSound.prepare();
-    return () => completionSound.release();
-  }, [completionSound]);
+    cueSound.prepare(preferences.sound);
+  }, [cueSound, preferences.sound]);
+
+  useEffect(() => () => cueSound.release(), [cueSound]);
 
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
 
@@ -134,8 +138,12 @@ export default function RunRoute() {
     [checklistTitle],
   );
   const playCompletionSound = useCallback(
-    () => completionSound.play(),
-    [completionSound],
+    () => cueSound.play('complete'),
+    [cueSound],
+  );
+  const playActionCue = useCallback(
+    (action: Exclude<CueAction, 'complete'>) => cueSound.play(action),
+    [cueSound],
   );
 
   if (loadState.kind === 'loading') {
@@ -170,7 +178,9 @@ export default function RunRoute() {
       initialAvailability={loadState.initialAvailability}
       onExit={exitRun}
       onRequestStop={confirmAndExitRun}
+      onStopHoldComplete={exitRun}
       onCompletion={playCompletionSound}
+      onCue={playActionCue}
       onVoiceRunStart={startVoiceRun}
       onVoiceRunStop={stopListeningNotification}
     />

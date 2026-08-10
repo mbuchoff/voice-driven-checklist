@@ -1,6 +1,23 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { BackHandler, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  BackHandler,
+  Platform,
+  Pressable,
+  Text,
+  View,
+} from 'react-native';
+import Animated, {
+  cancelAnimation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import type { CueAction } from '@/src/services/audio/cues';
 import type {
   SpeechPlaybackAdapter,
   SpeechRecognitionAdapter,
@@ -9,6 +26,11 @@ import { useTheme } from '@/src/theme/useTheme';
 
 import { parseCommand, parseInterimCommand } from './commandParser';
 import { initialRunState, runReducer } from './runReducer';
+import {
+  RUN_ITEM_GAP,
+  getRunItemPresentation,
+  getRunTrackOffset,
+} from './runPresentation';
 import type { ChecklistRunSnapshot } from './types';
 
 const LOCALE = 'en-US';
@@ -27,6 +49,8 @@ const TRANSIENT_RECOGNITION_ERRORS = new Set([
 
 const RECOGNITION_RESTART_DELAY_MS = 500;
 const RECOGNITION_END_RESTART_DELAY_MS = 0;
+const CUE_TO_SPEECH_DELAY_MS = 175;
+const STOP_HOLD_DURATION_MS = 1200;
 
 export type RunScreenProps = {
   snapshot: ChecklistRunSnapshot;
@@ -35,9 +59,12 @@ export type RunScreenProps = {
   initialAvailability: { spokenPlaybackAvailable: boolean; voiceControlAvailable: boolean };
   onExit: () => void | Promise<void>;
   onRequestStop: () => void | Promise<void>;
+  onStopHoldComplete?: () => void | Promise<void>;
   onCompletion?: () => void | Promise<void>;
+  onCue?: (action: Exclude<CueAction, 'complete'>) => void | Promise<void>;
   onVoiceRunStart?: () => void | Promise<void>;
   onVoiceRunStop?: () => void | Promise<void>;
+  screenReaderEnabled?: boolean;
 };
 
 type VoiceRunStartup = {
@@ -52,18 +79,30 @@ export function RunScreen({
   initialAvailability,
   onExit,
   onRequestStop,
+  onStopHoldComplete = onExit,
   onCompletion,
+  onCue,
   onVoiceRunStart,
   onVoiceRunStop,
+  screenReaderEnabled,
 }: RunScreenProps) {
   const theme = useTheme();
   const [state, dispatch] = useReducer(runReducer, undefined, () =>
     initialRunState(snapshot, initialAvailability),
   );
   const [voiceServiceReady, setVoiceServiceReady] = useState(!onVoiceRunStart);
+  const [talkBackEnabled, setTalkBackEnabled] = useState(
+    screenReaderEnabled ?? false,
+  );
+  const [holdingStop, setHoldingStop] = useState(false);
   const voiceRunStartupRef = useRef<VoiceRunStartup | null>(null);
   const voiceRunStartupTokenRef = useRef(0);
   const voiceRunStopRef = useRef<Promise<void>>(Promise.resolve());
+  const speechDelayRef = useRef(0);
+  const stopHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopHoldCompletedRef = useRef(false);
+  const stopHoldProgress = useSharedValue(0);
+  const trackOffset = useSharedValue(getRunTrackOffset(0));
 
   const stopVoiceRun = useCallback(() => {
     const stop = voiceRunStopRef.current
@@ -80,13 +119,83 @@ export function RunScreen({
     return stop;
   }, [onVoiceRunStop]);
 
-  const controlStyle = {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 6,
-  } as const;
+  useEffect(() => {
+    if (screenReaderEnabled !== undefined) {
+      setTalkBackEnabled(screenReaderEnabled);
+      return;
+    }
+    let cancelled = false;
+    void AccessibilityInfo.isScreenReaderEnabled().then((enabled) => {
+      if (!cancelled) setTalkBackEnabled(enabled);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [screenReaderEnabled]);
+
+  useEffect(() => {
+    trackOffset.value = withTiming(getRunTrackOffset(state.currentItemIndex), {
+      duration: 240,
+    });
+  }, [state.currentItemIndex, trackOffset]);
+
+  const runAction = useCallback(
+    (action: 'next' | 'previous' | 'repeat') => {
+      const completes =
+        action === 'next' &&
+        state.snapshot != null &&
+        state.currentItemIndex === state.snapshot.items.length - 1;
+      speechDelayRef.current = onCue && !completes ? CUE_TO_SPEECH_DELAY_MS : 0;
+      if (onCue && !completes) {
+        void Promise.resolve(onCue(action)).catch(() => undefined);
+      }
+      if (action === 'next') dispatch({ type: 'NEXT' });
+      else if (action === 'previous') dispatch({ type: 'PREVIOUS' });
+      else dispatch({ type: 'REPEAT' });
+    },
+    [onCue, state.currentItemIndex, state.snapshot],
+  );
+
+  const beginStopHold = useCallback(() => {
+    if (talkBackEnabled || stopHoldTimerRef.current) return;
+    stopHoldCompletedRef.current = false;
+    setHoldingStop(true);
+    stopHoldProgress.value = 0;
+    stopHoldProgress.value = withTiming(1, { duration: STOP_HOLD_DURATION_MS });
+    stopHoldTimerRef.current = setTimeout(() => {
+      stopHoldTimerRef.current = null;
+      stopHoldCompletedRef.current = true;
+      void onStopHoldComplete();
+    }, STOP_HOLD_DURATION_MS);
+  }, [onStopHoldComplete, stopHoldProgress, talkBackEnabled]);
+
+  const releaseStopHold = useCallback(() => {
+    if (stopHoldTimerRef.current) {
+      clearTimeout(stopHoldTimerRef.current);
+      stopHoldTimerRef.current = null;
+    }
+    if (!stopHoldCompletedRef.current) {
+      cancelAnimation(stopHoldProgress);
+      stopHoldProgress.value = withTiming(0, { duration: 140 });
+    }
+    setHoldingStop(false);
+  }, [stopHoldProgress]);
+
+  useEffect(
+    () => () => {
+      if (stopHoldTimerRef.current) clearTimeout(stopHoldTimerRef.current);
+    },
+    [],
+  );
+
+  const trackStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: trackOffset.value }],
+  }));
+
+  const stopControlStyle = useAnimatedStyle(() => {
+    const size = interpolate(stopHoldProgress.value, [0, 0.15, 1], [44, 66, 66]);
+    return { width: size, height: size, borderRadius: size / 2 };
+  });
 
   const spokenPlaybackReady = !state.voiceControlAvailable || voiceServiceReady;
 
@@ -99,16 +208,24 @@ export function RunScreen({
     if (state.status !== 'speaking' || !state.snapshot || !spokenPlaybackReady) return;
     const item = state.snapshot.items[state.currentItemIndex];
     let cancelled = false;
-    playback
-      .speak(item.text, { locale: LOCALE })
-      .then(() => {
-        if (!cancelled) dispatch({ type: 'PLAYBACK_FINISHED' });
-      })
-      .catch(() => {
-        if (!cancelled) dispatch({ type: 'PLAYBACK_UNAVAILABLE' });
-      });
+    let speechTimer: ReturnType<typeof setTimeout> | null = null;
+    const speak = () => {
+      playback
+        .speak(item.text, { locale: LOCALE })
+        .then(() => {
+          if (!cancelled) dispatch({ type: 'PLAYBACK_FINISHED' });
+        })
+        .catch(() => {
+          if (!cancelled) dispatch({ type: 'PLAYBACK_UNAVAILABLE' });
+        });
+    };
+    const delay = speechDelayRef.current;
+    speechDelayRef.current = 0;
+    if (delay > 0) speechTimer = setTimeout(speak, delay);
+    else speak();
     return () => {
       cancelled = true;
+      if (speechTimer) clearTimeout(speechTimer);
       playback.stop();
     };
   }, [
@@ -152,9 +269,7 @@ export function RunScreen({
             if (!cmd) return;
             cancelled = true;
             void recognition.stopListening();
-            if (cmd === 'next') dispatch({ type: 'NEXT' });
-            else if (cmd === 'repeat') dispatch({ type: 'REPEAT' });
-            else dispatch({ type: 'PREVIOUS' });
+            runAction(cmd);
           },
           onError: (error) => {
             if (cancelled) return;
@@ -185,7 +300,13 @@ export function RunScreen({
       if (restartTimer) clearTimeout(restartTimer);
       recognition.stopListening();
     };
-  }, [state.status, state.playbackTick, recognition, voiceServiceReady]);
+  }, [
+    state.status,
+    state.playbackTick,
+    recognition,
+    voiceServiceReady,
+    runAction,
+  ]);
 
   // Start before the first listening window so locking during spoken playback
   // still leaves Android ready to open the mic under a foreground service.
@@ -281,134 +402,575 @@ export function RunScreen({
     return () => sub.remove();
   }, [state.status, onExit, onRequestStop]);
 
-  const currentItem = state.snapshot?.items[state.currentItemIndex];
   const totalItems = state.snapshot?.items.length ?? 0;
+  const items = state.snapshot?.items ?? [];
+  const androidApi = Platform.OS === 'android' ? Number(Platform.Version) : 0;
 
   if (state.status === 'completed') {
     return (
-      <ScrollView
-        style={{ backgroundColor: theme.background }}
-        contentContainerStyle={{ padding: 24, gap: 16 }}
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: '#23614e', padding: 24 }}
       >
-        <Text style={{ color: theme.text, fontSize: 24, fontWeight: '700' }}>Checklist complete</Text>
-        <Text style={{ color: theme.text }}>You finished “{state.snapshot?.checklistTitle}”.</Text>
-        <View style={{ flexDirection: 'row', gap: 12 }}>
+        <CompletionConfetti />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+          <View
+            style={{
+              width: 94,
+              height: 94,
+              borderRadius: 30,
+              backgroundColor: '#f6a184',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 18,
+            }}
+          >
+            <Text style={{ color: '#164638', fontSize: 48, fontWeight: '700' }}>✓</Text>
+          </View>
+          <Text style={{ color: '#ffc0aa', fontSize: 13, fontWeight: '900', letterSpacing: 1.8 }}>
+            CHECKLIST COMPLETE
+          </Text>
+          <Text style={{ color: '#fffaf1', fontSize: 40, lineHeight: 44, fontWeight: '900' }}>
+            Nicely done.
+          </Text>
+          <Text style={{ color: '#c3d2cc', fontSize: 17, lineHeight: 24, textAlign: 'center' }}>
+            All {totalItems} steps in “{state.snapshot?.checklistTitle}” are checked off.
+          </Text>
+        </View>
+        <View style={{ gap: 10 }}>
           <Pressable
             accessibilityRole="button"
             testID="completion-restart"
-            onPress={() => dispatch({ type: 'RESTART' })}
+            onPress={() => {
+              speechDelayRef.current = 0;
+              dispatch({ type: 'RESTART' });
+            }}
             style={{
-              paddingVertical: 10,
-              paddingHorizontal: 18,
-              backgroundColor: theme.primary,
-              borderRadius: 6,
+              minHeight: 52,
+              backgroundColor: '#f6a184',
+              borderRadius: 15,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <Text style={{ color: theme.onPrimary, fontWeight: '600' }}>Restart</Text>
+            <Text style={{ color: '#164638', fontWeight: '900', fontSize: 17 }}>↻  Run it again</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             testID="completion-return"
             onPress={onExit}
             style={{
-              paddingVertical: 10,
-              paddingHorizontal: 18,
+              minHeight: 50,
               borderWidth: 1,
-              borderColor: theme.border,
-              borderRadius: 6,
+              borderColor: '#5b7e72',
+              backgroundColor: '#315f52',
+              borderRadius: 15,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <Text style={{ color: theme.text }}>Return to library</Text>
+            <Text style={{ color: '#fffaf1', fontWeight: '800', fontSize: 17 }}>Back to my checklists</Text>
           </Pressable>
         </View>
-      </ScrollView>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView
-      style={{ backgroundColor: theme.background }}
-      contentContainerStyle={{ padding: 24, gap: 16 }}
-    >
-      <Text style={{ color: theme.text, fontSize: 18, fontWeight: '600' }}>{state.snapshot?.checklistTitle}</Text>
-      <Text style={{ color: theme.textMuted }}>
-        Item {state.currentItemIndex + 1} of {totalItems}
-      </Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.runBackground }}>
+      <RunTexture color={theme.text} />
 
-      <View
-        style={{
-          padding: 18,
-          borderWidth: 1,
-          borderColor: theme.inputBorder,
-          borderRadius: 8,
-          minHeight: 80,
+      <View style={{ height: 76, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Stop run"
+            accessibilityHint={
+              talkBackEnabled
+                ? 'Opens a confirmation dialog'
+                : 'Press and hold for one point two seconds'
+            }
+            testID="stop-run"
+            onPressIn={beginStopHold}
+            onPressOut={releaseStopHold}
+            onPress={() => {
+              if (talkBackEnabled) void onRequestStop();
+            }}
+          >
+            <Animated.View
+              testID="stop-hold-control"
+              style={[
+                {
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  borderWidth: 1,
+                  borderColor: theme.runBorder,
+                  backgroundColor: theme.runSurface,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                },
+                stopControlStyle,
+              ]}
+            >
+              <HoldProgressRing progress={stopHoldProgress} color={theme.accent} />
+              <Text style={{ color: theme.text, fontSize: holdingStop ? 34 : 27, fontWeight: '300' }}>×</Text>
+            </Animated.View>
+          </Pressable>
+          {holdingStop ? (
+            <Text
+              style={{
+                color: theme.onPrimary,
+                backgroundColor: theme.accent,
+                borderRadius: 9,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                fontWeight: '900',
+              }}
+            >
+              Keep holding
+            </Text>
+          ) : null}
+        </View>
+        <Text
+          numberOfLines={1}
+          style={{ color: theme.text, fontSize: 16, fontWeight: '800', textAlign: 'center', maxWidth: '46%' }}
+        >
+          {state.snapshot?.checklistTitle}
+        </Text>
+        <View style={{ flex: 1 }} />
+      </View>
+
+      <ProgressOrbit
+        current={state.currentItemIndex + 1}
+        total={totalItems}
+        color={theme.text}
+        mutedColor={theme.runBorder}
+        accentColor={theme.accent}
+        surfaceColor={theme.runSurface}
+      />
+
+      <View testID="run-items-stage" style={{ flex: 1, overflow: 'hidden' }}>
+        <Animated.View
+          testID="run-track"
+          style={[
+            {
+              position: 'absolute',
+              top: '42%',
+              left: 20,
+              right: 20,
+            },
+            trackStyle,
+          ]}
+        >
+          {items.map((item, index) => (
+            <RunItem
+              key={item.id}
+              index={index}
+              currentIndex={state.currentItemIndex}
+              text={item.text}
+              androidApi={androidApi}
+              textColor={theme.text}
+            />
+          ))}
+        </Animated.View>
+      </View>
+
+      <View style={{ paddingHorizontal: 20, paddingBottom: 10, gap: 10 }}>
+        {!state.voiceControlAvailable ? (
+          <Text testID="voice-unavailable" style={{ color: theme.danger, textAlign: 'center' }}>
+            Voice control unavailable — use the buttons to control playback.
+          </Text>
+        ) : null}
+        {!state.spokenPlaybackAvailable ? (
+          <Text testID="playback-unavailable" style={{ color: theme.danger, textAlign: 'center' }}>
+            Spoken playback unavailable — the item text remains visible above.
+          </Text>
+        ) : null}
+
+        <View
+          style={{
+            minHeight: 66,
+            padding: 10,
+            backgroundColor: theme.runSurface,
+            borderWidth: 1,
+            borderColor: theme.runBorder,
+            borderRadius: 18,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <View
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 21,
+              backgroundColor: theme.accentSoft,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: theme.accent, fontSize: 22 }}>◉</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text testID="status-banner" style={{ color: theme.text, fontWeight: '800' }}>
+              {state.status === 'speaking' && 'Speaking…'}
+              {state.status === 'listening' && 'Listening'}
+              {state.status === 'manual' && state.voiceControlAvailable && 'Manual controls'}
+            </Text>
+            <Text
+              testID={
+                state.latestRecognizedPhrase.length > 0
+                  ? 'transcript-panel'
+                  : undefined
+              }
+              style={{ color: theme.textMuted, fontSize: 12 }}
+              numberOfLines={1}
+            >
+              {state.latestRecognizedPhrase.length > 0
+                ? state.latestRecognizedPhrase
+                : 'Say next, repeat, or previous'}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Try next"
+            onPress={() => runAction('next')}
+            style={{ borderWidth: 1, borderColor: theme.runBorder, borderRadius: 12, padding: 10 }}
+          >
+            <Text style={{ color: theme.text, fontWeight: '800', fontSize: 12 }}>Try “next”</Text>
+          </Pressable>
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <RunControl
+            testID="manual-previous"
+            label="Previous"
+            symbol="‹"
+            color={theme.text}
+            background={theme.runSurface}
+            border={theme.runBorder}
+            onPress={() => runAction('previous')}
+          />
+          <Pressable
+            accessibilityRole="button"
+            testID="manual-next"
+            onPress={() => runAction('next')}
+            style={{
+              flex: 1,
+              minHeight: 66,
+              backgroundColor: theme.accent,
+              borderRadius: 18,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: theme.onPrimary, fontWeight: '900' }}>Next  ›</Text>
+          </Pressable>
+          <RunControl
+            testID="manual-repeat"
+            label="Repeat"
+            symbol="↻"
+            color={theme.text}
+            background={theme.runSurface}
+            border={theme.runBorder}
+            onPress={() => runAction('repeat')}
+          />
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function RunItem({
+  index,
+  currentIndex,
+  text,
+  androidApi,
+  textColor,
+}: {
+  index: number;
+  currentIndex: number;
+  text: string;
+  androidApi: number;
+  textColor: string;
+}) {
+  const selected = index === currentIndex;
+  const presentation = getRunItemPresentation(index, currentIndex, androidApi);
+  const emphasis = useSharedValue(selected ? 1 : 0);
+
+  useEffect(() => {
+    emphasis.value = withTiming(selected ? 1 : 0, { duration: 220 });
+  }, [emphasis, selected]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const common = {
+      opacity: interpolate(
+        emphasis.value,
+        [0, 1],
+        [presentation.opacity, 1],
+      ),
+      transform: [
+        {
+          scale: interpolate(
+            emphasis.value,
+            [0, 1],
+            [presentation.scale, 1],
+          ),
+        },
+      ],
+    };
+    if (presentation.blurRadius === 0) return common;
+    return {
+      ...common,
+      filter: [
+        {
+          blur: interpolate(
+            emphasis.value,
+            [0, 1],
+            [presentation.blurRadius, 0],
+          ),
+        },
+      ],
+    };
+  }, [presentation.blurRadius, presentation.opacity, presentation.scale]);
+
+  return (
+    <Animated.View
+      testID={`run-item-${index}`}
+      accessibilityState={{ selected }}
+      accessible={selected}
+      importantForAccessibility={selected ? 'yes' : 'no-hide-descendants'}
+      style={[
+        {
+          position: 'absolute',
+          top: index * RUN_ITEM_GAP - 68,
+          left: 0,
+          right: 0,
+          minHeight: 136,
+          paddingHorizontal: 8,
+          paddingVertical: 6,
+          alignItems: 'center',
           justifyContent: 'center',
+        },
+        animatedStyle,
+      ]}
+    >
+      <Text
+        style={{
+          color: textColor,
+          fontSize: 31,
+          lineHeight: 35,
+          fontWeight: '900',
+          textAlign: 'center',
         }}
       >
-        <Text style={{ color: theme.text, fontSize: 22 }}>{currentItem?.text}</Text>
-      </View>
-
-      <Text testID="status-banner" style={{ color: theme.textMuted }}>
-        {state.status === 'speaking' && 'Speaking…'}
-        {state.status === 'listening' && 'Listening for "next", "repeat", or "previous"…'}
-        {state.status === 'manual' && state.voiceControlAvailable && 'Use the buttons below to advance.'}
+        {text}
       </Text>
+    </Animated.View>
+  );
+}
 
-      {!state.voiceControlAvailable && (
-        <Text testID="voice-unavailable" style={{ color: theme.danger }}>
-          Voice control unavailable — use the buttons to control playback.
-        </Text>
-      )}
-      {!state.spokenPlaybackAvailable && (
-        <Text testID="playback-unavailable" style={{ color: theme.danger }}>
-          Spoken playback unavailable — the item text remains visible above.
-        </Text>
-      )}
-
-      {state.latestRecognizedPhrase.length > 0 && (
-        <View
-          testID="transcript-panel"
-          style={{ padding: 12, backgroundColor: theme.surfaceAlt, borderRadius: 6 }}
-        >
-          <Text style={{ color: theme.textSubtle }}>I heard:</Text>
-          <Text style={{ color: theme.text, fontSize: 16 }}>{state.latestRecognizedPhrase}</Text>
-        </View>
-      )}
-
-      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-        <Pressable
-          accessibilityRole="button"
-          testID="manual-previous"
-          onPress={() => dispatch({ type: 'PREVIOUS' })}
-          style={controlStyle}
-        >
-          <Text style={{ color: theme.text }}>Previous</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          testID="manual-repeat"
-          onPress={() => dispatch({ type: 'REPEAT' })}
-          style={controlStyle}
-        >
-          <Text style={{ color: theme.text }}>Repeat</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          testID="manual-next"
-          onPress={() => dispatch({ type: 'NEXT' })}
-          style={controlStyle}
-        >
-          <Text style={{ color: theme.text }}>Next</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          testID="manual-stop"
-          onPress={onRequestStop}
-          style={[controlStyle, { borderColor: theme.danger }]}
-        >
-          <Text style={{ color: theme.danger }}>Stop</Text>
-        </Pressable>
+function ProgressOrbit({
+  current,
+  total,
+  color,
+  mutedColor,
+  accentColor,
+  surfaceColor,
+}: {
+  current: number;
+  total: number;
+  color: string;
+  mutedColor: string;
+  accentColor: string;
+  surfaceColor: string;
+}) {
+  const segments = 24;
+  const completedSegments = Math.ceil((current / Math.max(total, 1)) * segments);
+  return (
+    <View style={{ alignItems: 'center', paddingTop: 6 }}>
+      <View
+        style={{
+          width: 94,
+          height: 94,
+          borderRadius: 47,
+          backgroundColor: surfaceColor,
+          borderWidth: 8,
+          borderColor: mutedColor,
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 4px 10px rgba(20, 50, 40, 0.12)',
+        }}
+      >
+        {Array.from({ length: segments }, (_, index) => (
+          <View
+            key={index}
+            style={{
+              position: 'absolute',
+              width: 3,
+              height: 8,
+              borderRadius: 2,
+              backgroundColor: index < completedSegments ? accentColor : 'transparent',
+              top: 35,
+              left: 37.5,
+              transform: [
+                { rotate: `${index * (360 / segments)}deg` },
+                { translateY: -41 },
+              ],
+            }}
+          />
+        ))}
+        <Text style={{ color, fontSize: 35, lineHeight: 38, fontWeight: '900' }}>{current}</Text>
+        <Text style={{ color, opacity: 0.65, fontSize: 10, fontWeight: '800' }}>OF {total}</Text>
       </View>
-    </ScrollView>
+      <Text style={{ position: 'absolute', opacity: 0 }}>
+        Item {current} of {total}
+      </Text>
+    </View>
+  );
+}
+
+function HoldProgressRing({
+  progress,
+  color,
+}: {
+  progress: SharedValue<number>;
+  color: string;
+}) {
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', inset: 0 }}>
+      {Array.from({ length: 18 }, (_, index) => (
+        <HoldProgressSegment
+          key={index}
+          index={index}
+          progress={progress}
+          color={color}
+        />
+      ))}
+    </View>
+  );
+}
+
+function HoldProgressSegment({
+  index,
+  progress,
+  color,
+}: {
+  index: number;
+  progress: SharedValue<number>;
+  color: string;
+}) {
+  const style = useAnimatedStyle(() => ({
+    opacity: progress.value >= (index + 1) / 18 ? 1 : 0,
+  }));
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          width: 3,
+          height: 8,
+          borderRadius: 2,
+          backgroundColor: color,
+          top: '50%',
+          left: '50%',
+          marginLeft: -1.5,
+          marginTop: -4,
+          transform: [
+            { rotate: `${index * 20}deg` },
+            { translateY: -29 },
+          ],
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+function RunControl({
+  testID,
+  label,
+  symbol,
+  color,
+  background,
+  border,
+  onPress,
+}: {
+  testID: string;
+  label: string;
+  symbol: string;
+  color: string;
+  background: string;
+  border: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      testID={testID}
+      onPress={onPress}
+      style={{
+        width: 64,
+        minHeight: 66,
+        backgroundColor: background,
+        borderWidth: 1,
+        borderColor: border,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ color, fontSize: 22, lineHeight: 22 }}>{symbol}</Text>
+      <Text style={{ color, fontSize: 11, fontWeight: '800' }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function RunTexture({ color }: { color: string }) {
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', inset: 0, opacity: 0.025 }}>
+      {Array.from({ length: 46 }, (_, index) => (
+        <View
+          key={index}
+          style={{
+            position: 'absolute',
+            top: index * 18,
+            left: 0,
+            right: 0,
+            height: 1,
+            backgroundColor: color,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+function CompletionConfetti() {
+  const pieces = [
+    { top: 60, left: 28, color: '#d7ad7e', rotate: '28deg' },
+    { top: 104, right: 26, color: '#94bba8', rotate: '72deg' },
+    { bottom: 116, left: 21, color: '#79a999', rotate: '38deg' },
+    { bottom: 78, right: 33, color: '#d8bb73', rotate: '54deg' },
+  ] as const;
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', inset: 0 }}>
+      {pieces.map((piece, index) => (
+        <View
+          key={index}
+          style={{
+            position: 'absolute',
+            width: 8,
+            height: 20,
+            borderRadius: 4,
+            ...piece,
+            backgroundColor: piece.color,
+            transform: [{ rotate: piece.rotate }],
+          }}
+        />
+      ))}
+    </View>
   );
 }

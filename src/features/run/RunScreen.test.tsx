@@ -31,14 +31,18 @@ type RenderOptions = Partial<
     | 'onVoiceRunStart'
     | 'onVoiceRunStop'
     | 'initialAvailability'
+    | 'onStopHoldComplete'
+    | 'onCue'
+    | 'screenReaderEnabled'
   >
->;
+> & { snapshot?: ChecklistRunSnapshot };
 
 function setup(options: RenderOptions = {}) {
   const playback = new FakeSpeechPlaybackAdapter();
   const recognition = new FakeSpeechRecognitionAdapter();
   const onExit = options.onExit ?? jest.fn();
   const onRequestStop = options.onRequestStop ?? jest.fn();
+  const onStopHoldComplete = options.onStopHoldComplete ?? jest.fn();
   const onCompletion = options.onCompletion ?? jest.fn();
   const initialAvailability = options.initialAvailability ?? {
     spokenPlaybackAvailable: true,
@@ -47,19 +51,30 @@ function setup(options: RenderOptions = {}) {
 
   const utils = render(
     <RunScreen
-      snapshot={snapshot}
+      snapshot={options.snapshot ?? snapshot}
       playback={playback}
       recognition={recognition}
       initialAvailability={initialAvailability}
       onExit={onExit}
       onRequestStop={onRequestStop}
+      onStopHoldComplete={onStopHoldComplete}
       onCompletion={onCompletion}
+      onCue={options.onCue}
+      screenReaderEnabled={options.screenReaderEnabled}
       onVoiceRunStart={options.onVoiceRunStart}
       onVoiceRunStop={options.onVoiceRunStop}
     />,
   );
 
-  return { ...utils, playback, recognition, onExit, onRequestStop, onCompletion };
+  return {
+    ...utils,
+    playback,
+    recognition,
+    onExit,
+    onRequestStop,
+    onStopHoldComplete,
+    onCompletion,
+  };
 }
 
 async function flush() {
@@ -81,6 +96,7 @@ function useAndroidHardwareBack() {
 
 describe('RunScreen', () => {
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
     mockHardwareBackHandler = null;
     Object.defineProperty(Platform, 'OS', {
@@ -103,6 +119,40 @@ describe('RunScreen', () => {
       const { playback } = setup();
       await flush();
       expect(playback.spoken).toEqual(['Item one']);
+    });
+
+    it('keeps every snapshot item mounted while only the current row is selected', async () => {
+      const longSnapshot: ChecklistRunSnapshot = {
+        checklistId: 'long',
+        checklistTitle: 'Long routine',
+        items: Array.from({ length: 17 }, (_, index) => ({
+          id: `long-${index}`,
+          text: `Step ${index + 1}`,
+          order: index,
+        })),
+      };
+      setup({ snapshot: longSnapshot });
+      await flush();
+
+      expect(
+        screen.getAllByTestId(/run-item-/, { includeHiddenElements: true }),
+      ).toHaveLength(17);
+      expect(
+        screen.getByText('Step 17', { includeHiddenElements: true }),
+      ).toBeOnTheScreen();
+      expect(screen.getByTestId('run-item-0').props.accessibilityState).toMatchObject({
+        selected: true,
+      });
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+
+      expect(
+        screen.getAllByTestId(/run-item-/, { includeHiddenElements: true }),
+      ).toHaveLength(17);
+      expect(screen.getByTestId('run-item-1').props.accessibilityState).toMatchObject({
+        selected: true,
+      });
     });
 
     it('waits for the Android voice run startup before speaking the first item', async () => {
@@ -461,13 +511,89 @@ describe('RunScreen', () => {
       expect(playback.spoken.length).toBe(before + 1); // re-spoke item one
     });
 
-    it('requests confirmation when Stop is pressed', async () => {
-      const { onExit, onRequestStop } = setup();
+    it('plays the action cue before beginning speech roughly 175ms later', async () => {
+      const onCue = jest.fn();
+      const { playback } = setup({ onCue });
+      await flush();
+      jest.useFakeTimers();
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+
+      expect(onCue).toHaveBeenCalledWith('next');
+      expect(playback.spoken).toEqual(['Item one']);
+
+      await act(async () => {
+        jest.advanceTimersByTime(174);
+        await Promise.resolve();
+      });
+      expect(playback.spoken).toEqual(['Item one']);
+
+      await act(async () => {
+        jest.advanceTimersByTime(1);
+        await Promise.resolve();
+      });
+      expect(playback.spoken).toEqual(['Item one', 'Item two']);
+      jest.useRealTimers();
+    });
+
+    it('uses distinct cues for Repeat and Previous', async () => {
+      const onCue = jest.fn();
+      setup({ onCue });
       await flush();
 
-      fireEvent.press(screen.getByTestId('manual-stop'));
+      fireEvent.press(screen.getByTestId('manual-repeat'));
+      fireEvent.press(screen.getByTestId('manual-previous'));
+
+      expect(onCue.mock.calls.map(([action]) => action)).toEqual([
+        'repeat',
+        'previous',
+      ]);
+    });
+
+    it('keeps the run active when the pointer hold is released early', async () => {
+      const { onStopHoldComplete, onRequestStop } = setup({
+        screenReaderEnabled: false,
+      });
+      await flush();
+      jest.useFakeTimers();
+
+      fireEvent(screen.getByTestId('stop-run'), 'pressIn');
+      expect(screen.getByText(/keep holding/i)).toBeOnTheScreen();
+      act(() => jest.advanceTimersByTime(600));
+      fireEvent(screen.getByTestId('stop-run'), 'pressOut');
+
+      act(() => jest.advanceTimersByTime(1200));
+      expect(onStopHoldComplete).not.toHaveBeenCalled();
+      expect(onRequestStop).not.toHaveBeenCalled();
+      expect(screen.queryByText(/keep holding/i)).toBeNull();
+      jest.useRealTimers();
+    });
+
+    it('stops directly after the complete 1.2-second pointer hold', async () => {
+      const { onStopHoldComplete, onRequestStop } = setup({
+        screenReaderEnabled: false,
+      });
+      await flush();
+      jest.useFakeTimers();
+
+      fireEvent(screen.getByTestId('stop-run'), 'pressIn');
+      act(() => jest.advanceTimersByTime(1200));
+
+      expect(onStopHoldComplete).toHaveBeenCalledTimes(1);
+      expect(onRequestStop).not.toHaveBeenCalled();
+      jest.useRealTimers();
+    });
+
+    it('opens confirmation when TalkBack activates the X', async () => {
+      const { onStopHoldComplete, onRequestStop } = setup({
+        screenReaderEnabled: true,
+      });
+      await flush();
+
+      fireEvent.press(screen.getByTestId('stop-run'));
+
       expect(onRequestStop).toHaveBeenCalledTimes(1);
-      expect(onExit).not.toHaveBeenCalled();
+      expect(onStopHoldComplete).not.toHaveBeenCalled();
     });
 
     it('requests confirmation when Android back is pressed during an active run', async () => {
