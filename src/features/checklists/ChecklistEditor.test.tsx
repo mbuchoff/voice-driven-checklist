@@ -22,7 +22,7 @@ async function setupDb() {
 function dragRow(index: number, startY: number, endY: number) {
   const localId = screen.getByTestId(`item-row-${index}`).props.nativeID;
   act(() => {
-    fireGestureHandler(getByGestureTestId(`item-hold-gesture-${localId}-${index}`), [
+    fireGestureHandler(getByGestureTestId(`item-hold-gesture-${localId}`), [
       { state: State.BEGAN, absoluteY: startY },
       { state: State.ACTIVE, absoluteY: startY },
       { state: State.ACTIVE, absoluteY: endY },
@@ -33,7 +33,7 @@ function dragRow(index: number, startY: number, endY: number) {
 
 function beginRowDrag(index: number, startY: number, currentY: number): GestureType {
   const localId = screen.getByTestId(`item-row-${index}`).props.nativeID;
-  const gesture = getByGestureTestId(`item-hold-gesture-${localId}-${index}`);
+  const gesture = getByGestureTestId(`item-hold-gesture-${localId}`);
   act(() => {
     gesture.handlers.onStart?.({ absoluteY: startY } as never);
     gesture.handlers.onUpdate?.({ absoluteY: currentY } as never);
@@ -98,6 +98,9 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-text-1').props.autoFocus).toBe(false);
       expect(screen.getByTestId('item-text-2').props.autoFocus).toBe(true);
       fireEvent(screen.getByTestId('item-text-2'), 'focus');
+
+      fireEvent(screen.getByTestId('item-text-2'), 'blur');
+      expect(screen.getByTestId('item-text-2').props.autoFocus).toBe(false);
 
       expect(scrollToEnd).toHaveBeenCalledTimes(2);
       scrollToEnd.mockRestore();
@@ -565,7 +568,7 @@ describe('ChecklistEditor', () => {
       });
 
       const localId = screen.getByTestId('item-row-0').props.nativeID;
-      const gesture = getByGestureTestId(`item-hold-gesture-${localId}-0`);
+      const gesture = getByGestureTestId(`item-hold-gesture-${localId}`);
       expect(gesture.config.activateAfterLongPress).toBe(350);
       expect(screen.getByTestId('checklist-editor-scroll').props.scrollEnabled).toBe(true);
 

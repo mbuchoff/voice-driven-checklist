@@ -107,6 +107,8 @@ export function ChecklistEditor({
   const [items, setItems] = useState<EditorItem[]>(() =>
     initialItems(initialChecklist),
   );
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const [focusItemId, setFocusItemId] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
@@ -157,8 +159,9 @@ export function ChecklistEditor({
 
   const dropIndexFor = (localId: string, contentY: number) => {
     let index = 0;
-    for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
-      const item = items[itemIndex];
+    const currentItems = itemsRef.current;
+    for (let itemIndex = 0; itemIndex < currentItems.length; itemIndex += 1) {
+      const item = currentItems[itemIndex];
       if (item.localId === localId) continue;
       const layout = rowLayouts.current[itemIndex];
       if (layout && contentY < layout.y + layout.height / 2) return index;
@@ -186,7 +189,11 @@ export function ChecklistEditor({
     scrollRef.current?.scrollTo({ y: nextY, animated: false });
   };
 
-  const startDrag = (item: EditorItem, index: number, pageY: number) => {
+  const startDrag = (localId: string, pageY: number) => {
+    const currentItems = itemsRef.current;
+    const index = currentItems.findIndex((item) => item.localId === localId);
+    if (index < 0) return;
+    const item = currentItems[index];
     const layout = rowLayouts.current[index];
     if (!layout || dragRef.current) return;
 
@@ -245,15 +252,15 @@ export function ChecklistEditor({
     setItems((previous) => moveItem(previous, index, index + delta));
   };
 
-  const gestureFor = (item: EditorItem, index: number) =>
+  const gestureFor = (item: EditorItem) =>
     Gesture.Pan()
-      .withTestId(`item-hold-gesture-${item.localId}-${index}`)
+      .withTestId(`item-hold-gesture-${item.localId}`)
       .activateAfterLongPress(HOLD_TO_REORDER_MS)
       .maxPointers(1)
       .shouldCancelWhenOutside(false)
       .blocksExternalGesture(scrollRef as never)
       .runOnJS(true)
-      .onStart((event) => startDrag(item, index, event.absoluteY))
+      .onStart((event) => startDrag(item.localId, event.absoluteY))
       .onUpdate((event) => updateDrag(event.absoluteY))
       .onEnd(finishDrag)
       .onFinalize((_event, success) => {
@@ -447,8 +454,7 @@ export function ChecklistEditor({
                   <Fragment key={item.localId}>
                     {dropTarget}
                     <GestureDetector
-                      key={`${item.localId}-${index}`}
-                      gesture={gestureFor(item, index)}
+                      gesture={gestureFor(item)}
                     >
                       <View
                         testID={`item-row-${index}`}
@@ -504,6 +510,11 @@ export function ChecklistEditor({
                             scrollEnabled={false}
                             autoFocus={focusItemId === item.localId}
                             onFocus={scrollFocusedItemIntoView}
+                            onBlur={() => {
+                              setFocusItemId((current) =>
+                                current === item.localId ? null : current,
+                              );
+                            }}
                             onChangeText={(text) => updateItemText(item.localId, text)}
                             placeholder={`Step ${index + 1}`}
                             placeholderTextColor={theme.textMuted}
