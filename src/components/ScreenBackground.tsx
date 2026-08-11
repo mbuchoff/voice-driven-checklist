@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, useWindowDimensions } from 'react-native';
 import Svg, {
   Defs,
   LinearGradient,
@@ -21,19 +21,32 @@ type RunBackground = {
     middleOffset: string;
   };
   glow: {
-    cx: string;
-    cy: string;
-    r: string;
+    cx: number;
+    cy: number;
+    fadeStop: string;
     color: string;
     opacity: number;
   };
   warmth: {
-    cx: string;
-    cy: string;
-    r: string;
+    cx: number;
+    cy: number;
+    fadeStop: string;
     opacity: number;
   };
 };
+
+export function getFarthestCornerCircle(
+  width: number,
+  height: number,
+  centerX: number,
+  centerY: number,
+) {
+  const cx = width * centerX;
+  const cy = height * centerY;
+  const farthestX = Math.max(cx, width - cx);
+  const farthestY = Math.max(cy, height - cy);
+  return { cx, cy, r: Math.hypot(farthestX, farthestY) };
+}
 
 export function getRunBackground(mode: 'light' | 'dark'): RunBackground {
   const light = mode === 'light';
@@ -49,16 +62,16 @@ export function getRunBackground(mode: 'light' | 'dark'): RunBackground {
       middleOffset: light ? '58%' : '60%',
     },
     glow: {
-      cx: light ? '76%' : '75%',
-      cy: '12%',
-      r: light ? '35%' : '34%',
+      cx: light ? 0.76 : 0.75,
+      cy: 0.12,
+      fadeStop: light ? '35%' : '34%',
       color: light ? '#a3beab' : '#6a9981',
       opacity: light ? 0.34 : 0.24,
     },
     warmth: {
-      cx: '12%',
-      cy: '72%',
-      r: '32%',
+      cx: 0.12,
+      cy: 0.72,
+      fadeStop: '32%',
       opacity: light ? 0.1 : 0,
     },
   };
@@ -70,6 +83,7 @@ export function ScreenBackground({
   variant: 'editor' | 'settings' | 'run' | 'completion';
 }) {
   const theme = useTheme();
+  const { width, height } = useWindowDimensions();
 
   if (variant === 'completion') {
     return (
@@ -92,6 +106,18 @@ export function ScreenBackground({
 
   if (variant === 'run') {
     const background = getRunBackground(theme.mode);
+    const glow = getFarthestCornerCircle(
+      width,
+      height,
+      background.glow.cx,
+      background.glow.cy,
+    );
+    const warmth = getFarthestCornerCircle(
+      width,
+      height,
+      background.warmth.cx,
+      background.warmth.cy,
+    );
     return (
       <Svg pointerEvents="none" style={StyleSheet.absoluteFillObject} width="100%" height="100%">
         <Defs>
@@ -108,25 +134,35 @@ export function ScreenBackground({
           </LinearGradient>
           <RadialGradient
             id="run-glow"
-            cx={background.glow.cx}
-            cy={background.glow.cy}
-            r={background.glow.r}
+            gradientUnits="userSpaceOnUse"
+            cx={glow.cx}
+            cy={glow.cy}
+            r={glow.r}
           >
             <Stop
               offset="0%"
               stopColor={background.glow.color}
               stopOpacity={background.glow.opacity}
             />
-            <Stop offset="100%" stopColor={background.glow.color} stopOpacity={0} />
+            <Stop
+              offset={background.glow.fadeStop}
+              stopColor={background.glow.color}
+              stopOpacity={0}
+            />
           </RadialGradient>
           <RadialGradient
             id="run-warmth"
-            cx={background.warmth.cx}
-            cy={background.warmth.cy}
-            r={background.warmth.r}
+            gradientUnits="userSpaceOnUse"
+            cx={warmth.cx}
+            cy={warmth.cy}
+            r={warmth.r}
           >
             <Stop offset="0%" stopColor="#ef916f" stopOpacity={background.warmth.opacity} />
-            <Stop offset="100%" stopColor="#ef916f" stopOpacity={0} />
+            <Stop
+              offset={background.warmth.fadeStop}
+              stopColor="#ef916f"
+              stopOpacity={0}
+            />
           </RadialGradient>
         </Defs>
         <Rect width="100%" height="100%" fill="url(#run-base)" />
