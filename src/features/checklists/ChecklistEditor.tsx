@@ -17,6 +17,10 @@ import {
   GestureDetector,
   ScrollView,
 } from 'react-native-gesture-handler';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -112,6 +116,8 @@ export function ChecklistEditor({
   const viewportTop = useRef(0);
   const viewportHeight = useRef(0);
   const contentHeight = useRef(0);
+  const dragBaseTop = useRef(0);
+  const dragOffset = useSharedValue(0);
   const [title, setTitle] = useState(initialChecklist?.title ?? '');
   const [items, setItems] = useState<EditorItem[]>(() =>
     initialItems(initialChecklist),
@@ -123,6 +129,9 @@ export function ChecklistEditor({
   const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
   const [drag, setDrag] = useState<DragState | null>(null);
   const [keyboardClearance, setKeyboardClearance] = useState(0);
+  const dragPreviewStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dragOffset.value }],
+  }));
 
   const scrollFocusedItemIntoView = () => {
     if (!focusItemId || keyboardClearance <= 0) return;
@@ -239,6 +248,8 @@ export function ChecklistEditor({
       startPageY: pageY,
       startScrollY: scrollY.current,
     };
+    dragBaseTop.current = current.top;
+    dragOffset.value = 0;
     animateRowsAside();
     dragRef.current = current;
     setDrag(dragStateFrom(current));
@@ -254,9 +265,16 @@ export function ChecklistEditor({
       (pageY - current.startPageY) +
       (scrollY.current - current.startScrollY);
     const to = dropIndexFor(current.localId, contentY);
-    if (to !== current.to) animateRowsAside();
+    const targetChanged = to !== current.to;
     current.to = to;
     current.top = contentY - current.height / 2;
+    if (!targetChanged) {
+      dragOffset.value = current.top - dragBaseTop.current;
+      return;
+    }
+    dragBaseTop.current = current.top;
+    dragOffset.value = 0;
+    animateRowsAside();
     setDrag(dragStateFrom(current));
   };
 
@@ -614,27 +632,30 @@ export function ChecklistEditor({
             {renderDropTarget(items.length - 1)}
 
             {drag ? (
-              <View
+              <Animated.View
                 testID="item-drag-preview"
                 pointerEvents="none"
-                style={{
-                  position: 'absolute',
-                  top: drag.top,
-                  left: 0,
-                  right: 0,
-                  minHeight: drag.height,
-                  borderWidth: 2,
-                  borderColor: theme.primary,
-                  borderRadius: 18,
-                  padding: 10,
-                  backgroundColor: theme.surface,
-                  zIndex: 30,
-                  elevation: 12,
-                  boxShadow: `0 8px 18px ${theme.shadow}`,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 10,
-                }}
+                style={[
+                  {
+                    position: 'absolute',
+                    top: drag.top,
+                    left: 0,
+                    right: 0,
+                    minHeight: drag.height,
+                    borderWidth: 2,
+                    borderColor: theme.primary,
+                    borderRadius: 18,
+                    padding: 10,
+                    backgroundColor: theme.surface,
+                    zIndex: 30,
+                    elevation: 12,
+                    boxShadow: `0 8px 18px ${theme.shadow}`,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                  },
+                  dragPreviewStyle,
+                ]}
               >
                 <View
                   style={{
@@ -654,7 +675,7 @@ export function ChecklistEditor({
                 <Text testID="item-drag-preview-text" style={{ color: theme.text, fontSize: 16, flex: 1 }}>
                   {drag.text}
                 </Text>
-              </View>
+              </Animated.View>
             ) : null}
 
             <Pressable

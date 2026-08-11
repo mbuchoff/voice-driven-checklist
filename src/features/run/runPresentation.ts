@@ -6,6 +6,20 @@ export type RunItemPresentation = {
   blurRadius: number;
 };
 
+export function getRunProgressPalette(mode: 'light' | 'dark') {
+  return mode === 'light'
+    ? {
+        surface: '#fffaf3',
+        track: 'rgba(23, 56, 46, 0.12)',
+        shadow: '0 13px 34px rgba(43, 74, 61, 0.13)',
+      }
+    : {
+        surface: '#193f34',
+        track: 'rgba(255, 255, 255, 0.14)',
+        shadow: '0 12px 32px rgba(7, 32, 24, 0.24)',
+      };
+}
+
 export function getRunTrackOffset(currentIndex: number): number {
   return -currentIndex * RUN_ITEM_GAP;
 }

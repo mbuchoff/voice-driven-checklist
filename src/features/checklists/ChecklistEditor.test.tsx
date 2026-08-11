@@ -1,5 +1,6 @@
+import { Profiler } from 'react';
 import { act, fireEvent, screen, within } from '@testing-library/react-native';
-import { Keyboard, ScrollView } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet } from 'react-native';
 import { State, type GestureType } from 'react-native-gesture-handler';
 
 import { runMigrations } from '@/src/db/migrations';
@@ -450,6 +451,44 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-row-2')).toBeOnTheScreen();
     });
 
+    it('moves within one insertion slot without rerendering the editor', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'smooth drag',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      const onRender = jest.fn();
+      await renderWithDatabase(
+        <Profiler id="editor" onRender={onRender}>
+          <ChecklistEditor
+            initialChecklist={existing}
+            onSaved={jest.fn()}
+            onCancel={jest.fn()}
+          />
+        </Profiler>,
+        { database },
+      );
+
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
+        nativeEvent: { layout: { y: 50, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+        nativeEvent: { layout: { y: 100, height: 50 } },
+      });
+
+      const gesture = beginRowDrag(0, 25, 25);
+      onRender.mockClear();
+      act(() => {
+        gesture.handlers.onUpdate?.({ absoluteY: 30 } as never);
+      });
+
+      expect(onRender).not.toHaveBeenCalled();
+      cancelRowDrag(gesture);
+    });
+
     it('starts a second drag from the item current row after reordering', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
@@ -480,7 +519,10 @@ describe('ChecklistEditor', () => {
 
       beginRowDrag(0, 25, 25);
 
-      expect(screen.getByTestId('item-drag-preview').props.style.top).toBe(0);
+      expect(
+        StyleSheet.flatten(screen.getByTestId('item-drag-preview').props.style)
+          .top,
+      ).toBe(0);
       expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('c');
     });
 
@@ -516,7 +558,10 @@ describe('ChecklistEditor', () => {
 
       beginRowDrag(2, 125, 125);
 
-      expect(screen.getByTestId('item-drag-preview').props.style.top).toBe(100);
+      expect(
+        StyleSheet.flatten(screen.getByTestId('item-drag-preview').props.style)
+          .top,
+      ).toBe(100);
     });
 
     it('autoscrolls when the pointer is near the visible scroll edge below the header', async () => {

@@ -33,6 +33,7 @@ import { initialRunState, runReducer } from './runReducer';
 import {
   RUN_ITEM_GAP,
   getRunItemPresentation,
+  getRunProgressPalette,
   getRunTrackOffset,
 } from './runPresentation';
 import type { ChecklistRunSnapshot } from './types';
@@ -410,6 +411,7 @@ export function RunScreen({
   const totalItems = state.snapshot?.items.length ?? 0;
   const items = state.snapshot?.items ?? [];
   const androidApi = Platform.OS === 'android' ? Number(Platform.Version) : 0;
+  const progressPalette = getRunProgressPalette(theme.mode);
 
   if (state.status === 'completed') {
     return (
@@ -585,9 +587,10 @@ export function RunScreen({
         current={state.currentItemIndex + 1}
         total={totalItems}
         color={theme.runText}
-        mutedColor={theme.runBorder}
+        mutedColor={progressPalette.track}
         accentColor={theme.accent}
-        surfaceColor={theme.runSurface}
+        surfaceColor={progressPalette.surface}
+        shadow={progressPalette.shadow}
       />
 
       <View testID="run-items-stage" style={{ flex: 1, overflow: 'visible' }}>
@@ -824,6 +827,7 @@ function ProgressOrbit({
   mutedColor,
   accentColor,
   surfaceColor,
+  shadow,
 }: {
   current: number;
   total: number;
@@ -831,6 +835,7 @@ function ProgressOrbit({
   mutedColor: string;
   accentColor: string;
   surfaceColor: string;
+  shadow: string;
 }) {
   const size = 116;
   const strokeWidth = 9;
@@ -846,7 +851,7 @@ function ProgressOrbit({
           borderRadius: size / 2,
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: '0 4px 10px rgba(20, 50, 40, 0.12)',
+          boxShadow: shadow,
         }}
       >
         <Svg
@@ -857,6 +862,7 @@ function ProgressOrbit({
           style={{ position: 'absolute' }}
         >
           <Circle
+            testID="run-progress-background"
             cx={size / 2}
             cy={size / 2}
             r={radius}

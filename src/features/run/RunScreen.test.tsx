@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { BackHandler, Platform, StyleSheet } from 'react-native';
+import { BackHandler, Platform, processColor, StyleSheet } from 'react-native';
 
 import {
   FakeSpeechPlaybackAdapter,
@@ -142,6 +142,19 @@ describe('RunScreen', () => {
 
       expect(screen.getByTestId('run-progress-arc')).toBeOnTheScreen();
       expect(screen.getByTestId('stop-progress-arc')).toBeOnTheScreen();
+    });
+
+    it('renders the approved solid center and track behind progress', async () => {
+      setup();
+      await flush();
+
+      expect(screen.getByTestId('run-progress-background').props).toMatchObject({
+        fill: { type: 0, payload: processColor('#fffaf3') },
+        stroke: {
+          type: 0,
+          payload: processColor('rgba(23, 56, 46, 0.12)'),
+        },
+      });
     });
 
     it('centers the title independently of the stop control width', async () => {

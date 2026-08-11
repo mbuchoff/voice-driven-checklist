@@ -1,6 +1,7 @@
 import {
   RUN_ITEM_GAP,
   getRunItemPresentation,
+  getRunProgressPalette,
   getRunTrackOffset,
 } from './runPresentation';
 
@@ -27,5 +28,18 @@ describe('run item presentation', () => {
     expect(getRunItemPresentation(3, 4, 30).blurRadius).toBe(0);
     expect(getRunItemPresentation(3, 4, 30).opacity).toBeLessThan(1);
     expect(getRunItemPresentation(3, 4, 30).scale).toBeLessThan(1);
+  });
+
+  it('uses the approved solid center and track behind progress', () => {
+    expect(getRunProgressPalette('dark')).toEqual({
+      surface: '#193f34',
+      track: 'rgba(255, 255, 255, 0.14)',
+      shadow: '0 12px 32px rgba(7, 32, 24, 0.24)',
+    });
+    expect(getRunProgressPalette('light')).toEqual({
+      surface: '#fffaf3',
+      track: 'rgba(23, 56, 46, 0.12)',
+      shadow: '0 13px 34px rgba(43, 74, 61, 0.13)',
+    });
   });
 });

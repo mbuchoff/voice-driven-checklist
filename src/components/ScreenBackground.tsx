@@ -9,6 +9,61 @@ import Svg, {
 
 import { useTheme } from '@/src/theme/useTheme';
 
+type RunBackground = {
+  gradient: {
+    x1: string;
+    y1: string;
+    x2: string;
+    y2: string;
+    start: string;
+    middle: string;
+    end: string;
+    middleOffset: string;
+  };
+  glow: {
+    cx: string;
+    cy: string;
+    r: string;
+    color: string;
+    opacity: number;
+  };
+  warmth: {
+    cx: string;
+    cy: string;
+    r: string;
+    opacity: number;
+  };
+};
+
+export function getRunBackground(mode: 'light' | 'dark'): RunBackground {
+  const light = mode === 'light';
+  return {
+    gradient: {
+      x1: '37%',
+      y1: '0%',
+      x2: '63%',
+      y2: '100%',
+      start: light ? '#f7f1e7' : '#214d3e',
+      middle: light ? '#edf1e9' : '#15352c',
+      end: light ? '#dfeae2' : '#102a23',
+      middleOffset: light ? '58%' : '60%',
+    },
+    glow: {
+      cx: light ? '76%' : '75%',
+      cy: '12%',
+      r: light ? '35%' : '34%',
+      color: light ? '#a3beab' : '#6a9981',
+      opacity: light ? 0.34 : 0.24,
+    },
+    warmth: {
+      cx: '12%',
+      cy: '72%',
+      r: '32%',
+      opacity: light ? 0.1 : 0,
+    },
+  };
+}
+
 export function ScreenBackground({
   variant,
 }: {
@@ -36,26 +91,42 @@ export function ScreenBackground({
   }
 
   if (variant === 'run') {
-    const light = theme.mode === 'light';
+    const background = getRunBackground(theme.mode);
     return (
       <Svg pointerEvents="none" style={StyleSheet.absoluteFillObject} width="100%" height="100%">
         <Defs>
-          <LinearGradient id="run-base" x1="0" y1="0" x2="0.45" y2="1">
-            <Stop offset="0" stopColor={light ? '#f7f1e7' : '#214d3e'} />
-            <Stop offset="0.58" stopColor={light ? '#edf1e9' : '#15352c'} />
-            <Stop offset="1" stopColor={light ? '#dfeae2' : '#102a23'} />
+          <LinearGradient
+            id="run-base"
+            x1={background.gradient.x1}
+            y1={background.gradient.y1}
+            x2={background.gradient.x2}
+            y2={background.gradient.y2}
+          >
+            <Stop offset="0%" stopColor={background.gradient.start} />
+            <Stop offset={background.gradient.middleOffset} stopColor={background.gradient.middle} />
+            <Stop offset="100%" stopColor={background.gradient.end} />
           </LinearGradient>
-          <RadialGradient id="run-glow" cx="76%" cy="12%" r="42%">
+          <RadialGradient
+            id="run-glow"
+            cx={background.glow.cx}
+            cy={background.glow.cy}
+            r={background.glow.r}
+          >
             <Stop
-              offset="0"
-              stopColor={light ? '#a3beab' : '#6a9981'}
-              stopOpacity={light ? 0.34 : 0.24}
+              offset="0%"
+              stopColor={background.glow.color}
+              stopOpacity={background.glow.opacity}
             />
-            <Stop offset="1" stopColor={light ? '#a3beab' : '#6a9981'} stopOpacity={0} />
+            <Stop offset="100%" stopColor={background.glow.color} stopOpacity={0} />
           </RadialGradient>
-          <RadialGradient id="run-warmth" cx="12%" cy="72%" r="36%">
-            <Stop offset="0" stopColor="#ef916f" stopOpacity={light ? 0.1 : 0} />
-            <Stop offset="1" stopColor="#ef916f" stopOpacity={0} />
+          <RadialGradient
+            id="run-warmth"
+            cx={background.warmth.cx}
+            cy={background.warmth.cy}
+            r={background.warmth.r}
+          >
+            <Stop offset="0%" stopColor="#ef916f" stopOpacity={background.warmth.opacity} />
+            <Stop offset="100%" stopColor="#ef916f" stopOpacity={0} />
           </RadialGradient>
         </Defs>
         <Rect width="100%" height="100%" fill="url(#run-base)" />
