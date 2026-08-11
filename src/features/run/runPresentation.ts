@@ -1,4 +1,5 @@
 export const RUN_ITEM_GAP = 152;
+export const RUN_TRANSITION_DURATION_MS = 440;
 
 export type RunItemPresentation = {
   opacity: number;

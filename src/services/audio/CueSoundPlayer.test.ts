@@ -21,6 +21,7 @@ function audioPlayer() {
 
 describe('CueSoundPlayer', () => {
   beforeEach(() => mockedCreateAudioPlayer.mockReset());
+  afterEach(() => jest.useRealTimers());
 
   it('prepares one distinct player for every action in an audible family', () => {
     mockedCreateAudioPlayer.mockImplementation(() => audioPlayer() as never);
@@ -107,5 +108,51 @@ describe('CueSoundPlayer', () => {
     expect(partialPlayer.release).toHaveBeenCalledTimes(1);
     expect(prepared).toHaveLength(4);
     expect(prepared[0].play).toHaveBeenCalledTimes(1);
+  });
+
+  it('abandons a cue that cannot start so it cannot block speech indefinitely', async () => {
+    jest.useFakeTimers();
+    const stalledPlayer = audioPlayer();
+    stalledPlayer.seekTo.mockImplementation(() => new Promise(() => undefined));
+    const players = [stalledPlayer, audioPlayer(), audioPlayer(), audioPlayer()];
+    mockedCreateAudioPlayer.mockImplementation(() => players.shift() as never);
+    const cues = new CueSoundPlayer();
+    cues.prepare('chime');
+
+    const started = cues.play('next');
+    await jest.advanceTimersByTimeAsync(1000);
+
+    await expect(started).resolves.toBe(false);
+    expect(stalledPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it('does not start a stale cue after its player family is released', async () => {
+    let finishSeek: () => void = () => undefined;
+    const stalePlayer = audioPlayer();
+    stalePlayer.seekTo.mockImplementation(
+      () => new Promise<undefined>((resolve) => {
+        finishSeek = () => resolve(undefined);
+      }),
+    );
+    const players = [
+      stalePlayer,
+      audioPlayer(),
+      audioPlayer(),
+      audioPlayer(),
+      audioPlayer(),
+      audioPlayer(),
+      audioPlayer(),
+      audioPlayer(),
+    ];
+    mockedCreateAudioPlayer.mockImplementation(() => players.shift() as never);
+    const cues = new CueSoundPlayer();
+    cues.prepare('chime');
+
+    const started = cues.play('next');
+    cues.prepare('ping');
+    finishSeek();
+
+    await expect(started).resolves.toBe(false);
+    expect(stalePlayer.play).not.toHaveBeenCalled();
   });
 });

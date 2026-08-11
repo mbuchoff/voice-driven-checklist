@@ -567,6 +567,11 @@ describe('ChecklistEditor', () => {
     });
 
     it('autoscrolls when the pointer is near the visible scroll edge below the header', async () => {
+      const frames: FrameRequestCallback[] = [];
+      jest.spyOn(global, 'requestAnimationFrame').mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
       const scrollTo = jest
         .spyOn(ScrollView.prototype, 'scrollTo')
         .mockImplementation(jest.fn());
@@ -599,8 +604,13 @@ describe('ChecklistEditor', () => {
       });
 
       beginRowDrag(2, 289, 340);
+      act(() => frames.shift()?.(0));
+      act(() => frames.shift()?.(16));
 
-      expect(scrollTo).toHaveBeenCalledWith({ y: 32, animated: false });
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+      const scrollOptions = scrollTo.mock.calls[0]?.[0] as { y: number };
+      expect(scrollOptions.y).toBeGreaterThan(0);
+      expect(scrollOptions.y).toBeLessThan(16);
       scrollTo.mockRestore();
     });
 
@@ -645,6 +655,7 @@ describe('ChecklistEditor', () => {
 
       act(() => frames.shift()?.(16));
       act(() => frames.shift()?.(32));
+      act(() => frames.shift()?.(48));
       expect(scrollTo).toHaveBeenCalledTimes(callsAfterPointerUpdate + 2);
 
       finishRowDrag(gesture);
@@ -654,6 +665,11 @@ describe('ChecklistEditor', () => {
     });
 
     it('updates the drop target after autoscroll before release', async () => {
+      const frames: FrameRequestCallback[] = [];
+      jest.spyOn(global, 'requestAnimationFrame').mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
       jest.spyOn(ScrollView.prototype, 'scrollTo').mockImplementation(jest.fn());
       const database = await setupDb();
       const existing = await createChecklist(database, {
@@ -683,7 +699,11 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 650, height: 50 } },
       });
 
-      dragRow(0, 25, 290);
+      const gesture = beginRowDrag(0, 25, 290);
+      for (const timestamp of [0, 16, 32, 48, 64, 80]) {
+        act(() => frames.shift()?.(timestamp));
+      }
+      finishRowDrag(gesture);
 
       expect(screen.getByTestId('item-text-1').props.value).toBe('a');
       jest.restoreAllMocks();

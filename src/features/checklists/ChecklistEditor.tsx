@@ -24,6 +24,7 @@ import { useTheme } from '@/src/theme/useTheme';
 import { createChecklist, updateChecklist } from './repository';
 import type { Checklist } from './types';
 import {
+  CHECKLIST_REORDER_HOLD_MS,
   animateEditorRows,
   useChecklistReorder,
   type ReorderItem,
@@ -32,8 +33,6 @@ import {
   validateChecklistItemText,
   validateChecklistTitle,
 } from './validation';
-
-const HOLD_TO_REORDER_MS = 350;
 
 type EditorItem = ReorderItem;
 
@@ -325,7 +324,7 @@ export function ChecklistEditor({
                 const isEditing = focusItemId === item.localId;
                 const editGesture = Gesture.Tap()
                   .withTestId(`item-edit-gesture-${item.localId}`)
-                  .maxDuration(HOLD_TO_REORDER_MS - 1)
+                  .maxDuration(CHECKLIST_REORDER_HOLD_MS - 1)
                   .runOnJS(true)
                   .onEnd((_event, success) => {
                     if (success) setFocusItemId(item.localId);

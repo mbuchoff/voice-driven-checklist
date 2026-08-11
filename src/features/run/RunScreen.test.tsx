@@ -513,6 +513,31 @@ describe('RunScreen', () => {
       expect(onRequestStop).toHaveBeenCalledTimes(1);
     });
 
+    it('does not let the initial TalkBack query overwrite a newer change event', async () => {
+      let finishInitialQuery: (enabled: boolean) => void = () => undefined;
+      let onScreenReaderChanged: (enabled: boolean) => void = () => undefined;
+      jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled').mockImplementation(
+        () => new Promise((resolve) => {
+          finishInitialQuery = resolve;
+        }),
+      );
+      jest
+        .spyOn(AccessibilityInfo, 'addEventListener')
+        .mockImplementation((_event, listener) => {
+          onScreenReaderChanged = listener as unknown as (enabled: boolean) => void;
+          return { remove: jest.fn() } as never;
+        });
+      const { onRequestStop } = setup();
+      await flush();
+
+      act(() => onScreenReaderChanged(true));
+      await act(async () => finishInitialQuery(false));
+      await flush();
+      fireEvent.press(screen.getByTestId('stop-run'));
+
+      expect(onRequestStop).toHaveBeenCalledTimes(1);
+    });
+
     it('requests confirmation when Android back is pressed during an active run', async () => {
       useAndroidHardwareBack();
       const { onExit, onRequestStop } = setup();

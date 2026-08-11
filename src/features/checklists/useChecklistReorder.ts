@@ -20,7 +20,21 @@ import { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
 import { moveItem } from './reorder';
 
-const HOLD_TO_REORDER_MS = 350;
+export const CHECKLIST_REORDER_HOLD_MS = 350;
+const EDGE_AUTOSCROLL_THRESHOLD = 56;
+const EDGE_AUTOSCROLL_MAX_SPEED = 480;
+const MAX_AUTOSCROLL_FRAME_MS = 32;
+
+export function getEdgeAutoscrollDelta(
+  distanceIntoEdge: number,
+  elapsedMs: number,
+): number {
+  const intensity = Math.min(
+    1,
+    Math.max(0, distanceIntoEdge) / EDGE_AUTOSCROLL_THRESHOLD,
+  );
+  return EDGE_AUTOSCROLL_MAX_SPEED * intensity * Math.max(0, elapsedMs) / 1000;
+}
 
 export type ReorderItem = { localId: string; text: string };
 type RowLayout = { y: number; height: number };
@@ -78,6 +92,7 @@ export function useChecklistReorder({
   const dragBaseTop = useRef(0);
   const dragPageY = useRef<number | null>(null);
   const autoscrollFrame = useRef<number | null>(null);
+  const lastAutoscrollTime = useRef<number | null>(null);
   const dragOffset = useSharedValue(0);
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -105,23 +120,35 @@ export function useChecklistReorder({
     return index;
   };
 
-  const autoscrollNearEdge = (pageY: number): boolean => {
+  const autoscrollNearEdge = (pageY: number, elapsedMs: number): boolean => {
     const maxY = Math.max(0, contentHeight.current - viewportHeight.current);
     if (!viewportHeight.current || !maxY) return false;
 
-    const threshold = 56;
-    const step = 32;
     const viewportY = pageY - viewportTop.current;
-    let nextY = scrollY.current;
-    if (viewportY < threshold) {
-      nextY = Math.max(0, scrollY.current - step);
-    } else if (viewportHeight.current - viewportY < threshold) {
-      nextY = Math.min(maxY, scrollY.current + step);
-    }
-    if (nextY === scrollY.current) return false;
+    const distanceFromBottom = viewportHeight.current - viewportY;
+    const direction = viewportY < EDGE_AUTOSCROLL_THRESHOLD
+      ? -1
+      : distanceFromBottom < EDGE_AUTOSCROLL_THRESHOLD
+        ? 1
+        : 0;
+    if (!direction) return false;
+    const distanceIntoEdge = direction < 0
+      ? EDGE_AUTOSCROLL_THRESHOLD - Math.max(0, viewportY)
+      : EDGE_AUTOSCROLL_THRESHOLD - Math.max(0, distanceFromBottom);
+    const delta = getEdgeAutoscrollDelta(
+      distanceIntoEdge,
+      Math.min(MAX_AUTOSCROLL_FRAME_MS, elapsedMs),
+    );
+    const nextY = Math.min(
+      maxY,
+      Math.max(0, scrollY.current + direction * delta),
+    );
+    if (nextY === scrollY.current && delta > 0) return false;
 
-    scrollY.current = nextY;
-    scrollRef.current?.scrollTo({ y: nextY, animated: false });
+    if (nextY !== scrollY.current) {
+      scrollY.current = nextY;
+      scrollRef.current?.scrollTo({ y: nextY, animated: false });
+    }
     return true;
   };
 
@@ -146,17 +173,24 @@ export function useChecklistReorder({
     setDrag(dragStateFrom(current));
   };
 
-  const continueEdgeAutoscroll = () => {
+  const continueEdgeAutoscroll = (timestamp: number) => {
     autoscrollFrame.current = null;
     const pageY = dragPageY.current;
     if (pageY == null || !dragRef.current) return;
-    if (!autoscrollNearEdge(pageY)) return;
+    const previousTime = lastAutoscrollTime.current;
+    lastAutoscrollTime.current = timestamp;
+    const elapsedMs = previousTime == null ? 0 : timestamp - previousTime;
+    if (!autoscrollNearEdge(pageY, elapsedMs)) {
+      lastAutoscrollTime.current = null;
+      return;
+    }
     updateDragPosition(pageY);
     autoscrollFrame.current = requestAnimationFrame(continueEdgeAutoscroll);
   };
 
   const cancelEdgeAutoscroll = () => {
     dragPageY.current = null;
+    lastAutoscrollTime.current = null;
     if (autoscrollFrame.current != null) {
       cancelAnimationFrame(autoscrollFrame.current);
       autoscrollFrame.current = null;
@@ -194,9 +228,12 @@ export function useChecklistReorder({
   const updateDrag = (pageY: number) => {
     if (!dragRef.current) return;
     dragPageY.current = pageY;
-    const scrolled = autoscrollNearEdge(pageY);
     updateDragPosition(pageY);
-    if (scrolled && autoscrollFrame.current == null) {
+    if (
+      autoscrollFrame.current == null &&
+      autoscrollNearEdge(pageY, 0)
+    ) {
+      lastAutoscrollTime.current = null;
       autoscrollFrame.current = requestAnimationFrame(continueEdgeAutoscroll);
     }
   };
@@ -227,7 +264,7 @@ export function useChecklistReorder({
   const gestureFor = (item: ReorderItem) =>
     Gesture.Pan()
       .withTestId(`item-hold-gesture-${item.localId}`)
-      .activateAfterLongPress(HOLD_TO_REORDER_MS)
+      .activateAfterLongPress(CHECKLIST_REORDER_HOLD_MS)
       .maxPointers(1)
       .shouldCancelWhenOutside(false)
       .blocksExternalGesture(scrollRef as never)

@@ -1,11 +1,17 @@
 import {
   RUN_ITEM_GAP,
+  RUN_TRANSITION_DURATION_MS,
   getRunItemPresentation,
   getRunProgressPalette,
   getRunTrackOffset,
 } from './runPresentation';
 
 describe('run item presentation', () => {
+  it('keeps run movement within the approved gentle transition range', () => {
+    expect(RUN_TRANSITION_DURATION_MS).toBeGreaterThanOrEqual(420);
+    expect(RUN_TRANSITION_DURATION_MS).toBeLessThanOrEqual(500);
+  });
+
   it('keeps each current item at the same focus position as the track advances', () => {
     for (let currentIndex = 0; currentIndex < 17; currentIndex += 1) {
       const itemPosition = currentIndex * RUN_ITEM_GAP;

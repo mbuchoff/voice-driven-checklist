@@ -20,6 +20,7 @@ import { useTheme } from '@/src/theme/useTheme';
 import { parseCommand, parseInterimCommand } from './commandParser';
 import { initialRunState, runReducer } from './runReducer';
 import { ActiveRunView, CompletionView } from './RunScreenView';
+import { RUN_TRANSITION_DURATION_MS } from './runPresentation';
 import type { ChecklistRunSnapshot } from './types';
 
 const LOCALE = 'en-US';
@@ -114,13 +115,17 @@ export function RunScreen({
       return;
     }
     let cancelled = false;
+    let changedSinceQuery = false;
     const subscription = AccessibilityInfo.addEventListener(
       'screenReaderChanged',
-      setTalkBackEnabled,
+      (enabled) => {
+        changedSinceQuery = true;
+        setTalkBackEnabled(enabled);
+      },
     );
     void AccessibilityInfo.isScreenReaderEnabled().then(
       (enabled) => {
-        if (!cancelled) setTalkBackEnabled(enabled);
+        if (!cancelled && !changedSinceQuery) setTalkBackEnabled(enabled);
       },
       () => undefined,
     );
@@ -132,7 +137,7 @@ export function RunScreen({
 
   useEffect(() => {
     animatedCurrentIndex.value = withTiming(state.currentItemIndex, {
-      duration: 240,
+      duration: RUN_TRANSITION_DURATION_MS,
     });
   }, [animatedCurrentIndex, state.currentItemIndex]);
 
