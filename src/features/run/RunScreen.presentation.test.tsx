@@ -77,6 +77,19 @@ describe('RunScreen presentation', () => {
       expect(center.r).toBeLessThan(track.r);
     });
 
+    it('stacks the progress orbit above overflowing checklist rows', async () => {
+      setup();
+      await flush();
+
+      const orbitStyle = StyleSheet.flatten(
+        screen.getByTestId('run-progress-orbit').props.style,
+      );
+      const stageStyle = StyleSheet.flatten(
+        screen.getByTestId('run-items-stage').props.style,
+      );
+      expect(orbitStyle.zIndex).toBeGreaterThan(stageStyle.zIndex ?? 0);
+    });
+
     it('centers the title independently of the stop control width', async () => {
       setup();
       await flush();

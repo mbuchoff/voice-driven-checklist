@@ -549,7 +549,15 @@ function ProgressOrbit({
       (1 - (animatedCurrentIndex.value + 1) / Math.max(total, 1)),
   }));
   return (
-    <View style={{ alignItems: 'center', paddingTop: 6 }}>
+    <View
+      testID="run-progress-orbit"
+      style={{
+        position: 'relative',
+        zIndex: 1,
+        alignItems: 'center',
+        paddingTop: 6,
+      }}
+    >
       <View
         style={{
           width: size,
