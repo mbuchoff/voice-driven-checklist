@@ -115,8 +115,11 @@ describe('ChecklistEditor', () => {
     });
 
     it('focuses and scrolls every newly added multiline step above the visible keyboard', async () => {
-      const scrollToEnd = jest
-        .spyOn(ScrollView.prototype, 'scrollToEnd')
+      const revealInput = jest
+        .spyOn(
+          ScrollView.prototype,
+          'scrollResponderScrollNativeHandleToKeyboard',
+        )
         .mockImplementation(jest.fn());
       const keyboardListener = jest.spyOn(Keyboard, 'addListener');
       const database = await setupDb();
@@ -147,8 +150,8 @@ describe('ChecklistEditor', () => {
         screen.getByTestId('checklist-editor-scroll').props
           .contentContainerStyle.paddingBottom,
       ).toBeGreaterThan(48);
-      expect(scrollToEnd).toHaveBeenCalled();
-      scrollToEnd.mockClear();
+      expect(revealInput).toHaveBeenCalled();
+      revealInput.mockClear();
 
       fireEvent.press(screen.getByTestId('add-item'));
       expect(screen.getByTestId('item-text-1').props.autoFocus).toBe(false);
@@ -159,12 +162,12 @@ describe('ChecklistEditor', () => {
         100,
         2_200,
       );
-      expect(scrollToEnd).toHaveBeenCalled();
+      expect(revealInput).toHaveBeenCalled();
 
       fireEvent(screen.getByTestId('item-text-2'), 'blur');
       expect(screen.getByTestId('item-text-2').props.autoFocus).toBe(false);
 
-      scrollToEnd.mockRestore();
+      revealInput.mockRestore();
       keyboardListener.mockRestore();
     });
 
@@ -291,6 +294,57 @@ describe('ChecklistEditor', () => {
   });
 
   describe('edit mode', () => {
+    it('reveals a tapped existing step instead of scrolling to the checklist end', async () => {
+      jest
+        .spyOn(global, 'requestAnimationFrame')
+        .mockImplementation((callback) => {
+          callback(0);
+          return 1;
+        });
+      const revealInput = jest
+        .spyOn(
+          ScrollView.prototype,
+          'scrollResponderScrollNativeHandleToKeyboard',
+        )
+        .mockImplementation(jest.fn());
+      const scrollToEnd = jest
+        .spyOn(ScrollView.prototype, 'scrollToEnd')
+        .mockImplementation(jest.fn());
+      const keyboardListener = jest.spyOn(Keyboard, 'addListener');
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'keep the selected row visible',
+        items: Array.from({ length: 8 }, (_, index) => ({
+          text: `step ${index + 1}`,
+        })),
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+      fireEvent(screen.getByTestId('checklist-editor-scroll'), 'layout', {
+        nativeEvent: {
+          layout: { x: 0, y: 84, width: 360, height: 500 },
+        },
+      });
+
+      tapToEdit(4);
+      const keyboardShown = keyboardListener.mock.calls
+        .filter(([event]) => event === 'keyboardDidShow')
+        .at(-1);
+      expect(keyboardShown).toBeDefined();
+      act(() => {
+        keyboardShown?.[1]({ endCoordinates: { screenY: 400 } } as never);
+      });
+
+      expect(revealInput).toHaveBeenCalledWith(expect.anything(), 108, true);
+      expect(scrollToEnd).not.toHaveBeenCalled();
+    });
+
     it('activates reordering from the whole row without a visible drag handle', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {

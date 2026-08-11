@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -13,6 +14,7 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import {
   Gesture,
@@ -44,6 +46,7 @@ import {
 } from './validation';
 
 type EditorItem = ReorderItem;
+const EDITOR_KEYBOARD_OFFSET = 24;
 
 export type ChecklistEditorProps = {
   initialChecklist?: Checklist;
@@ -92,6 +95,7 @@ export function ChecklistEditor({
   const database = useDatabase();
   const theme = useTheme();
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const editorViewportTop = useRef(0);
   const itemInputRefs = useRef<
     Record<string, ComponentRef<typeof TextInput> | null>
   >({});
@@ -116,9 +120,20 @@ export function ChecklistEditor({
     setContentHeight,
   } = useChecklistReorder({ items, setItems, scrollRef });
 
-  const scrollFocusedItemIntoView = () => {
-    if (!focusItemId || keyboardClearance <= 0) return;
-    scrollRef.current?.scrollToEnd({ animated: true });
+  const scrollFocusedItemIntoView = useCallback(() => {
+    if (!focusItemId) return;
+    const input = itemInputRefs.current[focusItemId];
+    if (!input) return;
+    scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(
+      input,
+      editorViewportTop.current + EDITOR_KEYBOARD_OFFSET,
+      true,
+    );
+  }, [focusItemId]);
+
+  const handleViewportLayout = (event: LayoutChangeEvent) => {
+    editorViewportTop.current = event.nativeEvent.layout.y;
+    onViewportLayout(event);
   };
 
   useEffect(() => {
@@ -128,11 +143,6 @@ export function ChecklistEditor({
         Dimensions.get('screen').height - event.endCoordinates.screenY,
       );
       setKeyboardClearance(clearance);
-      if (focusItemId) {
-        requestAnimationFrame(() => {
-          scrollRef.current?.scrollToEnd({ animated: true });
-        });
-      }
     });
     const hidden = Keyboard.addListener('keyboardDidHide', () => {
       setKeyboardClearance(0);
@@ -141,12 +151,18 @@ export function ChecklistEditor({
       shown.remove();
       hidden.remove();
     };
-  }, [focusItemId]);
+  }, []);
 
   useEffect(() => {
     if (!focusItemId) return;
     focusEditorInput(itemInputRefs.current[focusItemId]);
   }, [focusItemId]);
+
+  useEffect(() => {
+    if (!focusItemId || keyboardClearance <= 0) return;
+    const frame = requestAnimationFrame(scrollFocusedItemIntoView);
+    return () => cancelAnimationFrame(frame);
+  }, [focusItemId, keyboardClearance, scrollFocusedItemIntoView]);
 
   const updateItemText = (localId: string, text: string) => {
     setItems((current) =>
@@ -281,10 +297,10 @@ export function ChecklistEditor({
           keyboardDismissMode="interactive"
           scrollEnabled={!drag}
           testID="checklist-editor-scroll"
-          onLayout={onViewportLayout}
+          onLayout={handleViewportLayout}
           onContentSizeChange={(_, height) => {
             setContentHeight(height);
-            scrollFocusedItemIntoView();
+            if (keyboardClearance > 0) scrollFocusedItemIntoView();
           }}
           onScroll={onScroll}
           scrollEventThrottle={16}
