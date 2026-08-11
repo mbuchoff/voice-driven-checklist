@@ -590,7 +590,7 @@ export function RunScreen({
         surfaceColor={theme.runSurface}
       />
 
-      <View testID="run-items-stage" style={{ flex: 1, overflow: 'hidden' }}>
+      <View testID="run-items-stage" style={{ flex: 1, overflow: 'visible' }}>
         <Animated.View
           testID="run-track"
           style={[

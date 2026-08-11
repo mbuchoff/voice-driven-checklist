@@ -195,6 +195,16 @@ describe('RunScreen', () => {
       });
     });
 
+    it('lets the full step track extend beyond the focus stage', async () => {
+      setup();
+      await flush();
+
+      const stageStyle = StyleSheet.flatten(
+        screen.getByTestId('run-items-stage').props.style,
+      );
+      expect(stageStyle.overflow ?? 'visible').toBe('visible');
+    });
+
     it('clears native blur when a background item becomes current', async () => {
       Object.defineProperty(Platform, 'OS', {
         configurable: true,
