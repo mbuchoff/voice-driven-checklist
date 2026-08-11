@@ -1,4 +1,11 @@
-import { Fragment, useEffect, useRef, useState, type ComponentRef } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ComponentRef,
+} from 'react';
 import {
   Dimensions,
   Keyboard,
@@ -27,6 +34,8 @@ import {
   CHECKLIST_REORDER_HOLD_MS,
   animateEditorRows,
   useChecklistReorder,
+  useChecklistReorderRowStyle,
+  type ChecklistReorderMotion,
   type ReorderItem,
 } from './useChecklistReorder';
 import {
@@ -60,6 +69,21 @@ function initialItems(checklist?: Checklist): EditorItem[] {
   return [makeBlankItem()];
 }
 
+type ReorderableChecklistRowProps = ComponentProps<typeof Animated.View> & {
+  itemIndex: number;
+  reorderMotion: ChecklistReorderMotion;
+};
+
+function ReorderableChecklistRow({
+  itemIndex,
+  reorderMotion,
+  style,
+  ...props
+}: ReorderableChecklistRowProps) {
+  const reorderStyle = useChecklistReorderRowStyle(itemIndex, reorderMotion);
+  return <Animated.View {...props} style={[style, reorderStyle]} />;
+}
+
 export function ChecklistEditor({
   initialChecklist,
   onSaved,
@@ -82,11 +106,13 @@ export function ChecklistEditor({
   const {
     drag,
     dragPreviewStyle,
+    dropTargetStyle,
     gestureFor,
     moveItemByAction,
     onRowLayout,
     onScroll,
     onViewportLayout,
+    reorderMotion,
     setContentHeight,
   } = useChecklistReorder({ items, setItems, scrollRef });
 
@@ -148,17 +174,20 @@ export function ChecklistEditor({
 
   const renderDropTarget = (index: number) =>
     drag?.to === index ? (
-      <View
+      <Animated.View
         key={`drop-target-${index}`}
         testID={`item-drop-target-${index}`}
-        style={{
-          height: drag.height,
-          borderRadius: 18,
-          borderWidth: 2,
-          borderStyle: 'dashed',
-          borderColor: theme.primary,
-          backgroundColor: theme.surfaceAlt,
-        }}
+        style={[
+          {
+            height: drag.height,
+            borderRadius: 18,
+            borderWidth: 2,
+            borderStyle: 'dashed',
+            borderColor: theme.primary,
+            backgroundColor: theme.surfaceAlt,
+          },
+          dropTargetStyle,
+        ]}
       />
     ) : null;
 
@@ -323,14 +352,14 @@ export function ChecklistEditor({
                 const isActive = drag?.localId === item.localId;
                 const isEditing = focusItemId === item.localId;
                 const editGesture = Gesture.Tap()
-                  .withTestId(`item-edit-gesture-${item.localId}`)
+                  .withTestId(`item-edit-gesture-${item.localId}-${index}`)
                   .maxDuration(CHECKLIST_REORDER_HOLD_MS - 1)
                   .runOnJS(true)
                   .onEnd((_event, success) => {
                     if (success) setFocusItemId(item.localId);
                   });
                 const rowInteraction = Gesture.Exclusive(
-                  gestureFor(item),
+                  gestureFor(item, index),
                   editGesture,
                 );
                 const dropTarget = isActive
@@ -342,7 +371,9 @@ export function ChecklistEditor({
                   <Fragment key={item.localId}>
                     {dropTarget}
                     <GestureDetector gesture={rowInteraction}>
-                      <View
+                      <ReorderableChecklistRow
+                        itemIndex={index}
+                        reorderMotion={reorderMotion}
                         testID={`item-row-${index}`}
                         nativeID={item.localId}
                         accessibilityLabel={`Hold row ${index + 1} to reorder`}
@@ -446,7 +477,7 @@ export function ChecklistEditor({
                             testID={`delete-step-icon-${index}`}
                           />
                         </Pressable>
-                      </View>
+                      </ReorderableChecklistRow>
                     </GestureDetector>
                   </Fragment>
                 );
