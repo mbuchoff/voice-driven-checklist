@@ -6,7 +6,7 @@ import { runMigrations } from '@/src/db/migrations';
 import { createTestDatabase } from '@/src/test/createTestDatabase';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
-import { ChecklistEditor } from './ChecklistEditor';
+import { ChecklistEditor, focusEditorInput } from './ChecklistEditor';
 import { createChecklist, getChecklist } from './repository';
 
 const { fireGestureHandler, getByGestureTestId } = jest.requireActual(
@@ -54,7 +54,23 @@ function cancelRowDrag(gesture: GestureType) {
   });
 }
 
+function tapToEdit(index: number) {
+  const localId = screen.getByTestId(`item-row-${index}`).props.nativeID;
+  const gesture = getByGestureTestId(`item-edit-gesture-${localId}`);
+  act(() => {
+    gesture.handlers.onEnd?.({} as never, true);
+  });
+}
+
 describe('ChecklistEditor', () => {
+  it('requests native focus when a step enters editing', () => {
+    const focus = jest.fn();
+
+    focusEditorInput({ focus });
+
+    expect(focus).toHaveBeenCalledTimes(1);
+  });
+
   describe('create mode', () => {
     it('renders an empty form with a single blank item row by default', async () => {
       const database = await setupDb();
@@ -186,7 +202,7 @@ describe('ChecklistEditor', () => {
       );
 
       fireEvent.changeText(screen.getByTestId('title-input'), '  Groceries  ');
-      fireEvent.press(screen.getByTestId('item-edit-0'));
+      tapToEdit(0);
       fireEvent.changeText(screen.getByTestId('item-text-0'), '  Milk  ');
       fireEvent.press(screen.getByTestId('add-item'));
       fireEvent.changeText(screen.getByTestId('item-text-1'), '  Bread  ');
@@ -211,7 +227,7 @@ describe('ChecklistEditor', () => {
         <ChecklistEditor onSaved={onSaved} onCancel={jest.fn()} />,
         { database },
       );
-      fireEvent.press(screen.getByTestId('item-edit-0'));
+      tapToEdit(0);
       fireEvent.changeText(screen.getByTestId('item-text-0'), 'valid');
       fireEvent.press(screen.getByTestId('save'));
 
@@ -228,7 +244,7 @@ describe('ChecklistEditor', () => {
       );
       fireEvent.changeText(screen.getByTestId('title-input'), 'Title');
       fireEvent.press(screen.getByTestId('add-item'));
-      fireEvent.press(screen.getByTestId('item-edit-0'));
+      tapToEdit(0);
       fireEvent.changeText(screen.getByTestId('item-text-0'), 'valid');
       // Leave item-text-1 blank.
       fireEvent.press(screen.getByTestId('save'));
@@ -323,7 +339,7 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-text-1').props.value).toBe('two');
 
       fireEvent.changeText(screen.getByTestId('title-input'), 'Renamed');
-      fireEvent.press(screen.getByTestId('item-edit-0'));
+      tapToEdit(0);
       fireEvent.changeText(screen.getByTestId('item-text-0'), 'uno');
       fireEvent.press(screen.getByTestId('save'));
 
@@ -656,13 +672,28 @@ describe('ChecklistEditor', () => {
       );
 
       expect(screen.getByTestId('item-text-0').props.editable).toBe(false);
-      expect(screen.getByTestId('item-text-0').props.pointerEvents).toBe(
+      expect(screen.getByTestId('item-edit-0').props.pointerEvents).toBe(
         'none',
       );
 
-      fireEvent.press(screen.getByTestId('item-edit-0'));
+      const localId = screen.getByTestId('item-row-0').props.nativeID;
+      const rowGesture = getByGestureTestId(
+        `item-hold-gesture-${localId}`,
+      );
+      const editGesture = getByGestureTestId(
+        `item-edit-gesture-${localId}`,
+      );
+      expect(editGesture.config.maxDurationMs).toBeLessThan(
+        rowGesture.config.activateAfterLongPress as number,
+      );
+      expect(editGesture.config.requireToFail).toContain(
+        rowGesture.handlerTag,
+      );
+      act(() => {
+        editGesture.handlers.onEnd?.({} as never, true);
+      });
       expect(screen.getByTestId('item-text-0').props.editable).toBe(true);
-      expect(screen.getByTestId('item-text-0').props.pointerEvents).toBe(
+      expect(screen.getByTestId('item-edit-0').props.pointerEvents).toBe(
         'auto',
       );
 

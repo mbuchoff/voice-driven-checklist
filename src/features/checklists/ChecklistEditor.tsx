@@ -57,6 +57,10 @@ export type ChecklistEditorProps = {
   onCancel: () => void;
 };
 
+export function focusEditorInput(input: { focus: () => void } | null) {
+  input?.focus();
+}
+
 function makeBlankItem(): EditorItem {
   return { localId: uuidv4(), text: '' };
 }
@@ -99,6 +103,9 @@ export function ChecklistEditor({
   const database = useDatabase();
   const theme = useTheme();
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const itemInputRefs = useRef<
+    Record<string, ComponentRef<typeof TextInput> | null>
+  >({});
   const rowLayouts = useRef<RowLayout[]>([]);
   const dragRef = useRef<DragContext | null>(null);
   const scrollY = useRef(0);
@@ -142,6 +149,11 @@ export function ChecklistEditor({
       shown.remove();
       hidden.remove();
     };
+  }, [focusItemId]);
+
+  useEffect(() => {
+    if (!focusItemId) return;
+    focusEditorInput(itemInputRefs.current[focusItemId]);
   }, [focusItemId]);
 
   const updateItemText = (localId: string, text: string) => {
@@ -468,6 +480,17 @@ export function ChecklistEditor({
                 const error = itemErrors[item.localId];
                 const isActive = drag?.localId === item.localId;
                 const isEditing = focusItemId === item.localId;
+                const editGesture = Gesture.Tap()
+                  .withTestId(`item-edit-gesture-${item.localId}`)
+                  .maxDuration(HOLD_TO_REORDER_MS - 1)
+                  .runOnJS(true)
+                  .onEnd((_event, success) => {
+                    if (success) setFocusItemId(item.localId);
+                  });
+                const rowInteraction = Gesture.Exclusive(
+                  gestureFor(item),
+                  editGesture,
+                );
                 const dropTarget = isActive
                   ? null
                   : renderDropTarget(dropIndex);
@@ -476,7 +499,7 @@ export function ChecklistEditor({
                 return (
                   <Fragment key={item.localId}>
                     {dropTarget}
-                    <GestureDetector gesture={gestureFor(item)}>
+                    <GestureDetector gesture={rowInteraction}>
                       <View
                         testID={`item-row-${index}`}
                         nativeID={item.localId}
@@ -527,17 +550,19 @@ export function ChecklistEditor({
                           <Text style={{ color: theme.primaryDark, fontWeight: '800', fontSize: 12 }}>{index + 1}</Text>
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Pressable
+                          <View
                             testID={`item-edit-${index}`}
-                            onPress={() => setFocusItemId(item.localId)}
+                            pointerEvents={isEditing ? 'auto' : 'none'}
                           >
                             <TextInput
+                              ref={(input) => {
+                                itemInputRefs.current[item.localId] = input;
+                              }}
                               testID={`item-text-${index}`}
                               value={item.text}
                               multiline
                               scrollEnabled={false}
                               editable={isEditing}
-                              pointerEvents={isEditing ? 'auto' : 'none'}
                               autoFocus={isEditing}
                               onBlur={() => {
                                 setFocusItemId((current) =>
@@ -557,7 +582,7 @@ export function ChecklistEditor({
                                 lineHeight: 21,
                               }}
                             />
-                          </Pressable>
+                          </View>
                           {error ? (
                             <Text testID={`item-error-${index}`} style={{ color: theme.danger, paddingHorizontal: 6 }}>
                               {error}
