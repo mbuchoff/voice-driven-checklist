@@ -1,8 +1,11 @@
+import { memo, useEffect, useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Animated, {
   interpolate,
   useAnimatedProps,
   useAnimatedStyle,
+  useSharedValue,
+  withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,9 +17,13 @@ import type { Palette } from '@/src/theme/palette';
 
 import {
   RUN_ITEM_GAP,
+  RUN_TRANSITION_CONFIG,
   getRunItemPresentation,
+  getRunItemStatus,
   getRunProgressPalette,
   getRunTrackOffset,
+  type RunItemBackgroundStatus,
+  type RunItemStatus,
 } from './runPresentation';
 import type { ChecklistRunState } from './types';
 
@@ -315,8 +322,7 @@ export function ActiveRunView({
             <RunItem
               key={item.id}
               index={index}
-              currentIndex={state.currentItemIndex}
-              animatedCurrentIndex={animatedCurrentIndex}
+              status={getRunItemStatus(index, state.currentItemIndex)}
               text={item.text}
               androidApi={androidApi}
               textColor={theme.runText}
@@ -443,26 +449,37 @@ export function ActiveRunView({
   );
 }
 
-function RunItem({
+const RunItem = memo(function RunItem({
   index,
-  currentIndex,
-  animatedCurrentIndex,
+  status,
   text,
   androidApi,
   textColor,
 }: {
   index: number;
-  currentIndex: number;
-  animatedCurrentIndex: SharedValue<number>;
+  status: RunItemStatus;
   text: string;
   androidApi: number;
   textColor: string;
 }) {
-  const selected = index === currentIndex;
+  const selected = status === 'current';
+  const focusProgress = useSharedValue(selected ? 1 : 0);
+  const previousStatus = useRef(status);
+  const backgroundStatus: RunItemBackgroundStatus = selected
+    ? previousStatus.current === 'past'
+      ? 'past'
+      : 'upcoming'
+    : status;
+
+  useEffect(() => {
+    focusProgress.value = withTiming(selected ? 1 : 0, RUN_TRANSITION_CONFIG);
+    previousStatus.current = status;
+  }, [focusProgress, selected, status]);
+
   const animatedStyle = useAnimatedStyle(() => {
     const presentation = getRunItemPresentation(
-      index,
-      animatedCurrentIndex.value,
+      backgroundStatus,
+      focusProgress.value,
       androidApi,
     );
     const common = {
@@ -477,7 +494,7 @@ function RunItem({
       ...common,
       filter: [{ blur: presentation.blurRadius }],
     };
-  }, [androidApi, animatedCurrentIndex, index]);
+  }, [androidApi, backgroundStatus, focusProgress]);
 
   return (
     <Animated.View
@@ -514,7 +531,7 @@ function RunItem({
       </Text>
     </Animated.View>
   );
-}
+});
 
 function ProgressOrbit({
   current,

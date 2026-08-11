@@ -1,6 +1,8 @@
 import {
   RUN_ITEM_GAP,
   RUN_TRANSITION_DURATION_MS,
+  RUN_TRANSITION_EASING,
+  getRunItemStatus,
   getRunItemPresentation,
   getRunProgressPalette,
   getRunTrackOffset,
@@ -10,6 +12,7 @@ describe('run item presentation', () => {
   it('keeps run movement within the approved gentle transition range', () => {
     expect(RUN_TRANSITION_DURATION_MS).toBeGreaterThanOrEqual(420);
     expect(RUN_TRANSITION_DURATION_MS).toBeLessThanOrEqual(500);
+    expect(RUN_TRANSITION_EASING.factory).toEqual(expect.any(Function));
   });
 
   it('keeps each current item at the same focus position as the track advances', () => {
@@ -20,56 +23,50 @@ describe('run item presentation', () => {
   });
 
   it('keeps the current item sharp and visually prominent', () => {
-    expect(getRunItemPresentation(4, 4, 36)).toEqual({
+    expect(getRunItemPresentation('upcoming', 1, 36)).toEqual({
       opacity: 1,
       scale: 1,
       blurRadius: 0,
     });
-    expect(getRunItemPresentation(3, 4, 36).opacity).toBeLessThan(1);
-    expect(getRunItemPresentation(3, 4, 36).scale).toBeLessThan(1);
+    expect(getRunItemPresentation('past', 0, 36).opacity).toBeLessThan(1);
+    expect(getRunItemPresentation('past', 0, 36).scale).toBeLessThan(1);
   });
 
   it('uses native blur on API 31+ and the opacity/scale fallback below it', () => {
-    expect(getRunItemPresentation(3, 4, 31).blurRadius).toBeGreaterThan(0);
-    expect(getRunItemPresentation(3, 4, 30).blurRadius).toBe(0);
-    expect(getRunItemPresentation(3, 4, 30).opacity).toBeLessThan(1);
-    expect(getRunItemPresentation(3, 4, 30).scale).toBeLessThan(1);
+    expect(getRunItemPresentation('past', 0, 31).blurRadius).toBeGreaterThan(0);
+    expect(getRunItemPresentation('past', 0, 30).blurRadius).toBe(0);
+    expect(getRunItemPresentation('past', 0, 30).opacity).toBeLessThan(1);
+    expect(getRunItemPresentation('past', 0, 30).scale).toBeLessThan(1);
   });
 
-  it('moves both adjacent rows smoothly through the shared transition', () => {
-    const outgoing = getRunItemPresentation(0, 0.5, 36);
-    const incoming = getRunItemPresentation(1, 0.5, 36);
+  it('moves incoming and outgoing rows smoothly between their endpoints', () => {
+    for (const background of ['past', 'upcoming'] as const) {
+      const backgroundPresentation = getRunItemPresentation(background, 0, 36);
+      const transitioning = getRunItemPresentation(background, 0.5, 36);
+      const current = getRunItemPresentation(background, 1, 36);
 
-    expect(outgoing).toEqual(incoming);
-    expect(outgoing.opacity).toBeGreaterThan(
-      getRunItemPresentation(0, 1, 36).opacity,
-    );
-    expect(outgoing.opacity).toBeLessThan(
-      getRunItemPresentation(0, 0, 36).opacity,
-    );
-    expect(outgoing.scale).toBeGreaterThan(
-      getRunItemPresentation(0, 1, 36).scale,
-    );
-    expect(outgoing.scale).toBeLessThan(
-      getRunItemPresentation(0, 0, 36).scale,
-    );
-    expect(outgoing.blurRadius).toBeGreaterThan(0);
-    expect(outgoing.blurRadius).toBeLessThan(
-      getRunItemPresentation(0, 1, 36).blurRadius,
-    );
+      expect(transitioning.opacity).toBeGreaterThan(backgroundPresentation.opacity);
+      expect(transitioning.opacity).toBeLessThan(current.opacity);
+      expect(transitioning.scale).toBeGreaterThan(backgroundPresentation.scale);
+      expect(transitioning.scale).toBeLessThan(current.scale);
+      expect(transitioning.blurRadius).toBeGreaterThan(current.blurRadius);
+      expect(transitioning.blurRadius).toBeLessThan(backgroundPresentation.blurRadius);
+    }
   });
 
-  it('moves distant rows continuously instead of snapping their emphasis', () => {
-    const before = getRunItemPresentation(3, 0, 36);
-    const during = getRunItemPresentation(3, 0.5, 36);
-    const after = getRunItemPresentation(3, 1, 36);
+  it('changes emphasis on only the outgoing and incoming rows', () => {
+    const before = Array.from({ length: 17 }, (_, index) =>
+      getRunItemStatus(index, 8),
+    );
+    const after = Array.from({ length: 17 }, (_, index) =>
+      getRunItemStatus(index, 9),
+    );
 
-    expect(during.opacity).toBeGreaterThan(before.opacity);
-    expect(during.opacity).toBeLessThan(after.opacity);
-    expect(during.scale).toBeGreaterThan(before.scale);
-    expect(during.scale).toBeLessThan(after.scale);
-    expect(during.blurRadius).toBeLessThan(before.blurRadius);
-    expect(during.blurRadius).toBeGreaterThan(after.blurRadius);
+    expect(
+      before.flatMap((status, index) => status === after[index] ? [] : [index]),
+    ).toEqual([8, 9]);
+    expect(before[12]).toBe('upcoming');
+    expect(after[12]).toBe('upcoming');
   });
 
   it('uses the approved solid center and track behind progress', () => {

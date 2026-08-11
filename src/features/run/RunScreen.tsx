@@ -20,7 +20,7 @@ import { useTheme } from '@/src/theme/useTheme';
 import { parseCommand, parseInterimCommand } from './commandParser';
 import { initialRunState, runReducer } from './runReducer';
 import { ActiveRunView, CompletionView } from './RunScreenView';
-import { RUN_TRANSITION_DURATION_MS } from './runPresentation';
+import { RUN_TRANSITION_CONFIG } from './runPresentation';
 import type { ChecklistRunSnapshot } from './types';
 
 const LOCALE = 'en-US';
@@ -136,9 +136,10 @@ export function RunScreen({
   }, [screenReaderEnabled]);
 
   useEffect(() => {
-    animatedCurrentIndex.value = withTiming(state.currentItemIndex, {
-      duration: RUN_TRANSITION_DURATION_MS,
-    });
+    animatedCurrentIndex.value = withTiming(
+      state.currentItemIndex,
+      RUN_TRANSITION_CONFIG,
+    );
   }, [animatedCurrentIndex, state.currentItemIndex]);
 
   const runAction = useCallback(
