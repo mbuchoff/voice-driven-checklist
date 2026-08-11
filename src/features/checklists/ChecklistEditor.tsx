@@ -2,25 +2,17 @@ import { Fragment, useEffect, useRef, useState, type ComponentRef } from 'react'
 import {
   Dimensions,
   Keyboard,
-  LayoutAnimation,
   Pressable,
   Text,
   TextInput,
-  Vibration,
   View,
-  type LayoutChangeEvent,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from 'react-native';
 import {
   Gesture,
   GestureDetector,
   ScrollView,
 } from 'react-native-gesture-handler';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-} from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -30,8 +22,12 @@ import { useDatabase } from '@/src/db/DatabaseProvider';
 import { useTheme } from '@/src/theme/useTheme';
 
 import { createChecklist, updateChecklist } from './repository';
-import { moveItem } from './reorder';
 import type { Checklist } from './types';
+import {
+  animateEditorRows,
+  useChecklistReorder,
+  type ReorderItem,
+} from './useChecklistReorder';
 import {
   validateChecklistItemText,
   validateChecklistTitle,
@@ -39,21 +35,7 @@ import {
 
 const HOLD_TO_REORDER_MS = 350;
 
-type EditorItem = { localId: string; text: string };
-type RowLayout = { y: number; height: number };
-type DragState = {
-  localId: string;
-  text: string;
-  from: number;
-  to: number;
-  top: number;
-  height: number;
-};
-type DragContext = DragState & {
-  startCenterY: number;
-  startPageY: number;
-  startScrollY: number;
-};
+type EditorItem = ReorderItem;
 
 export type ChecklistEditorProps = {
   initialChecklist?: Checklist;
@@ -79,26 +61,6 @@ function initialItems(checklist?: Checklist): EditorItem[] {
   return [makeBlankItem()];
 }
 
-function dragStateFrom(context: DragContext): DragState {
-  return {
-    localId: context.localId,
-    text: context.text,
-    from: context.from,
-    to: context.to,
-    top: context.top,
-    height: context.height,
-  };
-}
-
-function animateRowsAside() {
-  LayoutAnimation.configureNext({
-    duration: 160,
-    create: { type: LayoutAnimation.Types.easeInEaseOut, property: 'opacity' },
-    update: { type: LayoutAnimation.Types.easeInEaseOut },
-    delete: { type: LayoutAnimation.Types.easeInEaseOut, property: 'opacity' },
-  });
-}
-
 export function ChecklistEditor({
   initialChecklist,
   onSaved,
@@ -110,28 +72,24 @@ export function ChecklistEditor({
   const itemInputRefs = useRef<
     Record<string, ComponentRef<typeof TextInput> | null>
   >({});
-  const rowLayouts = useRef<RowLayout[]>([]);
-  const dragRef = useRef<DragContext | null>(null);
-  const scrollY = useRef(0);
-  const viewportTop = useRef(0);
-  const viewportHeight = useRef(0);
-  const contentHeight = useRef(0);
-  const dragBaseTop = useRef(0);
-  const dragOffset = useSharedValue(0);
   const [title, setTitle] = useState(initialChecklist?.title ?? '');
   const [items, setItems] = useState<EditorItem[]>(() =>
     initialItems(initialChecklist),
   );
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
   const [focusItemId, setFocusItemId] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
-  const [drag, setDrag] = useState<DragState | null>(null);
   const [keyboardClearance, setKeyboardClearance] = useState(0);
-  const dragPreviewStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: dragOffset.value }],
-  }));
+  const {
+    drag,
+    dragPreviewStyle,
+    gestureFor,
+    moveItemByAction,
+    onRowLayout,
+    onScroll,
+    onViewportLayout,
+    setContentHeight,
+  } = useChecklistReorder({ items, setItems, scrollRef });
 
   const scrollFocusedItemIntoView = () => {
     if (!focusItemId || keyboardClearance <= 0) return;
@@ -180,142 +138,13 @@ export function ChecklistEditor({
   };
 
   const deleteItem = (localId: string) => {
-    animateRowsAside();
+    animateEditorRows();
     setItems((current) => current.filter((item) => item.localId !== localId));
     setItemErrors((current) => {
       const next = { ...current };
       delete next[localId];
       return next;
     });
-  };
-
-  const onRowLayout = (index: number, event: LayoutChangeEvent) => {
-    if (dragRef.current) return;
-    const { y, height } = event.nativeEvent.layout;
-    rowLayouts.current[index] = { y, height };
-  };
-
-  const dropIndexFor = (localId: string, contentY: number) => {
-    let index = 0;
-    const currentItems = itemsRef.current;
-    for (let itemIndex = 0; itemIndex < currentItems.length; itemIndex += 1) {
-      const item = currentItems[itemIndex];
-      if (item.localId === localId) continue;
-      const layout = rowLayouts.current[itemIndex];
-      if (layout && contentY < layout.y + layout.height / 2) return index;
-      index += 1;
-    }
-    return index;
-  };
-
-  const autoscrollNearEdge = (pageY: number) => {
-    const maxY = Math.max(0, contentHeight.current - viewportHeight.current);
-    if (!viewportHeight.current || !maxY) return;
-
-    const threshold = 56;
-    const step = 32;
-    const viewportY = pageY - viewportTop.current;
-    let nextY = scrollY.current;
-    if (viewportY < threshold) {
-      nextY = Math.max(0, scrollY.current - step);
-    } else if (viewportHeight.current - viewportY < threshold) {
-      nextY = Math.min(maxY, scrollY.current + step);
-    }
-    if (nextY === scrollY.current) return;
-
-    scrollY.current = nextY;
-    scrollRef.current?.scrollTo({ y: nextY, animated: false });
-  };
-
-  const startDrag = (localId: string, pageY: number) => {
-    const currentItems = itemsRef.current;
-    const index = currentItems.findIndex((item) => item.localId === localId);
-    if (index < 0) return;
-    const item = currentItems[index];
-    const layout = rowLayouts.current[index];
-    if (!layout || dragRef.current) return;
-
-    Keyboard.dismiss();
-    Vibration.vibrate(15);
-    const current: DragContext = {
-      localId: item.localId,
-      text: item.text,
-      from: index,
-      to: index,
-      top: layout.y,
-      height: layout.height,
-      startCenterY: layout.y + layout.height / 2,
-      startPageY: pageY,
-      startScrollY: scrollY.current,
-    };
-    dragBaseTop.current = current.top;
-    dragOffset.value = 0;
-    animateRowsAside();
-    dragRef.current = current;
-    setDrag(dragStateFrom(current));
-  };
-
-  const updateDrag = (pageY: number) => {
-    const current = dragRef.current;
-    if (!current) return;
-
-    autoscrollNearEdge(pageY);
-    const contentY =
-      current.startCenterY +
-      (pageY - current.startPageY) +
-      (scrollY.current - current.startScrollY);
-    const to = dropIndexFor(current.localId, contentY);
-    const targetChanged = to !== current.to;
-    current.to = to;
-    current.top = contentY - current.height / 2;
-    if (!targetChanged) {
-      dragOffset.value = current.top - dragBaseTop.current;
-      return;
-    }
-    dragBaseTop.current = current.top;
-    dragOffset.value = 0;
-    animateRowsAside();
-    setDrag(dragStateFrom(current));
-  };
-
-  const finishDrag = () => {
-    const current = dragRef.current;
-    dragRef.current = null;
-    if (!current) return;
-    animateRowsAside();
-    setDrag(null);
-    setItems((previous) => moveItem(previous, current.from, current.to));
-  };
-
-  const cancelDrag = () => {
-    if (!dragRef.current) return;
-    dragRef.current = null;
-    animateRowsAside();
-    setDrag(null);
-  };
-
-  const moveItemByAction = (index: number, delta: -1 | 1) => {
-    animateRowsAside();
-    setItems((previous) => moveItem(previous, index, index + delta));
-  };
-
-  const gestureFor = (item: EditorItem) =>
-    Gesture.Pan()
-      .withTestId(`item-hold-gesture-${item.localId}`)
-      .activateAfterLongPress(HOLD_TO_REORDER_MS)
-      .maxPointers(1)
-      .shouldCancelWhenOutside(false)
-      .blocksExternalGesture(scrollRef as never)
-      .runOnJS(true)
-      .onStart((event) => startDrag(item.localId, event.absoluteY))
-      .onUpdate((event) => updateDrag(event.absoluteY))
-      .onEnd(finishDrag)
-      .onFinalize((_event, success) => {
-        if (!success) cancelDrag();
-      });
-
-  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    scrollY.current = event.nativeEvent.contentOffset.y;
   };
 
   const renderDropTarget = (index: number) =>
@@ -424,13 +253,9 @@ export function ChecklistEditor({
           keyboardDismissMode="interactive"
           scrollEnabled={!drag}
           testID="checklist-editor-scroll"
-          onLayout={(event) => {
-            const { y, height } = event.nativeEvent.layout;
-            viewportTop.current = y;
-            viewportHeight.current = height;
-          }}
+          onLayout={onViewportLayout}
           onContentSizeChange={(_, height) => {
-            contentHeight.current = height;
+            setContentHeight(height);
             scrollFocusedItemIntoView();
           }}
           onScroll={onScroll}

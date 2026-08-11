@@ -1,7 +1,6 @@
 import {
   RUN_ITEM_GAP,
   getRunItemPresentation,
-  getRunItemPresentationAtPosition,
   getRunProgressPalette,
   getRunTrackOffset,
 } from './runPresentation';
@@ -32,8 +31,8 @@ describe('run item presentation', () => {
   });
 
   it('moves both adjacent rows smoothly through the shared transition', () => {
-    const outgoing = getRunItemPresentationAtPosition(0, 0.5, 36);
-    const incoming = getRunItemPresentationAtPosition(1, 0.5, 36);
+    const outgoing = getRunItemPresentation(0, 0.5, 36);
+    const incoming = getRunItemPresentation(1, 0.5, 36);
 
     expect(outgoing).toEqual(incoming);
     expect(outgoing.opacity).toBeGreaterThan(
@@ -55,9 +54,9 @@ describe('run item presentation', () => {
   });
 
   it('moves distant rows continuously instead of snapping their emphasis', () => {
-    const before = getRunItemPresentationAtPosition(3, 0, 36);
-    const during = getRunItemPresentationAtPosition(3, 0.5, 36);
-    const after = getRunItemPresentationAtPosition(3, 1, 36);
+    const before = getRunItemPresentation(3, 0, 36);
+    const during = getRunItemPresentation(3, 0.5, 36);
+    const after = getRunItemPresentation(3, 1, 36);
 
     expect(during.opacity).toBeGreaterThan(before.opacity);
     expect(during.opacity).toBeLessThan(after.opacity);
@@ -71,12 +70,16 @@ describe('run item presentation', () => {
     expect(getRunProgressPalette('dark')).toEqual({
       surface: '#193f34',
       track: 'rgba(255, 255, 255, 0.14)',
+      fill: '#ef916f',
+      labelOpacity: 0.64,
       centerBorder: 'transparent',
       shadow: '0 12px 32px rgba(7, 32, 24, 0.24)',
     });
     expect(getRunProgressPalette('light')).toEqual({
       surface: '#fffaf3',
       track: 'rgba(23, 56, 46, 0.12)',
+      fill: '#ef916f',
+      labelOpacity: 0.56,
       centerBorder: 'rgba(23, 56, 46, 0.06)',
       shadow: '0 13px 34px rgba(43, 74, 61, 0.13)',
     });

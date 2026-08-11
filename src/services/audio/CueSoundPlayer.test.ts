@@ -38,7 +38,7 @@ describe('CueSoundPlayer', () => {
     cues.prepare('wood');
     const prepared = mockedCreateAudioPlayer.mock.results.map((result) => result.value);
 
-    await cues.play('previous');
+    await expect(cues.play('previous')).resolves.toBe(true);
 
     expect(prepared[1].seekTo).toHaveBeenCalledWith(0);
     expect(prepared[1].play).toHaveBeenCalledTimes(1);
@@ -68,7 +68,7 @@ describe('CueSoundPlayer', () => {
     const prepared = mockedCreateAudioPlayer.mock.results.map((result) => result.value);
 
     cues.prepare('quiet');
-    await cues.play('complete');
+    await expect(cues.play('complete')).resolves.toBe(false);
 
     expect(prepared.every((player) => player.release.mock.calls.length === 1)).toBe(true);
     expect(prepared.every((player) => player.play.mock.calls.length === 0)).toBe(true);
@@ -82,7 +82,7 @@ describe('CueSoundPlayer', () => {
     const cues = new CueSoundPlayer();
 
     expect(() => cues.prepare('chime')).not.toThrow();
-    await expect(cues.play('next')).resolves.toBeUndefined();
+    await expect(cues.play('next')).resolves.toBe(false);
   });
 
   it('retries the same family after an interrupted setup', async () => {

@@ -14,7 +14,7 @@ import type { Palette } from '@/src/theme/palette';
 
 import {
   RUN_ITEM_GAP,
-  getRunItemPresentationAtPosition,
+  getRunItemPresentation,
   getRunProgressPalette,
   getRunTrackOffset,
 } from './runPresentation';
@@ -288,11 +288,13 @@ export function ActiveRunView({
       <ProgressOrbit
         current={state.currentItemIndex + 1}
         total={totalItems}
+        animatedCurrentIndex={animatedCurrentIndex}
         color={theme.runText}
         mutedColor={progressPalette.track}
-        accentColor={theme.accent}
+        accentColor={progressPalette.fill}
         surfaceColor={progressPalette.surface}
         centerBorderColor={progressPalette.centerBorder}
+        labelOpacity={progressPalette.labelOpacity}
         shadow={progressPalette.shadow}
       />
 
@@ -458,7 +460,7 @@ function RunItem({
 }) {
   const selected = index === currentIndex;
   const animatedStyle = useAnimatedStyle(() => {
-    const presentation = getRunItemPresentationAtPosition(
+    const presentation = getRunItemPresentation(
       index,
       animatedCurrentIndex.value,
       androidApi,
@@ -517,27 +519,35 @@ function RunItem({
 function ProgressOrbit({
   current,
   total,
+  animatedCurrentIndex,
   color,
   mutedColor,
   accentColor,
   surfaceColor,
   centerBorderColor,
+  labelOpacity,
   shadow,
 }: {
   current: number;
   total: number;
+  animatedCurrentIndex: SharedValue<number>;
   color: string;
   mutedColor: string;
   accentColor: string;
   surfaceColor: string;
   centerBorderColor: string;
+  labelOpacity: number;
   shadow: string;
 }) {
   const size = 116;
   const strokeWidth = 9;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const progress = current / Math.max(total, 1);
+  const animatedProgressProps = useAnimatedProps(() => ({
+    strokeDashoffset:
+      circumference *
+      (1 - (animatedCurrentIndex.value + 1) / Math.max(total, 1)),
+  }));
   return (
     <View style={{ alignItems: 'center', paddingTop: 6 }}>
       <View
@@ -566,7 +576,9 @@ function ProgressOrbit({
             stroke={mutedColor}
             strokeWidth={strokeWidth}
           />
-          <Circle
+          <AnimatedCircle
+            animatedProps={animatedProgressProps}
+            testID="run-progress-fill"
             cx={size / 2}
             cy={size / 2}
             r={radius}
@@ -574,7 +586,6 @@ function ProgressOrbit({
             stroke={accentColor}
             strokeWidth={strokeWidth}
             strokeDasharray={`${circumference} ${circumference}`}
-            strokeDashoffset={circumference * (1 - progress)}
             strokeLinecap="butt"
             rotation={-90}
             origin={`${size / 2}, ${size / 2}`}
@@ -595,7 +606,7 @@ function ProgressOrbit({
         <Text
           style={{
             color,
-            opacity: 0.64,
+            opacity: labelOpacity,
             fontSize: 9,
             fontWeight: '700',
             letterSpacing: 0.7,

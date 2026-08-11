@@ -1,92 +1,15 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, screen } from '@testing-library/react-native';
 import { Platform, processColor, StyleSheet } from 'react-native';
 
 import {
-  FakeSpeechPlaybackAdapter,
-  FakeSpeechRecognitionAdapter,
-} from '@/src/services/speech/fakes';
-import { DevicePreferencesProvider } from '@/src/features/settings/DevicePreferencesProvider';
-import { MemoryDevicePreferenceStore } from '@/src/features/settings/preferences';
-
-import { RunScreen, type RunScreenProps } from './RunScreen';
+  flushRunEffects as flush,
+  runSnapshot as snapshot,
+  setupRunScreen as setup,
+} from './RunScreen.testSupport';
 import { RUN_ITEM_GAP } from './runPresentation';
 import type { ChecklistRunSnapshot } from './types';
-
-const snapshot: ChecklistRunSnapshot = {
-  checklistId: 'cl-1',
-  checklistTitle: 'Demo',
-  items: [
-    { id: 'i1', text: 'Item one', order: 0 },
-    { id: 'i2', text: 'Item two', order: 1 },
-    { id: 'i3', text: 'Item three', order: 2 },
-  ],
-};
-
 const defaultPlatformOS = Platform.OS;
 const defaultPlatformVersion = Platform.Version;
-
-type RenderOptions = Partial<
-  Pick<
-    RunScreenProps,
-    | 'onExit'
-    | 'onRequestStop'
-    | 'onCompletion'
-    | 'onVoiceRunStart'
-    | 'onVoiceRunStop'
-    | 'initialAvailability'
-    | 'onStopHoldComplete'
-    | 'onCue'
-    | 'screenReaderEnabled'
-  >
-> & { snapshot?: ChecklistRunSnapshot };
-
-function setup(options: RenderOptions = {}) {
-  const playback = new FakeSpeechPlaybackAdapter();
-  const recognition = new FakeSpeechRecognitionAdapter();
-  const onExit = options.onExit ?? jest.fn();
-  const onRequestStop = options.onRequestStop ?? jest.fn();
-  const onStopHoldComplete = options.onStopHoldComplete ?? jest.fn();
-  const onCompletion = options.onCompletion ?? jest.fn();
-  const initialAvailability = options.initialAvailability ?? {
-    spokenPlaybackAvailable: true,
-    voiceControlAvailable: true,
-  };
-
-  const utils = render(
-    <DevicePreferencesProvider store={new MemoryDevicePreferenceStore()}>
-      <RunScreen
-        snapshot={options.snapshot ?? snapshot}
-        playback={playback}
-        recognition={recognition}
-        initialAvailability={initialAvailability}
-        onExit={onExit}
-        onRequestStop={onRequestStop}
-        onStopHoldComplete={onStopHoldComplete}
-        onCompletion={onCompletion}
-        onCue={options.onCue}
-        screenReaderEnabled={options.screenReaderEnabled}
-        onVoiceRunStart={options.onVoiceRunStart}
-        onVoiceRunStop={options.onVoiceRunStop}
-      />
-    </DevicePreferencesProvider>,
-  );
-
-  return {
-    ...utils,
-    playback,
-    recognition,
-    onExit,
-    onRequestStop,
-    onStopHoldComplete,
-    onCompletion,
-  };
-}
-
-async function flush() {
-  await act(async () => {
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  });
-}
 
 describe('RunScreen presentation', () => {
   afterEach(() => {

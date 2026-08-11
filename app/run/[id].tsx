@@ -138,7 +138,9 @@ export default function RunRoute() {
     [checklistTitle],
   );
   const playCompletionSound = useCallback(
-    () => cueSound.play('complete'),
+    async () => {
+      await cueSound.play('complete');
+    },
     [cueSound],
   );
   const playActionCue = useCallback(
@@ -178,7 +180,6 @@ export default function RunRoute() {
       initialAvailability={loadState.initialAvailability}
       onExit={exitRun}
       onRequestStop={confirmAndExitRun}
-      onStopHoldComplete={exitRun}
       onCompletion={playCompletionSound}
       onCue={playActionCue}
       onVoiceRunStart={startVoiceRun}

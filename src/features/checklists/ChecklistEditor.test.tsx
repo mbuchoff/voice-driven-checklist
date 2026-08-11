@@ -64,6 +64,8 @@ function tapToEdit(index: number) {
 }
 
 describe('ChecklistEditor', () => {
+  afterEach(() => jest.restoreAllMocks());
+
   it('requests native focus when a step enters editing', () => {
     const focus = jest.fn();
 
@@ -600,6 +602,55 @@ describe('ChecklistEditor', () => {
 
       expect(scrollTo).toHaveBeenCalledWith({ y: 32, animated: false });
       scrollTo.mockRestore();
+    });
+
+    it('keeps autoscrolling while a held row remains at the visible edge', async () => {
+      const frames: FrameRequestCallback[] = [];
+      jest.spyOn(global, 'requestAnimationFrame').mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+      const scrollTo = jest
+        .spyOn(ScrollView.prototype, 'scrollTo')
+        .mockImplementation(jest.fn());
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'keep scrolling',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+      fireEvent(screen.getByTestId('checklist-editor-scroll'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 300 } },
+      });
+      fireEvent(
+        screen.getByTestId('checklist-editor-scroll'),
+        'contentSizeChange',
+        0,
+        1000,
+      );
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+
+      const gesture = beginRowDrag(0, 25, 290);
+      const callsAfterPointerUpdate = scrollTo.mock.calls.length;
+      expect(frames).toHaveLength(1);
+
+      act(() => frames.shift()?.(16));
+      act(() => frames.shift()?.(32));
+      expect(scrollTo).toHaveBeenCalledTimes(callsAfterPointerUpdate + 2);
+
+      finishRowDrag(gesture);
+      const callsAfterDrop = scrollTo.mock.calls.length;
+      act(() => frames.shift()?.(48));
+      expect(scrollTo).toHaveBeenCalledTimes(callsAfterDrop);
     });
 
     it('updates the drop target after autoscroll before release', async () => {

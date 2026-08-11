@@ -50,14 +50,16 @@ export class CueSoundPlayer {
     }
   }
 
-  async play(action: CueAction): Promise<void> {
+  async play(action: CueAction): Promise<boolean> {
     const player = this.players.get(action);
-    if (!player) return;
+    if (!player) return false;
     try {
       await player.seekTo(0);
       player.play();
+      return true;
     } catch {
       // A cue must never prevent navigation, speech, or completion.
+      return false;
     }
   }
 

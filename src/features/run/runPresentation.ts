@@ -11,12 +11,16 @@ export function getRunProgressPalette(mode: 'light' | 'dark') {
     ? {
         surface: '#fffaf3',
         track: 'rgba(23, 56, 46, 0.12)',
+        fill: '#ef916f',
+        labelOpacity: 0.56,
         centerBorder: 'rgba(23, 56, 46, 0.06)',
         shadow: '0 13px 34px rgba(43, 74, 61, 0.13)',
       }
     : {
         surface: '#193f34',
         track: 'rgba(255, 255, 255, 0.14)',
+        fill: '#ef916f',
+        labelOpacity: 0.64,
         centerBorder: 'transparent',
         shadow: '0 12px 32px rgba(7, 32, 24, 0.24)',
       };
@@ -28,14 +32,6 @@ export function getRunTrackOffset(currentIndex: number): number {
 }
 
 export function getRunItemPresentation(
-  itemIndex: number,
-  currentIndex: number,
-  androidApi: number,
-): RunItemPresentation {
-  return getRunItemPresentationAtPosition(itemIndex, currentIndex, androidApi);
-}
-
-export function getRunItemPresentationAtPosition(
   itemIndex: number,
   currentPosition: number,
   androidApi: number,

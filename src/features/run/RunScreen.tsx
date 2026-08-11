@@ -48,9 +48,10 @@ export type RunScreenProps = {
   initialAvailability: { spokenPlaybackAvailable: boolean; voiceControlAvailable: boolean };
   onExit: () => void | Promise<void>;
   onRequestStop: () => void | Promise<void>;
-  onStopHoldComplete?: () => void | Promise<void>;
   onCompletion?: () => void | Promise<void>;
-  onCue?: (action: Exclude<CueAction, 'complete'>) => void | Promise<void>;
+  onCue?: (
+    action: Exclude<CueAction, 'complete'>,
+  ) => boolean | void | Promise<boolean | void>;
   onVoiceRunStart?: () => void | Promise<void>;
   onVoiceRunStop?: () => void | Promise<void>;
   screenReaderEnabled?: boolean;
@@ -68,7 +69,6 @@ export function RunScreen({
   initialAvailability,
   onExit,
   onRequestStop,
-  onStopHoldComplete = onExit,
   onCompletion,
   onCue,
   onVoiceRunStart,
@@ -81,13 +81,13 @@ export function RunScreen({
   );
   const [voiceServiceReady, setVoiceServiceReady] = useState(!onVoiceRunStart);
   const [talkBackEnabled, setTalkBackEnabled] = useState(
-    screenReaderEnabled ?? false,
+    screenReaderEnabled ?? true,
   );
   const [holdingStop, setHoldingStop] = useState(false);
   const voiceRunStartupRef = useRef<VoiceRunStartup | null>(null);
   const voiceRunStartupTokenRef = useRef(0);
   const voiceRunStopRef = useRef<Promise<void>>(Promise.resolve());
-  const speechDelayRef = useRef(0);
+  const cueStartedRef = useRef<Promise<boolean> | null>(null);
   const stopHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopHoldCompletedRef = useRef(false);
   const stopHoldProgress = useSharedValue(0);
@@ -114,11 +114,19 @@ export function RunScreen({
       return;
     }
     let cancelled = false;
-    void AccessibilityInfo.isScreenReaderEnabled().then((enabled) => {
-      if (!cancelled) setTalkBackEnabled(enabled);
-    });
+    const subscription = AccessibilityInfo.addEventListener(
+      'screenReaderChanged',
+      setTalkBackEnabled,
+    );
+    void AccessibilityInfo.isScreenReaderEnabled().then(
+      (enabled) => {
+        if (!cancelled) setTalkBackEnabled(enabled);
+      },
+      () => undefined,
+    );
     return () => {
       cancelled = true;
+      subscription.remove();
     };
   }, [screenReaderEnabled]);
 
@@ -134,10 +142,12 @@ export function RunScreen({
         action === 'next' &&
         state.snapshot != null &&
         state.currentItemIndex === state.snapshot.items.length - 1;
-      speechDelayRef.current = onCue && !completes ? CUE_TO_SPEECH_DELAY_MS : 0;
-      if (onCue && !completes) {
-        void Promise.resolve(onCue(action)).catch(() => undefined);
-      }
+      cueStartedRef.current = onCue && !completes
+        ? Promise.resolve(onCue(action)).then(
+            (audible) => audible !== false,
+            () => false,
+          )
+        : null;
       if (action === 'next') dispatch({ type: 'NEXT' });
       else if (action === 'previous') dispatch({ type: 'PREVIOUS' });
       else dispatch({ type: 'REPEAT' });
@@ -154,9 +164,9 @@ export function RunScreen({
     stopHoldTimerRef.current = setTimeout(() => {
       stopHoldTimerRef.current = null;
       stopHoldCompletedRef.current = true;
-      void onStopHoldComplete();
+      void onExit();
     }, STOP_HOLD_DURATION_MS);
-  }, [onStopHoldComplete, stopHoldProgress, talkBackEnabled]);
+  }, [onExit, stopHoldProgress, talkBackEnabled]);
 
   const releaseStopHold = useCallback(() => {
     if (stopHoldTimerRef.current) {
@@ -199,10 +209,20 @@ export function RunScreen({
           if (!cancelled) dispatch({ type: 'PLAYBACK_UNAVAILABLE' });
         });
     };
-    const delay = speechDelayRef.current;
-    speechDelayRef.current = 0;
-    if (delay > 0) speechTimer = setTimeout(speak, delay);
-    else speak();
+    const cueStarted = cueStartedRef.current;
+    cueStartedRef.current = null;
+    if (cueStarted) {
+      void cueStarted.then((audible) => {
+        if (cancelled) return;
+        if (audible) {
+          speechTimer = setTimeout(speak, CUE_TO_SPEECH_DELAY_MS);
+        } else {
+          speak();
+        }
+      });
+    } else {
+      speak();
+    }
     return () => {
       cancelled = true;
       if (speechTimer) clearTimeout(speechTimer);
@@ -391,7 +411,7 @@ export function RunScreen({
         totalItems={totalItems}
         checklistTitle={state.snapshot?.checklistTitle}
         onRestart={() => {
-          speechDelayRef.current = 0;
+          cueStartedRef.current = null;
           dispatch({ type: 'RESTART' });
         }}
         onExit={onExit}

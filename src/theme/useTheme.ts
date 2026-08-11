@@ -18,5 +18,5 @@ export function useTheme(): Palette {
 }
 
 export function useResolvedColorScheme(): 'light' | 'dark' {
-  return useTheme() === dark ? 'dark' : 'light';
+  return useTheme().mode;
 }
