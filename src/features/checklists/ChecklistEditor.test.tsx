@@ -453,6 +453,52 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-row-2')).toBeOnTheScreen();
     });
 
+    it('keeps one preview coordinate base as consecutive insertion targets open', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'smooth targets',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
+        nativeEvent: { layout: { y: 50, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+        nativeEvent: { layout: { y: 100, height: 50 } },
+      });
+
+      const gesture = beginRowDrag(0, 25, 25);
+      const previewTop = () =>
+        StyleSheet.flatten(screen.getByTestId('item-drag-preview').props.style)
+          .top;
+      expect(previewTop()).toBe(0);
+
+      act(() => {
+        gesture.handlers.onUpdate?.({ absoluteY: 80 } as never);
+      });
+      expect(screen.getByTestId('item-drop-target-1')).toBeOnTheScreen();
+      expect(previewTop()).toBe(0);
+
+      act(() => {
+        gesture.handlers.onUpdate?.({ absoluteY: 130 } as never);
+      });
+      expect(screen.getByTestId('item-drop-target-2')).toBeOnTheScreen();
+      expect(previewTop()).toBe(0);
+
+      cancelRowDrag(gesture);
+    });
+
     it('moves within one insertion slot without rerendering the editor', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {

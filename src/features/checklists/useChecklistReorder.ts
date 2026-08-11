@@ -47,6 +47,7 @@ export type ChecklistDragState = {
   height: number;
 };
 type DragContext = ChecklistDragState & {
+  previewTop: number;
   startCenterY: number;
   startPageY: number;
   startScrollY: number;
@@ -64,7 +65,7 @@ function dragStateFrom(context: DragContext): ChecklistDragState {
     text: context.text,
     from: context.from,
     to: context.to,
-    top: context.top,
+    top: context.previewTop,
     height: context.height,
   };
 }
@@ -89,7 +90,6 @@ export function useChecklistReorder({
   const viewportTop = useRef(0);
   const viewportHeight = useRef(0);
   const contentHeight = useRef(0);
-  const dragBaseTop = useRef(0);
   const dragPageY = useRef<number | null>(null);
   const autoscrollFrame = useRef<number | null>(null);
   const lastAutoscrollTime = useRef<number | null>(null);
@@ -163,12 +163,8 @@ export function useChecklistReorder({
     const targetChanged = to !== current.to;
     current.to = to;
     current.top = contentY - current.height / 2;
-    if (!targetChanged) {
-      dragOffset.value = current.top - dragBaseTop.current;
-      return;
-    }
-    dragBaseTop.current = current.top;
-    dragOffset.value = 0;
+    dragOffset.value = current.top - current.previewTop;
+    if (!targetChanged) return;
     animateEditorRows();
     setDrag(dragStateFrom(current));
   };
@@ -214,11 +210,11 @@ export function useChecklistReorder({
       to: index,
       top: layout.y,
       height: layout.height,
+      previewTop: layout.y,
       startCenterY: layout.y + layout.height / 2,
       startPageY: pageY,
       startScrollY: scrollY.current,
     };
-    dragBaseTop.current = current.top;
     dragOffset.value = 0;
     animateEditorRows();
     dragRef.current = current;
