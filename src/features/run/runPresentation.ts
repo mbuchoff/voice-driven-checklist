@@ -11,16 +11,19 @@ export function getRunProgressPalette(mode: 'light' | 'dark') {
     ? {
         surface: '#fffaf3',
         track: 'rgba(23, 56, 46, 0.12)',
+        centerBorder: 'rgba(23, 56, 46, 0.06)',
         shadow: '0 13px 34px rgba(43, 74, 61, 0.13)',
       }
     : {
         surface: '#193f34',
         track: 'rgba(255, 255, 255, 0.14)',
+        centerBorder: 'transparent',
         shadow: '0 12px 32px rgba(7, 32, 24, 0.24)',
       };
 }
 
 export function getRunTrackOffset(currentIndex: number): number {
+  'worklet';
   return -currentIndex * RUN_ITEM_GAP;
 }
 
@@ -29,9 +32,26 @@ export function getRunItemPresentation(
   currentIndex: number,
   androidApi: number,
 ): RunItemPresentation {
-  const distance = Math.abs(itemIndex - currentIndex);
+  return getRunItemPresentationAtPosition(itemIndex, currentIndex, androidApi);
+}
+
+export function getRunItemPresentationAtPosition(
+  itemIndex: number,
+  currentPosition: number,
+  androidApi: number,
+): RunItemPresentation {
+  'worklet';
+  const distance = Math.abs(itemIndex - currentPosition);
   if (distance === 0) {
     return { opacity: 1, scale: 1, blurRadius: 0 };
+  }
+
+  if (distance < 1) {
+    return {
+      opacity: 1 - 0.66 * distance,
+      scale: 1 - 0.18 * distance,
+      blurRadius: androidApi >= 31 ? 3.05 * distance : 0,
+    };
   }
 
   return {

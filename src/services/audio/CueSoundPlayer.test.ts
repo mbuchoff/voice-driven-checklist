@@ -84,4 +84,28 @@ describe('CueSoundPlayer', () => {
     expect(() => cues.prepare('chime')).not.toThrow();
     await expect(cues.play('next')).resolves.toBeUndefined();
   });
+
+  it('retries the same family after an interrupted setup', async () => {
+    const partialPlayer = audioPlayer();
+    mockedCreateAudioPlayer
+      .mockReturnValueOnce(partialPlayer as never)
+      .mockImplementationOnce(() => {
+        throw new Error('audio unavailable');
+      });
+    const cues = new CueSoundPlayer();
+
+    cues.prepare('chime');
+    const retryPlayers = Array.from({ length: 4 }, audioPlayer);
+    mockedCreateAudioPlayer.mockImplementation(() => retryPlayers.shift() as never);
+    cues.prepare('chime');
+    const prepared = mockedCreateAudioPlayer.mock.results
+      .slice(2)
+      .map((result) => result.value);
+
+    await cues.play('next');
+
+    expect(partialPlayer.release).toHaveBeenCalledTimes(1);
+    expect(prepared).toHaveLength(4);
+    expect(prepared[0].play).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 
 import { runMigrations } from '@/src/db/migrations';
@@ -238,6 +238,24 @@ describe('SettingsContent', () => {
     await expect(listChecklists(database)).resolves.toEqual([]);
     expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
+  });
+
+  it('does not launch a second backup picker while an import is pending', async () => {
+    let finishSelection: (value: string | null) => void = () => undefined;
+    pickBackupFileMock.mockImplementation(
+      () => new Promise((resolve) => {
+        finishSelection = resolve;
+      }),
+    );
+    await renderSettings();
+
+    const importButton = screen.getByRole('button', { name: /import backup/i });
+    fireEvent.press(importButton);
+    await waitFor(() => expect(pickBackupFileMock).toHaveBeenCalledTimes(1));
+    fireEvent.press(importButton);
+
+    expect(pickBackupFileMock).toHaveBeenCalledTimes(1);
+    await act(async () => finishSelection(null));
   });
 
   it('reports unreadable and invalid backup files without importing them', async () => {

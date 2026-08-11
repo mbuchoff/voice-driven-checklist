@@ -33,15 +33,20 @@ export class CueSoundPlayer {
   prepare(family: SoundPreference): void {
     if (this.family === family) return;
     this.release();
-    this.family = family;
-    if (family === 'quiet') return;
+    if (family === 'quiet') {
+      this.family = family;
+      return;
+    }
 
+    const players = new Map<CueAction, AudioPlayer>();
     try {
       for (const action of CUE_ACTIONS) {
-        this.players.set(action, createAudioPlayer(SOURCES[family][action]));
+        players.set(action, createAudioPlayer(SOURCES[family][action]));
       }
+      this.players = players;
+      this.family = family;
     } catch {
-      this.releasePlayers();
+      this.releasePlayers(players);
     }
   }
 
@@ -61,14 +66,14 @@ export class CueSoundPlayer {
     this.family = null;
   }
 
-  private releasePlayers(): void {
-    for (const player of this.players.values()) {
+  private releasePlayers(players = this.players): void {
+    for (const player of players.values()) {
       try {
         player.release?.();
       } catch {
         // Releasing audio is best effort during navigation and app teardown.
       }
     }
-    this.players.clear();
+    players.clear();
   }
 }

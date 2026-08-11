@@ -1,6 +1,6 @@
 import { useColorScheme, type ColorSchemeName } from 'react-native';
 
-import { useDevicePreferences } from '@/src/features/settings/DevicePreferencesProvider';
+import { useDeviceThemePreference } from '@/src/features/settings/DevicePreferencesProvider';
 import type { ThemePreference } from '@/src/features/settings/preferences';
 
 import { dark, light, type Palette } from './palette';
@@ -14,8 +14,7 @@ export function resolveTheme(
 }
 
 export function useTheme(): Palette {
-  const { preferences } = useDevicePreferences();
-  return resolveTheme(preferences.theme, useColorScheme());
+  return resolveTheme(useDeviceThemePreference(), useColorScheme());
 }
 
 export function useResolvedColorScheme(): 'light' | 'dark' {

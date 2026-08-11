@@ -24,17 +24,22 @@ type DevicePreferencesContextValue = {
   setSound(sound: SoundPreference): Promise<void>;
 };
 
-const defaultContext: DevicePreferencesContextValue = {
-  preferences: DEFAULT_DEVICE_PREFERENCES,
-  setTheme: async () => undefined,
-  setSound: async () => undefined,
-};
-
 const DevicePreferencesContext =
-  createContext<DevicePreferencesContextValue>(defaultContext);
+  createContext<DevicePreferencesContextValue | null>(null);
 
 export function useDevicePreferences(): DevicePreferencesContextValue {
-  return useContext(DevicePreferencesContext);
+  const context = useContext(DevicePreferencesContext);
+  if (!context) {
+    throw new Error(
+      'useDevicePreferences must be used within DevicePreferencesProvider.',
+    );
+  }
+  return context;
+}
+
+export function useDeviceThemePreference(): ThemePreference {
+  return useContext(DevicePreferencesContext)?.preferences.theme
+    ?? DEFAULT_DEVICE_PREFERENCES.theme;
 }
 
 export function DevicePreferencesProvider({
@@ -44,32 +49,56 @@ export function DevicePreferencesProvider({
   store: DevicePreferenceStore;
   children: ReactNode;
 }) {
-  const [preferences, setPreferences] = useState(DEFAULT_DEVICE_PREFERENCES);
+  const [preferences, setPreferences] = useState<DevicePreferences | null>(null);
+  const [initializationError, setInitializationError] = useState<Error | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void store.load().then((loaded) => {
-      if (!cancelled) setPreferences(loaded);
-    });
+    setPreferences(null);
+    setInitializationError(null);
+    void store.load().then(
+      (loaded) => {
+        if (!cancelled) setPreferences(loaded);
+      },
+      (reason) => {
+        if (!cancelled) {
+          setInitializationError(
+            reason instanceof Error
+              ? reason
+              : new Error('Device preferences could not be loaded.'),
+          );
+        }
+      },
+    );
     return () => {
       cancelled = true;
     };
   }, [store]);
 
+  if (initializationError) throw initializationError;
+
   const value = useMemo<DevicePreferencesContextValue>(
     () => ({
-      preferences,
+      preferences: preferences ?? DEFAULT_DEVICE_PREFERENCES,
       async setTheme(theme) {
         await store.saveTheme(theme);
-        setPreferences((current) => ({ ...current, theme }));
+        setPreferences((current) => ({
+          ...(current ?? DEFAULT_DEVICE_PREFERENCES),
+          theme,
+        }));
       },
       async setSound(sound) {
         await store.saveSound(sound);
-        setPreferences((current) => ({ ...current, sound }));
+        setPreferences((current) => ({
+          ...(current ?? DEFAULT_DEVICE_PREFERENCES),
+          sound,
+        }));
       },
     }),
     [preferences, store],
   );
+
+  if (!preferences) return null;
 
   return (
     <DevicePreferencesContext.Provider value={value}>

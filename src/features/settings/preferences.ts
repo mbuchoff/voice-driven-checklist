@@ -18,7 +18,6 @@ export const DEFAULT_DEVICE_PREFERENCES: DevicePreferences = {
 
 export interface DevicePreferenceStore {
   load(): Promise<DevicePreferences>;
-  save(preferences: DevicePreferences): Promise<void>;
   saveTheme(theme: ThemePreference): Promise<void>;
   saveSound(sound: SoundPreference): Promise<void>;
 }
@@ -34,17 +33,6 @@ export class SqliteDevicePreferenceStore implements DevicePreferenceStore {
     );
     if (!preferences) throw new Error('Device preferences are missing.');
     return preferences;
-  }
-
-  async save(preferences: DevicePreferences): Promise<void> {
-    const result = await this.database.runAsync(
-      `UPDATE device_preferences
-       SET theme = ?, sound = ?
-       WHERE id = 1`,
-      preferences.theme,
-      preferences.sound,
-    );
-    if (result.changes !== 1) throw new Error('Device preferences are missing.');
   }
 
   async saveTheme(theme: ThemePreference): Promise<void> {
@@ -69,10 +57,6 @@ export class MemoryDevicePreferenceStore implements DevicePreferenceStore {
 
   async load(): Promise<DevicePreferences> {
     return this.preferences;
-  }
-
-  async save(preferences: DevicePreferences): Promise<void> {
-    this.preferences = preferences;
   }
 
   async saveTheme(theme: ThemePreference): Promise<void> {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -66,9 +66,12 @@ export function SettingsContent({
   const theme = useTheme();
   const { preferences, setTheme, setSound } = useDevicePreferences();
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const run = async (action: () => Promise<unknown>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -80,6 +83,7 @@ export function SettingsContent({
           : 'That setting could not be changed.',
       );
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -229,13 +233,13 @@ export function SettingsContent({
             label="Export backup"
             icon="upload"
             disabled={busy}
-            onPress={() => void exportBackup()}
+            onPress={() => void run(exportBackup)}
           />
           <ActionButton
             label="Import backup"
             icon="download"
             disabled={busy}
-            onPress={() => void importBackup()}
+            onPress={() => void run(importBackup)}
           />
         </View>
       </SettingsCard>

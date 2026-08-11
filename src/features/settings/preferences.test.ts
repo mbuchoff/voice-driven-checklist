@@ -19,7 +19,8 @@ describe('device preferences', () => {
     await runMigrations(database);
     const store = new SqliteDevicePreferenceStore(database);
 
-    await store.save({ theme: 'dark', sound: 'wood' });
+    await store.saveTheme('dark');
+    await store.saveSound('wood');
 
     await expect(new SqliteDevicePreferenceStore(database).load()).resolves.toEqual({
       theme: 'dark',
@@ -31,7 +32,8 @@ describe('device preferences', () => {
     const database = createTestDatabase();
     await runMigrations(database);
     const store = new SqliteDevicePreferenceStore(database);
-    await store.save({ theme: 'light', sound: 'ping' });
+    await store.saveTheme('light');
+    await store.saveSound('ping');
 
     await store.saveTheme('dark');
 
