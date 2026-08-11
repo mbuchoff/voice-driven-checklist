@@ -40,6 +40,14 @@ CREATE TABLE account_preferences (
 );
 `;
 
+const DEVICE_PREFERENCE_SCHEMA_SQL = `
+CREATE TABLE device_preferences (
+  id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+  theme TEXT NOT NULL CHECK (theme IN ('system', 'light', 'dark')),
+  sound TEXT NOT NULL CHECK (sound IN ('chime', 'wood', 'ping', 'quiet'))
+);
+`;
+
 type MigrationContext = {
   checklistSchemaExisted: boolean;
 };
@@ -55,6 +63,13 @@ const migrations: Migration[] = [
          (id, mode, cognito_sub, display_name, email)
        VALUES (1, ?, NULL, NULL, NULL)`,
       context.checklistSchemaExisted ? 'local' : 'unselected',
+    );
+  },
+  async (db) => {
+    await db.execAsync(DEVICE_PREFERENCE_SCHEMA_SQL);
+    await db.runAsync(
+      `INSERT INTO device_preferences (id, theme, sound)
+       VALUES (1, 'system', 'chime')`,
     );
   },
 ];

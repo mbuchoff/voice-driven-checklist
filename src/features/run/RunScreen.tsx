@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { BackHandler, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  BackHandler,
+  Platform,
+} from 'react-native';
+import {
+  cancelAnimation,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
+import type { CueAction } from '@/src/services/audio/cues';
 import type {
   SpeechPlaybackAdapter,
   SpeechRecognitionAdapter,
@@ -9,6 +19,8 @@ import { useTheme } from '@/src/theme/useTheme';
 
 import { parseCommand, parseInterimCommand } from './commandParser';
 import { initialRunState, runReducer } from './runReducer';
+import { ActiveRunView, CompletionView } from './RunScreenView';
+import { RUN_TRANSITION_CONFIG } from './runPresentation';
 import type { ChecklistRunSnapshot } from './types';
 
 const LOCALE = 'en-US';
@@ -27,6 +39,8 @@ const TRANSIENT_RECOGNITION_ERRORS = new Set([
 
 const RECOGNITION_RESTART_DELAY_MS = 500;
 const RECOGNITION_END_RESTART_DELAY_MS = 0;
+const CUE_TO_SPEECH_DELAY_MS = 175;
+const STOP_HOLD_DURATION_MS = 1200;
 
 export type RunScreenProps = {
   snapshot: ChecklistRunSnapshot;
@@ -36,8 +50,12 @@ export type RunScreenProps = {
   onExit: () => void | Promise<void>;
   onRequestStop: () => void | Promise<void>;
   onCompletion?: () => void | Promise<void>;
+  onCue?: (
+    action: Exclude<CueAction, 'complete'>,
+  ) => boolean | void | Promise<boolean | void>;
   onVoiceRunStart?: () => void | Promise<void>;
   onVoiceRunStop?: () => void | Promise<void>;
+  screenReaderEnabled?: boolean;
 };
 
 type VoiceRunStartup = {
@@ -53,17 +71,28 @@ export function RunScreen({
   onExit,
   onRequestStop,
   onCompletion,
+  onCue,
   onVoiceRunStart,
   onVoiceRunStop,
+  screenReaderEnabled,
 }: RunScreenProps) {
   const theme = useTheme();
   const [state, dispatch] = useReducer(runReducer, undefined, () =>
     initialRunState(snapshot, initialAvailability),
   );
   const [voiceServiceReady, setVoiceServiceReady] = useState(!onVoiceRunStart);
+  const [talkBackEnabled, setTalkBackEnabled] = useState(
+    screenReaderEnabled ?? true,
+  );
+  const [holdingStop, setHoldingStop] = useState(false);
   const voiceRunStartupRef = useRef<VoiceRunStartup | null>(null);
   const voiceRunStartupTokenRef = useRef(0);
   const voiceRunStopRef = useRef<Promise<void>>(Promise.resolve());
+  const cueStartedRef = useRef<Promise<boolean> | null>(null);
+  const stopHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopHoldCompletedRef = useRef(false);
+  const stopHoldProgress = useSharedValue(0);
+  const animatedCurrentIndex = useSharedValue(0);
 
   const stopVoiceRun = useCallback(() => {
     const stop = voiceRunStopRef.current
@@ -80,13 +109,89 @@ export function RunScreen({
     return stop;
   }, [onVoiceRunStop]);
 
-  const controlStyle = {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 6,
-  } as const;
+  useEffect(() => {
+    if (screenReaderEnabled !== undefined) {
+      setTalkBackEnabled(screenReaderEnabled);
+      return;
+    }
+    let cancelled = false;
+    let changedSinceQuery = false;
+    const subscription = AccessibilityInfo.addEventListener(
+      'screenReaderChanged',
+      (enabled) => {
+        changedSinceQuery = true;
+        setTalkBackEnabled(enabled);
+      },
+    );
+    void AccessibilityInfo.isScreenReaderEnabled().then(
+      (enabled) => {
+        if (!cancelled && !changedSinceQuery) setTalkBackEnabled(enabled);
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, [screenReaderEnabled]);
+
+  useEffect(() => {
+    animatedCurrentIndex.value = withTiming(
+      state.currentItemIndex,
+      RUN_TRANSITION_CONFIG,
+    );
+  }, [animatedCurrentIndex, state.currentItemIndex]);
+
+  const runAction = useCallback(
+    (action: 'next' | 'previous' | 'repeat') => {
+      const completes =
+        action === 'next' &&
+        state.snapshot != null &&
+        state.currentItemIndex === state.snapshot.items.length - 1;
+      cueStartedRef.current = onCue && !completes
+        ? Promise.resolve(onCue(action)).then(
+            (audible) => audible !== false,
+            () => false,
+          )
+        : null;
+      if (action === 'next') dispatch({ type: 'NEXT' });
+      else if (action === 'previous') dispatch({ type: 'PREVIOUS' });
+      else dispatch({ type: 'REPEAT' });
+    },
+    [onCue, state.currentItemIndex, state.snapshot],
+  );
+
+  const beginStopHold = useCallback(() => {
+    if (talkBackEnabled || stopHoldTimerRef.current) return;
+    stopHoldCompletedRef.current = false;
+    setHoldingStop(true);
+    stopHoldProgress.value = 0;
+    stopHoldProgress.value = withTiming(1, { duration: STOP_HOLD_DURATION_MS });
+    stopHoldTimerRef.current = setTimeout(() => {
+      stopHoldTimerRef.current = null;
+      stopHoldCompletedRef.current = true;
+      void onExit();
+    }, STOP_HOLD_DURATION_MS);
+  }, [onExit, stopHoldProgress, talkBackEnabled]);
+
+  const releaseStopHold = useCallback(() => {
+    if (stopHoldTimerRef.current) {
+      clearTimeout(stopHoldTimerRef.current);
+      stopHoldTimerRef.current = null;
+    }
+    if (!stopHoldCompletedRef.current) {
+      cancelAnimation(stopHoldProgress);
+      stopHoldProgress.value = withTiming(0, { duration: 140 });
+    }
+    setHoldingStop(false);
+  }, [stopHoldProgress]);
+
+  useEffect(
+    () => () => {
+      if (stopHoldTimerRef.current) clearTimeout(stopHoldTimerRef.current);
+    },
+    [],
+  );
 
   const spokenPlaybackReady = !state.voiceControlAvailable || voiceServiceReady;
 
@@ -99,16 +204,34 @@ export function RunScreen({
     if (state.status !== 'speaking' || !state.snapshot || !spokenPlaybackReady) return;
     const item = state.snapshot.items[state.currentItemIndex];
     let cancelled = false;
-    playback
-      .speak(item.text, { locale: LOCALE })
-      .then(() => {
-        if (!cancelled) dispatch({ type: 'PLAYBACK_FINISHED' });
-      })
-      .catch(() => {
-        if (!cancelled) dispatch({ type: 'PLAYBACK_UNAVAILABLE' });
+    let speechTimer: ReturnType<typeof setTimeout> | null = null;
+    const speak = () => {
+      playback
+        .speak(item.text, { locale: LOCALE })
+        .then(() => {
+          if (!cancelled) dispatch({ type: 'PLAYBACK_FINISHED' });
+        })
+        .catch(() => {
+          if (!cancelled) dispatch({ type: 'PLAYBACK_UNAVAILABLE' });
+        });
+    };
+    const cueStarted = cueStartedRef.current;
+    cueStartedRef.current = null;
+    if (cueStarted) {
+      void cueStarted.then((audible) => {
+        if (cancelled) return;
+        if (audible) {
+          speechTimer = setTimeout(speak, CUE_TO_SPEECH_DELAY_MS);
+        } else {
+          speak();
+        }
       });
+    } else {
+      speak();
+    }
     return () => {
       cancelled = true;
+      if (speechTimer) clearTimeout(speechTimer);
       playback.stop();
     };
   }, [
@@ -152,9 +275,7 @@ export function RunScreen({
             if (!cmd) return;
             cancelled = true;
             void recognition.stopListening();
-            if (cmd === 'next') dispatch({ type: 'NEXT' });
-            else if (cmd === 'repeat') dispatch({ type: 'REPEAT' });
-            else dispatch({ type: 'PREVIOUS' });
+            runAction(cmd);
           },
           onError: (error) => {
             if (cancelled) return;
@@ -185,7 +306,13 @@ export function RunScreen({
       if (restartTimer) clearTimeout(restartTimer);
       recognition.stopListening();
     };
-  }, [state.status, state.playbackTick, recognition, voiceServiceReady]);
+  }, [
+    state.status,
+    state.playbackTick,
+    recognition,
+    voiceServiceReady,
+    runAction,
+  ]);
 
   // Start before the first listening window so locking during spoken playback
   // still leaves Android ready to open the mic under a foreground service.
@@ -281,134 +408,36 @@ export function RunScreen({
     return () => sub.remove();
   }, [state.status, onExit, onRequestStop]);
 
-  const currentItem = state.snapshot?.items[state.currentItemIndex];
   const totalItems = state.snapshot?.items.length ?? 0;
+  const androidApi = Platform.OS === 'android' ? Number(Platform.Version) : 0;
 
   if (state.status === 'completed') {
     return (
-      <ScrollView
-        style={{ backgroundColor: theme.background }}
-        contentContainerStyle={{ padding: 24, gap: 16 }}
-      >
-        <Text style={{ color: theme.text, fontSize: 24, fontWeight: '700' }}>Checklist complete</Text>
-        <Text style={{ color: theme.text }}>You finished “{state.snapshot?.checklistTitle}”.</Text>
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <Pressable
-            accessibilityRole="button"
-            testID="completion-restart"
-            onPress={() => dispatch({ type: 'RESTART' })}
-            style={{
-              paddingVertical: 10,
-              paddingHorizontal: 18,
-              backgroundColor: theme.primary,
-              borderRadius: 6,
-            }}
-          >
-            <Text style={{ color: theme.onPrimary, fontWeight: '600' }}>Restart</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            testID="completion-return"
-            onPress={onExit}
-            style={{
-              paddingVertical: 10,
-              paddingHorizontal: 18,
-              borderWidth: 1,
-              borderColor: theme.border,
-              borderRadius: 6,
-            }}
-          >
-            <Text style={{ color: theme.text }}>Return to library</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+      <CompletionView
+        totalItems={totalItems}
+        checklistTitle={state.snapshot?.checklistTitle}
+        onRestart={() => {
+          cueStartedRef.current = null;
+          dispatch({ type: 'RESTART' });
+        }}
+        onExit={onExit}
+      />
     );
   }
 
   return (
-    <ScrollView
-      style={{ backgroundColor: theme.background }}
-      contentContainerStyle={{ padding: 24, gap: 16 }}
-    >
-      <Text style={{ color: theme.text, fontSize: 18, fontWeight: '600' }}>{state.snapshot?.checklistTitle}</Text>
-      <Text style={{ color: theme.textMuted }}>
-        Item {state.currentItemIndex + 1} of {totalItems}
-      </Text>
-
-      <View
-        style={{
-          padding: 18,
-          borderWidth: 1,
-          borderColor: theme.inputBorder,
-          borderRadius: 8,
-          minHeight: 80,
-          justifyContent: 'center',
-        }}
-      >
-        <Text style={{ color: theme.text, fontSize: 22 }}>{currentItem?.text}</Text>
-      </View>
-
-      <Text testID="status-banner" style={{ color: theme.textMuted }}>
-        {state.status === 'speaking' && 'Speaking…'}
-        {state.status === 'listening' && 'Listening for "next", "repeat", or "previous"…'}
-        {state.status === 'manual' && state.voiceControlAvailable && 'Use the buttons below to advance.'}
-      </Text>
-
-      {!state.voiceControlAvailable && (
-        <Text testID="voice-unavailable" style={{ color: theme.danger }}>
-          Voice control unavailable — use the buttons to control playback.
-        </Text>
-      )}
-      {!state.spokenPlaybackAvailable && (
-        <Text testID="playback-unavailable" style={{ color: theme.danger }}>
-          Spoken playback unavailable — the item text remains visible above.
-        </Text>
-      )}
-
-      {state.latestRecognizedPhrase.length > 0 && (
-        <View
-          testID="transcript-panel"
-          style={{ padding: 12, backgroundColor: theme.surfaceAlt, borderRadius: 6 }}
-        >
-          <Text style={{ color: theme.textSubtle }}>I heard:</Text>
-          <Text style={{ color: theme.text, fontSize: 16 }}>{state.latestRecognizedPhrase}</Text>
-        </View>
-      )}
-
-      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-        <Pressable
-          accessibilityRole="button"
-          testID="manual-previous"
-          onPress={() => dispatch({ type: 'PREVIOUS' })}
-          style={controlStyle}
-        >
-          <Text style={{ color: theme.text }}>Previous</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          testID="manual-repeat"
-          onPress={() => dispatch({ type: 'REPEAT' })}
-          style={controlStyle}
-        >
-          <Text style={{ color: theme.text }}>Repeat</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          testID="manual-next"
-          onPress={() => dispatch({ type: 'NEXT' })}
-          style={controlStyle}
-        >
-          <Text style={{ color: theme.text }}>Next</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          testID="manual-stop"
-          onPress={onRequestStop}
-          style={[controlStyle, { borderColor: theme.danger }]}
-        >
-          <Text style={{ color: theme.danger }}>Stop</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+    <ActiveRunView
+      state={state}
+      theme={theme}
+      androidApi={androidApi}
+      talkBackEnabled={talkBackEnabled}
+      holdingStop={holdingStop}
+      animatedCurrentIndex={animatedCurrentIndex}
+      stopHoldProgress={stopHoldProgress}
+      onBeginStopHold={beginStopHold}
+      onReleaseStopHold={releaseStopHold}
+      onRequestStop={onRequestStop}
+      onAction={runAction}
+    />
   );
 }

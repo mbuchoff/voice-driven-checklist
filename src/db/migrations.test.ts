@@ -30,10 +30,23 @@ type AccountPreferenceRow = {
   email: string | null;
 };
 
+type DevicePreferenceRow = {
+  theme: string;
+  sound: string;
+};
+
 async function accountPreference(db: Database): Promise<AccountPreferenceRow | null> {
   return db.getFirstAsync<AccountPreferenceRow>(
     `SELECT mode, cognito_sub, display_name, email
      FROM account_preferences
+     WHERE id = 1`,
+  );
+}
+
+async function devicePreference(db: Database): Promise<DevicePreferenceRow | null> {
+  return db.getFirstAsync<DevicePreferenceRow>(
+    `SELECT theme, sound
+     FROM device_preferences
      WHERE id = 1`,
   );
 }
@@ -52,7 +65,11 @@ describe('database migrations', () => {
     });
     await expect(
       db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'),
-    ).resolves.toEqual({ user_version: 1 });
+    ).resolves.toEqual({ user_version: 2 });
+    await expect(devicePreference(db)).resolves.toEqual({
+      theme: 'system',
+      sound: 'chime',
+    });
   });
 
   it('initializes a legacy empty library in local mode', async () => {
@@ -97,6 +114,41 @@ describe('database migrations', () => {
         'coffee',
       ),
     ).resolves.toEqual({ text: 'Make coffee' });
+    await expect(devicePreference(db)).resolves.toEqual({
+      theme: 'system',
+      sound: 'chime',
+    });
+  });
+
+  it('adds device preferences without changing an existing account choice', async () => {
+    const db = createTestDatabase();
+    await db.execAsync(LEGACY_SCHEMA);
+    await db.execAsync(`
+      CREATE TABLE account_preferences (
+        id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+        mode TEXT NOT NULL CHECK (mode IN ('unselected', 'local', 'google')),
+        cognito_sub TEXT,
+        display_name TEXT,
+        email TEXT
+      );
+      INSERT INTO account_preferences
+        (id, mode, cognito_sub, display_name, email)
+      VALUES (1, 'google', 'subject', 'Ada', 'ada@example.com');
+      PRAGMA user_version = 1;
+    `);
+
+    await runMigrations(db);
+
+    await expect(accountPreference(db)).resolves.toEqual({
+      mode: 'google',
+      cognito_sub: 'subject',
+      display_name: 'Ada',
+      email: 'ada@example.com',
+    });
+    await expect(devicePreference(db)).resolves.toEqual({
+      theme: 'system',
+      sound: 'chime',
+    });
   });
 
   it('is idempotent and keeps a single preference record', async () => {

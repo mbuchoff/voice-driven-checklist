@@ -1,72 +1,14 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { BackHandler, Platform } from 'react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { AccessibilityInfo, BackHandler, Platform } from 'react-native';
 
 import {
-  FakeSpeechPlaybackAdapter,
-  FakeSpeechRecognitionAdapter,
-} from '@/src/services/speech/fakes';
-
-import { RunScreen, type RunScreenProps } from './RunScreen';
-import type { ChecklistRunSnapshot } from './types';
-
-const snapshot: ChecklistRunSnapshot = {
-  checklistId: 'cl-1',
-  checklistTitle: 'Demo',
-  items: [
-    { id: 'i1', text: 'Item one', order: 0 },
-    { id: 'i2', text: 'Item two', order: 1 },
-    { id: 'i3', text: 'Item three', order: 2 },
-  ],
-};
-
+  flushRunEffects as flush,
+  runSnapshot as snapshot,
+  setupRunScreen as setup,
+} from './RunScreen.testSupport';
 const defaultPlatformOS = Platform.OS;
+const defaultPlatformVersion = Platform.Version;
 let mockHardwareBackHandler: (() => boolean | null | undefined) | null = null;
-
-type RenderOptions = Partial<
-  Pick<
-    RunScreenProps,
-    | 'onExit'
-    | 'onRequestStop'
-    | 'onCompletion'
-    | 'onVoiceRunStart'
-    | 'onVoiceRunStop'
-    | 'initialAvailability'
-  >
->;
-
-function setup(options: RenderOptions = {}) {
-  const playback = new FakeSpeechPlaybackAdapter();
-  const recognition = new FakeSpeechRecognitionAdapter();
-  const onExit = options.onExit ?? jest.fn();
-  const onRequestStop = options.onRequestStop ?? jest.fn();
-  const onCompletion = options.onCompletion ?? jest.fn();
-  const initialAvailability = options.initialAvailability ?? {
-    spokenPlaybackAvailable: true,
-    voiceControlAvailable: true,
-  };
-
-  const utils = render(
-    <RunScreen
-      snapshot={snapshot}
-      playback={playback}
-      recognition={recognition}
-      initialAvailability={initialAvailability}
-      onExit={onExit}
-      onRequestStop={onRequestStop}
-      onCompletion={onCompletion}
-      onVoiceRunStart={options.onVoiceRunStart}
-      onVoiceRunStop={options.onVoiceRunStop}
-    />,
-  );
-
-  return { ...utils, playback, recognition, onExit, onRequestStop, onCompletion };
-}
-
-async function flush() {
-  await act(async () => {
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  });
-}
 
 function useAndroidHardwareBack() {
   Object.defineProperty(Platform, 'OS', {
@@ -81,70 +23,20 @@ function useAndroidHardwareBack() {
 
 describe('RunScreen', () => {
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
     mockHardwareBackHandler = null;
     Object.defineProperty(Platform, 'OS', {
       configurable: true,
       get: () => defaultPlatformOS,
     });
+    Object.defineProperty(Platform, 'Version', {
+      configurable: true,
+      get: () => defaultPlatformVersion,
+    });
   });
 
   describe('initial render', () => {
-    it('shows the checklist title, current item, and progress label', async () => {
-      setup();
-      await flush();
-
-      expect(screen.getByText('Demo')).toBeOnTheScreen();
-      expect(screen.getByText('Item one')).toBeOnTheScreen();
-      expect(screen.getByText(/item 1 of 3/i)).toBeOnTheScreen();
-    });
-
-    it('begins playback of the first item when playback is available', async () => {
-      const { playback } = setup();
-      await flush();
-      expect(playback.spoken).toEqual(['Item one']);
-    });
-
-    it('waits for the Android voice run startup before speaking the first item', async () => {
-      let resolveStartup!: () => void;
-      const startupFinished = new Promise<void>((resolve) => {
-        resolveStartup = resolve;
-      });
-      const { playback, recognition } = setup({
-        onVoiceRunStart: jest.fn(() => startupFinished),
-      });
-      await flush();
-
-      expect(playback.spoken).toEqual([]);
-      expect(recognition.startCount).toBe(0);
-
-      await act(async () => {
-        resolveStartup();
-        await startupFinished;
-      });
-      await flush();
-
-      expect(playback.spoken).toEqual(['Item one']);
-      expect(recognition.startCount).toBe(0);
-    });
-
-    it('does not start recognition while speaking', async () => {
-      const { recognition } = setup();
-      await flush();
-      expect(recognition.startCount).toBe(0);
-      expect(recognition.isListening()).toBe(false);
-    });
-
-    it('starts recognition once playback finishes', async () => {
-      const { playback, recognition } = setup();
-      await flush();
-
-      playback.completePlayback();
-      await flush();
-
-      expect(recognition.startCount).toBe(1);
-      expect(recognition.isListening()).toBe(true);
-    });
 
     it('skips initial playback when spoken playback is unavailable and goes straight to listening', async () => {
       const { playback, recognition } = setup({
@@ -461,13 +353,189 @@ describe('RunScreen', () => {
       expect(playback.spoken.length).toBe(before + 1); // re-spoke item one
     });
 
-    it('requests confirmation when Stop is pressed', async () => {
-      const { onExit, onRequestStop } = setup();
+    it('plays the action cue before beginning speech roughly 175ms later', async () => {
+      const onCue = jest.fn();
+      const { playback } = setup({ onCue });
+      await flush();
+      jest.useFakeTimers();
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+
+      expect(onCue).toHaveBeenCalledWith('next');
+      expect(playback.spoken).toEqual(['Item one']);
+      await act(async () => Promise.resolve());
+
+      await act(async () => {
+        jest.advanceTimersByTime(174);
+        await Promise.resolve();
+      });
+      expect(playback.spoken).toEqual(['Item one']);
+
+      await act(async () => {
+        jest.advanceTimersByTime(1);
+        await Promise.resolve();
+      });
+      expect(playback.spoken).toEqual(['Item one', 'Item two']);
+      jest.useRealTimers();
+    });
+
+    it('starts the speech delay only after the cue has begun playing', async () => {
+      let cueStarted: () => void = () => undefined;
+      const onCue = jest.fn(
+        () => new Promise<boolean>((resolve) => {
+          cueStarted = () => resolve(true);
+        }),
+      );
+      const { playback } = setup({ onCue });
+      await flush();
+      jest.useFakeTimers();
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+      act(() => jest.advanceTimersByTime(500));
+      expect(playback.spoken).toEqual(['Item one']);
+
+      await act(async () => cueStarted());
+      act(() => jest.advanceTimersByTime(174));
+      expect(playback.spoken).toEqual(['Item one']);
+
+      await act(async () => jest.advanceTimersByTime(1));
+      expect(playback.spoken).toEqual(['Item one', 'Item two']);
+      jest.useRealTimers();
+    });
+
+    it('speaks immediately when the selected cue is silent', async () => {
+      const { playback } = setup({ onCue: async () => false });
+      await flush();
+      jest.useFakeTimers();
+
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await act(async () => Promise.resolve());
+
+      expect(playback.spoken).toEqual(['Item one', 'Item two']);
+      jest.useRealTimers();
+    });
+
+    it('uses distinct cues for Repeat and Previous', async () => {
+      const onCue = jest.fn();
+      setup({ onCue });
       await flush();
 
-      fireEvent.press(screen.getByTestId('manual-stop'));
+      fireEvent.press(screen.getByTestId('manual-repeat'));
+      fireEvent.press(screen.getByTestId('manual-previous'));
+
+      expect(onCue.mock.calls.map(([action]) => action)).toEqual([
+        'repeat',
+        'previous',
+      ]);
+    });
+
+    it('keeps the run active when the pointer hold is released early', async () => {
+      const { onExit, onRequestStop } = setup({
+        screenReaderEnabled: false,
+      });
+      await flush();
+      jest.useFakeTimers();
+
+      fireEvent(screen.getByTestId('stop-run'), 'pressIn');
+      expect(screen.queryByText(snapshot.checklistTitle)).toBeNull();
+      expect(screen.getByText(/keep holding/i)).toBeOnTheScreen();
+      act(() => jest.advanceTimersByTime(600));
+      fireEvent(screen.getByTestId('stop-run'), 'pressOut');
+
+      act(() => jest.advanceTimersByTime(1200));
+      expect(onExit).not.toHaveBeenCalled();
+      expect(onRequestStop).not.toHaveBeenCalled();
+      expect(screen.queryByText(/keep holding/i)).toBeNull();
+      expect(screen.getByText(snapshot.checklistTitle)).toBeOnTheScreen();
+      jest.useRealTimers();
+    });
+
+    it('stops directly after the complete 1.2-second pointer hold', async () => {
+      const { onExit, onRequestStop } = setup({
+        screenReaderEnabled: false,
+      });
+      await flush();
+      jest.useFakeTimers();
+
+      fireEvent(screen.getByTestId('stop-run'), 'pressIn');
+      act(() => jest.advanceTimersByTime(1200));
+
+      expect(onExit).toHaveBeenCalledTimes(1);
+      expect(onRequestStop).not.toHaveBeenCalled();
+      jest.useRealTimers();
+    });
+
+    it('opens confirmation when TalkBack activates the X', async () => {
+      const { onExit, onRequestStop } = setup({
+        screenReaderEnabled: true,
+      });
+      await flush();
+
+      fireEvent.press(screen.getByTestId('stop-run'));
+
       expect(onRequestStop).toHaveBeenCalledTimes(1);
       expect(onExit).not.toHaveBeenCalled();
+    });
+
+    it('uses confirmation when TalkBack turns on after the run opens', async () => {
+      let onScreenReaderChanged: (enabled: boolean) => void = () => undefined;
+      const remove = jest.fn();
+      jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled').mockResolvedValue(false);
+      jest
+        .spyOn(AccessibilityInfo, 'addEventListener')
+        .mockImplementation((_event, listener) => {
+          onScreenReaderChanged = listener as unknown as (enabled: boolean) => void;
+          return { remove } as never;
+        });
+      const { onRequestStop, unmount } = setup();
+      await flush();
+
+      act(() => onScreenReaderChanged(true));
+      fireEvent.press(screen.getByTestId('stop-run'));
+
+      expect(onRequestStop).toHaveBeenCalledTimes(1);
+      unmount();
+      expect(remove).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses confirmation while TalkBack detection is still pending', async () => {
+      jest
+        .spyOn(AccessibilityInfo, 'isScreenReaderEnabled')
+        .mockImplementation(() => new Promise(() => undefined));
+      jest.spyOn(AccessibilityInfo, 'addEventListener').mockReturnValue({
+        remove: jest.fn(),
+      } as never);
+      const { onRequestStop } = setup();
+      await flush();
+
+      fireEvent.press(screen.getByTestId('stop-run'));
+
+      expect(onRequestStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not let the initial TalkBack query overwrite a newer change event', async () => {
+      let finishInitialQuery: (enabled: boolean) => void = () => undefined;
+      let onScreenReaderChanged: (enabled: boolean) => void = () => undefined;
+      jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled').mockImplementation(
+        () => new Promise((resolve) => {
+          finishInitialQuery = resolve;
+        }),
+      );
+      jest
+        .spyOn(AccessibilityInfo, 'addEventListener')
+        .mockImplementation((_event, listener) => {
+          onScreenReaderChanged = listener as unknown as (enabled: boolean) => void;
+          return { remove: jest.fn() } as never;
+        });
+      const { onRequestStop } = setup();
+      await flush();
+
+      act(() => onScreenReaderChanged(true));
+      await act(async () => finishInitialQuery(false));
+      await flush();
+      fireEvent.press(screen.getByTestId('stop-run'));
+
+      expect(onRequestStop).toHaveBeenCalledTimes(1);
     });
 
     it('requests confirmation when Android back is pressed during an active run', async () => {

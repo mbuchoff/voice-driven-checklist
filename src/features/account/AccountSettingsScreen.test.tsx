@@ -25,6 +25,26 @@ function accountValue(
 }
 
 describe('AccountSettingsContent', () => {
+  it('uses the Settings visual shell and returns to Settings', () => {
+    const onBack = jest.fn();
+
+    render(
+      <AccountSettingsContent
+        account={accountValue({ status: 'local' })}
+        onBack={onBack}
+      />,
+    );
+
+    expect(screen.getByTestId('account-settings-safe-area')).toBeOnTheScreen();
+    expect(
+      screen.getByRole('header', { name: /manage accounts/i }),
+    ).toBeOnTheScreen();
+    fireEvent.press(
+      screen.getByRole('button', { name: /back to settings/i }),
+    );
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
   it('identifies local mode and offers optional Google sign-in', () => {
     const account = accountValue({ status: 'local' });
 
