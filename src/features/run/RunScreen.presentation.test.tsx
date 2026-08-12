@@ -6,6 +6,7 @@ import {
   runSnapshot as snapshot,
   setupRunScreen as setup,
 } from './RunScreen.testSupport';
+import { getStopControlPresentation } from './RunScreenView';
 import { RUN_ITEM_GAP } from './runPresentation';
 import type { ChecklistRunSnapshot } from './types';
 const defaultPlatformOS = Platform.OS;
@@ -99,6 +100,30 @@ describe('RunScreen presentation', () => {
       );
       expect(titleFrame.position).toBe('absolute');
       expect(titleFrame.left).toBe(titleFrame.right);
+    });
+
+    it('surrounds the pointer contact and follows it while stopping', async () => {
+      setup({ screenReaderEnabled: false });
+      await flush();
+
+      expect(getStopControlPresentation({
+        width: 52,
+        height: 44,
+        offsetX: 31,
+        offsetY: 27,
+      })).toEqual({ size: 76, left: -7, top: -11 });
+      expect(getStopControlPresentation({
+        width: 56,
+        height: 48,
+        offsetX: 43,
+        offsetY: 35,
+      })).toEqual({ size: 80, left: 3, top: -5 });
+      expect(screen.getByTestId('stop-run').props.onPointerDown).toEqual(
+        expect.any(Function),
+      );
+      expect(screen.getByTestId('stop-run').props.onPointerMove).toEqual(
+        expect.any(Function),
+      );
     });
 
     it('begins playback of the first item when playback is available', async () => {

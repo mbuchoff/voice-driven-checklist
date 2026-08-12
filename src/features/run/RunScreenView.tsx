@@ -1,7 +1,12 @@
 import { memo, useEffect, useRef } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import {
+  Pressable,
+  Text,
+  View,
+  type NativePointerEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import Animated, {
-  interpolate,
   useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
@@ -31,6 +36,31 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type RunCommand = 'next' | 'previous' | 'repeat';
 
+const STOP_CONTROL_REST_SIZE = 44;
+const STOP_CONTROL_MIN_HELD_SIZE = 66;
+const STOP_CONTROL_MAX_HELD_SIZE = 108;
+const STOP_CONTROL_CONTACT_PADDING = 24;
+
+export function getStopControlPresentation({
+  width,
+  height,
+  offsetX,
+  offsetY,
+}: Pick<NativePointerEvent, 'width' | 'height' | 'offsetX' | 'offsetY'>) {
+  const size = Math.min(
+    STOP_CONTROL_MAX_HELD_SIZE,
+    Math.max(
+      STOP_CONTROL_MIN_HELD_SIZE,
+      Math.max(width, height) + STOP_CONTROL_CONTACT_PADDING,
+    ),
+  );
+  return {
+    size,
+    left: offsetX - size / 2,
+    top: offsetY - size / 2,
+  };
+}
+
 export function CompletionView({
   totalItems,
   checklistTitle,
@@ -43,10 +73,23 @@ export function CompletionView({
   onExit: () => void | Promise<void>;
 }) {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#173d31', padding: 24 }}>
+    <View
+      testID="completion-screen"
+      style={{ flex: 1, overflow: 'hidden', backgroundColor: '#173d31' }}
+    >
       <ScreenBackground variant="completion" />
       <CompletionConfetti />
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <SafeAreaView style={{ flex: 1 }}>
+      <View
+        testID="completion-content"
+        style={{
+          flex: 1,
+          paddingHorizontal: 24,
+          paddingVertical: 28,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
         <View
           style={{
             width: 96,
@@ -140,7 +183,8 @@ export function CompletionView({
           </Pressable>
         </View>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -175,10 +219,40 @@ export function ActiveRunView({
   const trackStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: getRunTrackOffset(animatedCurrentIndex.value) }],
   }));
-  const stopControlStyle = useAnimatedStyle(() => {
-    const size = interpolate(stopHoldProgress.value, [0, 0.15, 1], [44, 66, 66]);
-    return { width: size, height: size, borderRadius: size / 2 };
-  });
+  const stopPointerId = useRef<number | null>(null);
+  const stopControlSize = useSharedValue(STOP_CONTROL_REST_SIZE);
+  const stopControlLeft = useSharedValue(0);
+  const stopControlTop = useSharedValue(0);
+  const stopControlStyle = useAnimatedStyle(() => ({
+    width: stopControlSize.value,
+    height: stopControlSize.value,
+    borderRadius: stopControlSize.value / 2,
+    left: stopControlLeft.value,
+    top: stopControlTop.value,
+  }));
+  const stopHintStyle = useAnimatedStyle(() => ({
+    left: stopControlLeft.value + stopControlSize.value + 10,
+    top: stopControlTop.value + (stopControlSize.value - 28) / 2,
+  }));
+
+  const positionStopControl = (
+    event: NativeSyntheticEvent<NativePointerEvent>,
+  ) => {
+    const pointer = event.nativeEvent;
+    if (stopPointerId.current !== pointer.pointerId) return;
+    const presentation = getStopControlPresentation(pointer);
+    stopControlSize.value = presentation.size;
+    stopControlLeft.value = presentation.left;
+    stopControlTop.value = presentation.top;
+  };
+
+  const resetStopControl = () => {
+    stopPointerId.current = null;
+    const timing = { duration: 140 };
+    stopControlSize.value = withTiming(STOP_CONTROL_REST_SIZE, timing);
+    stopControlLeft.value = withTiming(0, timing);
+    stopControlTop.value = withTiming(0, timing);
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.runBackground }}>
@@ -211,19 +285,46 @@ export function ActiveRunView({
                 : 'Press and hold for one point two seconds'
             }
             testID="stop-run"
-            onPressIn={onBeginStopHold}
-            onPressOut={onReleaseStopHold}
+            onPointerDown={(event) => {
+              if (talkBackEnabled) return;
+              stopPointerId.current = event.nativeEvent.pointerId;
+              positionStopControl(event);
+            }}
+            onPointerMove={positionStopControl}
+            onPointerUp={resetStopControl}
+            onPointerCancel={resetStopControl}
+            onPressIn={() => {
+              if (!talkBackEnabled && stopPointerId.current == null) {
+                stopControlSize.value = STOP_CONTROL_MIN_HELD_SIZE;
+                stopControlLeft.value =
+                  (STOP_CONTROL_REST_SIZE - STOP_CONTROL_MIN_HELD_SIZE) / 2;
+                stopControlTop.value =
+                  (STOP_CONTROL_REST_SIZE - STOP_CONTROL_MIN_HELD_SIZE) / 2;
+              }
+              onBeginStopHold();
+            }}
+            onPressOut={() => {
+              resetStopControl();
+              onReleaseStopHold();
+            }}
             onPress={() => {
               if (talkBackEnabled) void onRequestStop();
             }}
+            style={{
+              width: STOP_CONTROL_REST_SIZE,
+              height: STOP_CONTROL_REST_SIZE,
+              overflow: 'visible',
+            }}
           >
             <Animated.View
+              pointerEvents="none"
               testID="stop-hold-control"
               style={[
                 {
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
+                  position: 'absolute',
+                  width: STOP_CONTROL_REST_SIZE,
+                  height: STOP_CONTROL_REST_SIZE,
+                  borderRadius: STOP_CONTROL_REST_SIZE / 2,
                   borderWidth: 1,
                   borderColor: theme.runBorder,
                   backgroundColor: theme.runSurface,
@@ -245,22 +346,28 @@ export function ActiveRunView({
                 testID="stop-run-icon"
               />
             </Animated.View>
+            {holdingStop ? (
+              <Animated.Text
+                pointerEvents="none"
+                style={[
+                  {
+                    position: 'absolute',
+                    color: '#17382e',
+                    backgroundColor: theme.accent,
+                    borderRadius: 9,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    fontWeight: '800',
+                    fontSize: 12,
+                    width: 104,
+                  },
+                  stopHintStyle,
+                ]}
+              >
+                Keep holding
+              </Animated.Text>
+            ) : null}
           </Pressable>
-          {holdingStop ? (
-            <Text
-              style={{
-                color: '#17382e',
-                backgroundColor: theme.accent,
-                borderRadius: 9,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                fontWeight: '800',
-                fontSize: 12,
-              }}
-            >
-              Keep holding
-            </Text>
-          ) : null}
         </View>
         <View
           pointerEvents="none"

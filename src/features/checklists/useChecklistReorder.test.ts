@@ -2,6 +2,7 @@ import {
   getDropTargetOffset,
   getEdgeAutoscrollDelta,
   getReorderRowOffset,
+  resetChecklistDragMotion,
 } from './useChecklistReorder';
 
 describe('checklist edge autoscroll', () => {
@@ -35,6 +36,28 @@ describe('checklist edge autoscroll', () => {
 });
 
 describe('checklist row motion', () => {
+  it('keeps the released preview at the pointer until React replaces it', () => {
+    const motion = {
+      active: { value: 1 },
+      from: { value: 0 },
+      to: { value: 2 },
+      height: { value: 50 },
+      nearEdge: { value: 1 },
+      previewOffset: { value: 97 },
+    };
+
+    resetChecklistDragMotion(motion);
+
+    expect(motion).toMatchObject({
+      active: { value: 0 },
+      from: { value: -1 },
+      to: { value: -1 },
+      height: { value: 0 },
+      nearEdge: { value: 0 },
+      previewOffset: { value: 97 },
+    });
+  });
+
   it('slides only the rows displaced by a downward drag', () => {
     expect(getReorderRowOffset(0, 0, 2, 59)).toBe(0);
     expect(getReorderRowOffset(1, 0, 2, 59)).toBe(-59);

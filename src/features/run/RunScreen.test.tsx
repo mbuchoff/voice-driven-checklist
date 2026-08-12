@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
-import { AccessibilityInfo, BackHandler, Platform } from 'react-native';
+import { AccessibilityInfo, BackHandler, Platform, StyleSheet } from 'react-native';
 
 import {
   flushRunEffects as flush,
@@ -574,6 +574,31 @@ describe('RunScreen', () => {
       expect(recognition.isListening()).toBe(false);
       expect(onCompletion).toHaveBeenCalledTimes(1);
       expect(playback.spoken).toEqual(['Item one', 'Item two', 'Item three']);
+    });
+
+    it('keeps completion artwork full-bleed while safe-area padding stays on the content', async () => {
+      setup();
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+
+      const screenStyle = StyleSheet.flatten(
+        screen.getByTestId('completion-screen').props.style,
+      );
+      const contentStyle = StyleSheet.flatten(
+        screen.getByTestId('completion-content').props.style,
+      );
+      expect(screenStyle).toMatchObject({ flex: 1, overflow: 'hidden' });
+      expect(screenStyle.padding).toBeUndefined();
+      expect(contentStyle).toMatchObject({
+        flex: 1,
+        paddingHorizontal: 24,
+        paddingVertical: 28,
+      });
     });
 
     it('returns to the library when Android back is pressed after completion', async () => {

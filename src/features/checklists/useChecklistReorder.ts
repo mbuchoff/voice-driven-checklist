@@ -78,6 +78,26 @@ export type ChecklistReorderMotion = {
   height: SharedValue<number>;
 };
 
+type MutableNumber = { value: number };
+type ChecklistDragMotion = {
+  active: MutableNumber;
+  from: MutableNumber;
+  to: MutableNumber;
+  height: MutableNumber;
+  nearEdge: MutableNumber;
+  previewOffset: MutableNumber;
+};
+
+export function resetChecklistDragMotion(motion: ChecklistDragMotion) {
+  motion.active.value = 0;
+  motion.from.value = -1;
+  motion.to.value = -1;
+  motion.height.value = 0;
+  motion.nearEdge.value = 0;
+  // The preview remains mounted until React commits the reordered rows. Keep
+  // it under the pointer during that handoff; the next drag initializes it.
+}
+
 export function getReorderRowOffset(
   rowIndex: number,
   from: number,
@@ -386,14 +406,14 @@ export function useChecklistReorder({
     updateEdgeDrag(pageY, nearEdge);
   };
 
-  const resetDragMotion = () => {
-    dragActive.value = 0;
-    dragFrom.value = -1;
-    dragTarget.value = -1;
-    dragHeight.value = 0;
-    dragNearEdge.value = 0;
-    dragOffset.value = 0;
-  };
+  const resetDragMotion = () => resetChecklistDragMotion({
+    active: dragActive,
+    from: dragFrom,
+    to: dragTarget,
+    height: dragHeight,
+    nearEdge: dragNearEdge,
+    previewOffset: dragOffset,
+  });
 
   const finishDrag = () => {
     const current = dragRef.current;
