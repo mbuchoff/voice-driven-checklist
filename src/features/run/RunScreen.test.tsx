@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { AccessibilityInfo, BackHandler, Platform, StyleSheet } from 'react-native';
+import { type GestureType } from 'react-native-gesture-handler';
 
 import {
   flushRunEffects as flush,
@@ -9,6 +10,26 @@ import {
 const defaultPlatformOS = Platform.OS;
 const defaultPlatformVersion = Platform.Version;
 let mockHardwareBackHandler: (() => boolean | null | undefined) | null = null;
+
+const { getByGestureTestId } = jest.requireActual(
+  'react-native-gesture-handler/lib/commonjs/jestUtils',
+) as typeof import('react-native-gesture-handler/lib/typescript/jestUtils');
+
+function beginStopHold() {
+  const gesture = getByGestureTestId('stop-hold-gesture') as GestureType;
+  act(() => {
+    gesture.handlers.onBegin?.({ x: 22, y: 22 } as never);
+    jest.runOnlyPendingTimers();
+  });
+  return gesture;
+}
+
+function releaseStopHold(gesture: GestureType) {
+  act(() => {
+    gesture.handlers.onFinalize?.({} as never, false);
+    jest.runOnlyPendingTimers();
+  });
+}
 
 function useAndroidHardwareBack() {
   Object.defineProperty(Platform, 'OS', {
@@ -436,11 +457,11 @@ describe('RunScreen', () => {
       await flush();
       jest.useFakeTimers();
 
-      fireEvent(screen.getByTestId('stop-run'), 'pressIn');
+      const gesture = beginStopHold();
       expect(screen.queryByText(snapshot.checklistTitle)).toBeNull();
       expect(screen.getByText(/keep holding/i)).toBeOnTheScreen();
       act(() => jest.advanceTimersByTime(600));
-      fireEvent(screen.getByTestId('stop-run'), 'pressOut');
+      releaseStopHold(gesture);
 
       act(() => jest.advanceTimersByTime(1200));
       expect(onExit).not.toHaveBeenCalled();
@@ -457,7 +478,7 @@ describe('RunScreen', () => {
       await flush();
       jest.useFakeTimers();
 
-      fireEvent(screen.getByTestId('stop-run'), 'pressIn');
+      beginStopHold();
       act(() => jest.advanceTimersByTime(1200));
 
       expect(onExit).toHaveBeenCalledTimes(1);

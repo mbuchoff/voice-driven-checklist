@@ -1,5 +1,6 @@
 import { act, fireEvent, screen } from '@testing-library/react-native';
 import { Platform, processColor, StyleSheet } from 'react-native';
+import { type GestureType } from 'react-native-gesture-handler';
 
 import {
   flushRunEffects as flush,
@@ -7,6 +8,10 @@ import {
   setupRunScreen as setup,
 } from './RunScreen.testSupport';
 import { getStopControlPresentation } from './RunScreenView';
+
+const { getByGestureTestId } = jest.requireActual(
+  'react-native-gesture-handler/lib/commonjs/jestUtils',
+) as typeof import('react-native-gesture-handler/lib/typescript/jestUtils');
 import { RUN_ITEM_GAP } from './runPresentation';
 import type { ChecklistRunSnapshot } from './types';
 const defaultPlatformOS = Platform.OS;
@@ -118,12 +123,10 @@ describe('RunScreen presentation', () => {
         offsetX: 43,
         offsetY: 35,
       })).toEqual({ size: 80, left: 3, top: -5 });
-      expect(screen.getByTestId('stop-run').props.onPointerDown).toEqual(
-        expect.any(Function),
-      );
-      expect(screen.getByTestId('stop-run').props.onPointerMove).toEqual(
-        expect.any(Function),
-      );
+      const gesture = getByGestureTestId('stop-hold-gesture') as GestureType;
+      expect(gesture.handlers.onBegin).toEqual(expect.any(Function));
+      expect(gesture.handlers.onUpdate).toEqual(expect.any(Function));
+      expect(gesture.handlers.onFinalize).toEqual(expect.any(Function));
     });
 
     it('begins playback of the first item when playback is available', async () => {

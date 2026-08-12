@@ -13,6 +13,8 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { scheduleOnRN } from 'react-native-worklets';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
@@ -219,7 +221,6 @@ export function ActiveRunView({
   const trackStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: getRunTrackOffset(animatedCurrentIndex.value) }],
   }));
-  const stopPointerId = useRef<number | null>(null);
   const stopControlSize = useSharedValue(STOP_CONTROL_REST_SIZE);
   const stopControlLeft = useSharedValue(0);
   const stopControlTop = useSharedValue(0);
@@ -235,24 +236,43 @@ export function ActiveRunView({
     top: stopControlTop.value + (stopControlSize.value - 28) / 2,
   }));
 
-  const positionStopControl = (
+  const sizeStopControlForPointer = (
     event: NativeSyntheticEvent<NativePointerEvent>,
   ) => {
     const pointer = event.nativeEvent;
-    if (stopPointerId.current !== pointer.pointerId) return;
     const presentation = getStopControlPresentation(pointer);
     stopControlSize.value = presentation.size;
     stopControlLeft.value = presentation.left;
     stopControlTop.value = presentation.top;
   };
-
-  const resetStopControl = () => {
-    stopPointerId.current = null;
-    const timing = { duration: 140 };
-    stopControlSize.value = withTiming(STOP_CONTROL_REST_SIZE, timing);
-    stopControlLeft.value = withTiming(0, timing);
-    stopControlTop.value = withTiming(0, timing);
-  };
+  const stopGesture = Gesture.Pan()
+    .withTestId('stop-hold-gesture')
+    .enabled(!talkBackEnabled)
+    .minDistance(0)
+    .maxPointers(1)
+    .shouldCancelWhenOutside(false)
+    .onBegin((event) => {
+      'worklet';
+      if (stopControlSize.value < STOP_CONTROL_MIN_HELD_SIZE) {
+        stopControlSize.value = STOP_CONTROL_MIN_HELD_SIZE;
+      }
+      stopControlLeft.value = event.x - stopControlSize.value / 2;
+      stopControlTop.value = event.y - stopControlSize.value / 2;
+      scheduleOnRN(onBeginStopHold);
+    })
+    .onUpdate((event) => {
+      'worklet';
+      stopControlLeft.value = event.x - stopControlSize.value / 2;
+      stopControlTop.value = event.y - stopControlSize.value / 2;
+    })
+    .onFinalize(() => {
+      'worklet';
+      const timing = { duration: 140 };
+      stopControlSize.value = withTiming(STOP_CONTROL_REST_SIZE, timing);
+      stopControlLeft.value = withTiming(0, timing);
+      stopControlTop.value = withTiming(0, timing);
+      scheduleOnRN(onReleaseStopHold);
+    });
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.runBackground }}>
@@ -276,6 +296,7 @@ export function ActiveRunView({
             gap: 10,
           }}
         >
+          <GestureDetector gesture={stopGesture}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Stop run"
@@ -286,26 +307,7 @@ export function ActiveRunView({
             }
             testID="stop-run"
             onPointerDown={(event) => {
-              if (talkBackEnabled) return;
-              stopPointerId.current = event.nativeEvent.pointerId;
-              positionStopControl(event);
-            }}
-            onPointerMove={positionStopControl}
-            onPointerUp={resetStopControl}
-            onPointerCancel={resetStopControl}
-            onPressIn={() => {
-              if (!talkBackEnabled && stopPointerId.current == null) {
-                stopControlSize.value = STOP_CONTROL_MIN_HELD_SIZE;
-                stopControlLeft.value =
-                  (STOP_CONTROL_REST_SIZE - STOP_CONTROL_MIN_HELD_SIZE) / 2;
-                stopControlTop.value =
-                  (STOP_CONTROL_REST_SIZE - STOP_CONTROL_MIN_HELD_SIZE) / 2;
-              }
-              onBeginStopHold();
-            }}
-            onPressOut={() => {
-              resetStopControl();
-              onReleaseStopHold();
+              if (!talkBackEnabled) sizeStopControlForPointer(event);
             }}
             onPress={() => {
               if (talkBackEnabled) void onRequestStop();
@@ -368,6 +370,7 @@ export function ActiveRunView({
               </Animated.Text>
             ) : null}
           </Pressable>
+          </GestureDetector>
         </View>
         <View
           pointerEvents="none"
