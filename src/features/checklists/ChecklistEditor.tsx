@@ -189,7 +189,7 @@ export function ChecklistEditor({
   };
 
   const renderDropTarget = (index: number) =>
-    drag?.to === index ? (
+    drag?.phase === 'dragging' && drag.to === index ? (
       <Animated.View
         key={`drop-target-${index}`}
         testID={`item-drop-target-${index}`}
@@ -295,7 +295,7 @@ export function ChecklistEditor({
           }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
-          scrollEnabled={!drag}
+          scrollEnabled={drag?.phase !== 'dragging'}
           testID="checklist-editor-scroll"
           onLayout={handleViewportLayout}
           onContentSizeChange={(_, height) => {
@@ -365,7 +365,8 @@ export function ChecklistEditor({
               let dropIndex = 0;
               return items.map((item, index) => {
                 const error = itemErrors[item.localId];
-                const isActive = drag?.localId === item.localId;
+                const isActive =
+                  drag?.phase === 'dragging' && drag.localId === item.localId;
                 const isEditing = focusItemId === item.localId;
                 const editGesture = Gesture.Tap()
                   .withTestId(`item-edit-gesture-${item.localId}-${index}`)

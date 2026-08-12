@@ -44,11 +44,18 @@ async function beginRowDrag(
   return gesture;
 }
 
-async function finishRowDrag(gesture: GestureType) {
+async function releaseRowDrag(gesture: GestureType) {
   await act(async () => {
     gesture.handlers.onEnd?.({} as never, true);
     gesture.handlers.onFinalize?.({} as never, true);
     await Promise.resolve();
+  });
+}
+
+async function finishRowDrag(gesture: GestureType) {
+  await releaseRowDrag(gesture);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 140));
   });
 }
 
@@ -521,6 +528,48 @@ describe('ChecklistEditor', () => {
           .position,
       ).toBe('relative');
       expect(screen.getByTestId('item-row-2')).toBeOnTheScreen();
+    });
+
+    it('keeps the released preview over the settled row during the visual handoff', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'settle smoothly',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+
+      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+        nativeEvent: { layout: { y: 0, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
+        nativeEvent: { layout: { y: 50, height: 50 } },
+      });
+      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+        nativeEvent: { layout: { y: 100, height: 50 } },
+      });
+      const gesture = await beginRowDrag(0, 25, 125);
+
+      await releaseRowDrag(gesture);
+
+      expect(screen.getByTestId('item-text-2').props.value).toBe('a');
+      expect(
+        StyleSheet.flatten(screen.getByTestId('item-row-2').props.style)
+          .opacity,
+      ).toBe(1);
+      expect(screen.queryByTestId('item-drop-target-2')).toBeNull();
+      expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 140));
+      });
+      expect(screen.queryByTestId('item-drag-preview')).toBeNull();
     });
 
     it('keeps one preview coordinate base as consecutive insertion targets open', async () => {
