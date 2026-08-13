@@ -530,7 +530,7 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-row-2')).toBeOnTheScreen();
     });
 
-    it('keeps the released preview over the settled row during the visual handoff', async () => {
+    it('settles the released preview without reusing displaced native rows', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
         title: 'settle smoothly',
@@ -555,6 +555,8 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
       const gesture = await beginRowDrag(0, 25, 125);
+      const firstDisplacedRow = screen.getByTestId('item-row-1');
+      const secondDisplacedRow = screen.getByTestId('item-row-2');
 
       await releaseRowDrag(gesture);
 
@@ -563,6 +565,8 @@ describe('ChecklistEditor', () => {
         StyleSheet.flatten(screen.getByTestId('item-row-2').props.style)
           .opacity,
       ).toBe(1);
+      expect(screen.getByTestId('item-row-0')).not.toBe(firstDisplacedRow);
+      expect(screen.getByTestId('item-row-1')).not.toBe(secondDisplacedRow);
       expect(screen.queryByTestId('item-drop-target-2')).toBeNull();
       expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
 

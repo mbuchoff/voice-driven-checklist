@@ -389,6 +389,7 @@ export function ChecklistEditor({
                     {dropTarget}
                     <GestureDetector gesture={rowInteraction}>
                       <ReorderableChecklistRow
+                        key={`${item.localId}-${index}`}
                         itemIndex={index}
                         reorderMotion={reorderMotion}
                         testID={`item-row-${index}`}
