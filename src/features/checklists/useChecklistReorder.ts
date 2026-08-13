@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ComponentRef,
@@ -89,6 +90,27 @@ type ChecklistDragMotion = {
   nearEdge: MutableNumber;
   previewOffset: MutableNumber;
 };
+
+type ChecklistReleaseMotion = {
+  previewOffset: MutableNumber;
+  previewOpacity: MutableNumber;
+};
+
+export function beginChecklistDragRelease(
+  motion: ChecklistReleaseMotion,
+  targetOffset: number,
+) {
+  motion.previewOffset.value = withTiming(targetOffset, {
+    duration: CHECKLIST_REORDER_RELEASE_MS,
+    easing: REORDER_ROW_EASING,
+  });
+  motion.previewOpacity.value = withTiming(0, {
+    duration: CHECKLIST_REORDER_RELEASE_MS,
+    easing: REORDER_ROW_EASING,
+  });
+  // Keep neighboring rows translated until React commits their reordered
+  // layout. Resetting them before that commit briefly reopens the source gap.
+}
 
 export function resetChecklistDragMotion(motion: ChecklistDragMotion) {
   motion.active.value = 0;
@@ -438,22 +460,22 @@ export function useChecklistReorder({
     );
     setDrag({ ...dragStateFrom(current), phase: 'settling' });
     setItems((previous) => moveItem(previous, current.from, current.to));
-    dragOffset.value = withTiming(targetOffset, {
-      duration: CHECKLIST_REORDER_RELEASE_MS,
-      easing: REORDER_ROW_EASING,
-    });
-    dragPreviewOpacity.value = withTiming(0, {
-      duration: CHECKLIST_REORDER_RELEASE_MS,
-      easing: REORDER_ROW_EASING,
-    });
+    beginChecklistDragRelease({
+      previewOffset: dragOffset,
+      previewOpacity: dragPreviewOpacity,
+    }, targetOffset);
     releaseTimer.current = setTimeout(() => {
       releaseTimer.current = null;
       setDrag((activeDrag) =>
         activeDrag?.phase === 'settling' ? null : activeDrag,
       );
     }, CHECKLIST_REORDER_RELEASE_MS);
-    resetDragMotion();
   };
+
+  useLayoutEffect(() => {
+    if (drag?.phase !== 'settling') return;
+    resetDragMotion();
+  }, [drag?.phase]);
 
   const cancelDrag = () => {
     if (!dragRef.current) return;

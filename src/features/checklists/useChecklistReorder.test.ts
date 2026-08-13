@@ -1,4 +1,5 @@
 import {
+  beginChecklistDragRelease,
   getDropTargetOffset,
   getEdgeAutoscrollDelta,
   getReorderRowOffset,
@@ -36,6 +37,20 @@ describe('checklist edge autoscroll', () => {
 });
 
 describe('checklist row motion', () => {
+  it('keeps displaced rows in place until the reordered layout commits', () => {
+    const motion = {
+      previewOffset: { value: 350 },
+      previewOpacity: { value: 1 },
+    };
+
+    beginChecklistDragRelease(motion, 220);
+
+    expect(motion).toEqual({
+      previewOffset: { value: 220 },
+      previewOpacity: { value: 0 },
+    });
+  });
+
   it('keeps the released preview at the pointer until React replaces it', () => {
     const motion = {
       active: { value: 1 },
