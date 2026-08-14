@@ -21,8 +21,9 @@ import {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
-import { scheduleOnRN } from 'react-native-worklets';
+import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 
 import { moveItem } from './reorder';
 
@@ -112,6 +113,21 @@ function dragStateFrom(context: DragContext): ChecklistDragState {
     top: context.previewTop,
     height: context.height,
   };
+}
+
+function releaseDragClaim(
+  active: Pick<SharedValue<number>, 'value'>,
+  from: Pick<SharedValue<number>, 'value'>,
+  target: Pick<SharedValue<number>, 'value'>,
+  nearEdge: Pick<SharedValue<number>, 'value'>,
+  expectedFrom: number,
+) {
+  'worklet';
+  if (from.value !== expectedFrom) return;
+  active.value = 0;
+  from.value = -1;
+  target.value = -1;
+  nearEdge.value = 0;
 }
 
 export function animateEditorRows() {
@@ -306,9 +322,19 @@ export function useChecklistReorder({
     );
   };
 
-  const finishDrag = (localId: string) => {
+  const finishDrag = (localId: string, claimedIndex: number) => {
     const current = dragRef.current;
-    if (!current || current.localId !== localId) return;
+    if (!current || current.localId !== localId) {
+      scheduleOnUI(
+        releaseDragClaim,
+        dragActive,
+        dragFrom,
+        dragTarget,
+        dragNearEdge,
+        claimedIndex,
+      );
+      return;
+    }
     dragRef.current = null;
     cancelEdgeAutoscroll();
     const targetOffset = getDropTargetOffset(
@@ -330,6 +356,13 @@ export function useChecklistReorder({
         easing: REORDER_ROW_EASING,
       },
       (finished) => {
+        releaseDragClaim(
+          dragActive,
+          dragFrom,
+          dragTarget,
+          dragNearEdge,
+          claimedIndex,
+        );
         if (finished) scheduleOnRN(completeDragRelease, current.localId);
       },
     );
@@ -400,7 +433,7 @@ export function useChecklistReorder({
       .onEnd(() => {
         'worklet';
         if (dragFrom.value === itemIndex) {
-          scheduleOnRN(finishDrag, item.localId);
+          scheduleOnRN(finishDrag, item.localId, itemIndex);
         }
       })
       .onFinalize((_event, success) => {
@@ -408,11 +441,14 @@ export function useChecklistReorder({
         if (dragFrom.value !== itemIndex) return;
         if (!success) {
           scheduleOnRN(cancelDrag, item.localId);
+          releaseDragClaim(
+            dragActive,
+            dragFrom,
+            dragTarget,
+            dragNearEdge,
+            itemIndex,
+          );
         }
-        dragActive.value = 0;
-        dragFrom.value = -1;
-        dragTarget.value = -1;
-        dragNearEdge.value = 0;
       });
 
   useEffect(
