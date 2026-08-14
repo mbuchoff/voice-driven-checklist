@@ -6,6 +6,11 @@ import {
   runSnapshot as snapshot,
   setupRunScreen as setup,
 } from './RunScreen.testSupport';
+import {
+  applyHeldStopControlSizeIfActive,
+  getHeldStopControlSize,
+  getStopControlPosition,
+} from './StopRunControl';
 import { RUN_ITEM_GAP } from './runPresentation';
 import type { ChecklistRunSnapshot } from './types';
 const defaultPlatformOS = Platform.OS;
@@ -90,6 +95,19 @@ describe('RunScreen presentation', () => {
       expect(orbitStyle.zIndex).toBeGreaterThan(stageStyle.zIndex ?? 0);
     });
 
+    it('stacks the held stop control above the progress orbit', async () => {
+      setup();
+      await flush();
+
+      const headerStyle = StyleSheet.flatten(
+        screen.getByTestId('run-header').props.style,
+      );
+      const orbitStyle = StyleSheet.flatten(
+        screen.getByTestId('run-progress-orbit').props.style,
+      );
+      expect(headerStyle.zIndex).toBeGreaterThan(orbitStyle.zIndex ?? 0);
+    });
+
     it('centers the title independently of the stop control width', async () => {
       setup();
       await flush();
@@ -99,6 +117,36 @@ describe('RunScreen presentation', () => {
       );
       expect(titleFrame.position).toBe('absolute');
       expect(titleFrame.left).toBe(titleFrame.right);
+    });
+
+    it('grows with the pointer contact and stays centered as the pointer moves', () => {
+      expect(getHeldStopControlSize(1, 1)).toBe(66);
+      expect(getHeldStopControlSize(52, 44)).toBe(76);
+      expect(getHeldStopControlSize(56, 48)).toBe(80);
+      expect(getHeldStopControlSize(200, 200)).toBe(108);
+
+      expect(getStopControlPosition(76, 31, 27)).toEqual({
+        left: -7,
+        top: -11,
+      });
+      expect(getStopControlPosition(76, 60, 10)).toEqual({
+        left: 22,
+        top: -28,
+      });
+    });
+
+    it('ignores pointer contact sizing after the hold has ended', () => {
+      const size = { value: 44 };
+
+      expect(
+        applyHeldStopControlSizeIfActive(size, { value: false }, 56, 48),
+      ).toBe(false);
+      expect(size.value).toBe(44);
+
+      expect(
+        applyHeldStopControlSizeIfActive(size, { value: true }, 56, 48),
+      ).toBe(true);
+      expect(size.value).toBe(80);
     });
 
     it('begins playback of the first item when playback is available', async () => {

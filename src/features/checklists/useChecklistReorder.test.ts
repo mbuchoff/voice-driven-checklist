@@ -1,7 +1,6 @@
 import {
   getDropTargetOffset,
   getEdgeAutoscrollDelta,
-  getReorderRowOffset,
 } from './useChecklistReorder';
 
 describe('checklist edge autoscroll', () => {
@@ -34,21 +33,7 @@ describe('checklist edge autoscroll', () => {
   });
 });
 
-describe('checklist row motion', () => {
-  it('slides only the rows displaced by a downward drag', () => {
-    expect(getReorderRowOffset(0, 0, 2, 59)).toBe(0);
-    expect(getReorderRowOffset(1, 0, 2, 59)).toBe(-59);
-    expect(getReorderRowOffset(2, 0, 2, 59)).toBe(-59);
-    expect(getReorderRowOffset(3, 0, 2, 59)).toBe(0);
-  });
-
-  it('slides only the rows displaced by an upward drag', () => {
-    expect(getReorderRowOffset(0, 3, 1, 59)).toBe(0);
-    expect(getReorderRowOffset(1, 3, 1, 59)).toBe(59);
-    expect(getReorderRowOffset(2, 3, 1, 59)).toBe(59);
-    expect(getReorderRowOffset(3, 3, 1, 59)).toBe(0);
-  });
-
+describe('checklist row placement', () => {
   it('places the insertion target correctly among variable-height rows', () => {
     const layouts = [
       { y: 0, height: 70 },

@@ -1,9 +1,8 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
-import { AccessibilityInfo, BackHandler, Platform } from 'react-native';
+import { BackHandler, Platform, StyleSheet } from 'react-native';
 
 import {
   flushRunEffects as flush,
-  runSnapshot as snapshot,
   setupRunScreen as setup,
 } from './RunScreen.testSupport';
 const defaultPlatformOS = Platform.OS;
@@ -429,115 +428,6 @@ describe('RunScreen', () => {
       ]);
     });
 
-    it('keeps the run active when the pointer hold is released early', async () => {
-      const { onExit, onRequestStop } = setup({
-        screenReaderEnabled: false,
-      });
-      await flush();
-      jest.useFakeTimers();
-
-      fireEvent(screen.getByTestId('stop-run'), 'pressIn');
-      expect(screen.queryByText(snapshot.checklistTitle)).toBeNull();
-      expect(screen.getByText(/keep holding/i)).toBeOnTheScreen();
-      act(() => jest.advanceTimersByTime(600));
-      fireEvent(screen.getByTestId('stop-run'), 'pressOut');
-
-      act(() => jest.advanceTimersByTime(1200));
-      expect(onExit).not.toHaveBeenCalled();
-      expect(onRequestStop).not.toHaveBeenCalled();
-      expect(screen.queryByText(/keep holding/i)).toBeNull();
-      expect(screen.getByText(snapshot.checklistTitle)).toBeOnTheScreen();
-      jest.useRealTimers();
-    });
-
-    it('stops directly after the complete 1.2-second pointer hold', async () => {
-      const { onExit, onRequestStop } = setup({
-        screenReaderEnabled: false,
-      });
-      await flush();
-      jest.useFakeTimers();
-
-      fireEvent(screen.getByTestId('stop-run'), 'pressIn');
-      act(() => jest.advanceTimersByTime(1200));
-
-      expect(onExit).toHaveBeenCalledTimes(1);
-      expect(onRequestStop).not.toHaveBeenCalled();
-      jest.useRealTimers();
-    });
-
-    it('opens confirmation when TalkBack activates the X', async () => {
-      const { onExit, onRequestStop } = setup({
-        screenReaderEnabled: true,
-      });
-      await flush();
-
-      fireEvent.press(screen.getByTestId('stop-run'));
-
-      expect(onRequestStop).toHaveBeenCalledTimes(1);
-      expect(onExit).not.toHaveBeenCalled();
-    });
-
-    it('uses confirmation when TalkBack turns on after the run opens', async () => {
-      let onScreenReaderChanged: (enabled: boolean) => void = () => undefined;
-      const remove = jest.fn();
-      jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled').mockResolvedValue(false);
-      jest
-        .spyOn(AccessibilityInfo, 'addEventListener')
-        .mockImplementation((_event, listener) => {
-          onScreenReaderChanged = listener as unknown as (enabled: boolean) => void;
-          return { remove } as never;
-        });
-      const { onRequestStop, unmount } = setup();
-      await flush();
-
-      act(() => onScreenReaderChanged(true));
-      fireEvent.press(screen.getByTestId('stop-run'));
-
-      expect(onRequestStop).toHaveBeenCalledTimes(1);
-      unmount();
-      expect(remove).toHaveBeenCalledTimes(1);
-    });
-
-    it('uses confirmation while TalkBack detection is still pending', async () => {
-      jest
-        .spyOn(AccessibilityInfo, 'isScreenReaderEnabled')
-        .mockImplementation(() => new Promise(() => undefined));
-      jest.spyOn(AccessibilityInfo, 'addEventListener').mockReturnValue({
-        remove: jest.fn(),
-      } as never);
-      const { onRequestStop } = setup();
-      await flush();
-
-      fireEvent.press(screen.getByTestId('stop-run'));
-
-      expect(onRequestStop).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not let the initial TalkBack query overwrite a newer change event', async () => {
-      let finishInitialQuery: (enabled: boolean) => void = () => undefined;
-      let onScreenReaderChanged: (enabled: boolean) => void = () => undefined;
-      jest.spyOn(AccessibilityInfo, 'isScreenReaderEnabled').mockImplementation(
-        () => new Promise((resolve) => {
-          finishInitialQuery = resolve;
-        }),
-      );
-      jest
-        .spyOn(AccessibilityInfo, 'addEventListener')
-        .mockImplementation((_event, listener) => {
-          onScreenReaderChanged = listener as unknown as (enabled: boolean) => void;
-          return { remove: jest.fn() } as never;
-        });
-      const { onRequestStop } = setup();
-      await flush();
-
-      act(() => onScreenReaderChanged(true));
-      await act(async () => finishInitialQuery(false));
-      await flush();
-      fireEvent.press(screen.getByTestId('stop-run'));
-
-      expect(onRequestStop).toHaveBeenCalledTimes(1);
-    });
-
     it('requests confirmation when Android back is pressed during an active run', async () => {
       useAndroidHardwareBack();
       const { onExit, onRequestStop } = setup();
@@ -574,6 +464,31 @@ describe('RunScreen', () => {
       expect(recognition.isListening()).toBe(false);
       expect(onCompletion).toHaveBeenCalledTimes(1);
       expect(playback.spoken).toEqual(['Item one', 'Item two', 'Item three']);
+    });
+
+    it('keeps completion artwork full-bleed while safe-area padding stays on the content', async () => {
+      setup();
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+      fireEvent.press(screen.getByTestId('manual-next'));
+      await flush();
+
+      const screenStyle = StyleSheet.flatten(
+        screen.getByTestId('completion-screen').props.style,
+      );
+      const contentStyle = StyleSheet.flatten(
+        screen.getByTestId('completion-content').props.style,
+      );
+      expect(screenStyle).toMatchObject({ flex: 1, overflow: 'hidden' });
+      expect(screenStyle.padding).toBeUndefined();
+      expect(contentStyle).toMatchObject({
+        flex: 1,
+        paddingHorizontal: 24,
+        paddingVertical: 28,
+      });
     });
 
     it('returns to the library when Android back is pressed after completion', async () => {

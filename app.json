@@ -58,6 +58,7 @@
           "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
         }
       ],
+      "./plugins/withAndroidPointerEvents",
       "./plugins/withNotifeeMicrophoneForegroundService",
       "./plugins/withReleaseSigningConfig",
       [
