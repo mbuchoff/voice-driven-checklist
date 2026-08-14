@@ -1,91 +1,25 @@
 import { Profiler } from 'react';
 import { act, fireEvent, screen, within } from '@testing-library/react-native';
 import { Keyboard, ScrollView, StyleSheet } from 'react-native';
-import { type GestureType } from 'react-native-gesture-handler';
 import * as Reanimated from 'react-native-reanimated';
 
-import { runMigrations } from '@/src/db/migrations';
-import { createTestDatabase } from '@/src/test/createTestDatabase';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
 import { ChecklistEditor, focusEditorInput } from './ChecklistEditor';
+import {
+  beginRowDrag,
+  cancelRowDrag,
+  dragRow,
+  finishRowDrag,
+  flushGestureCommit,
+  getByGestureTestId,
+  primeRowLayouts,
+  releaseRowDrag,
+  rowGesture,
+  setupEditorDatabase as setupDb,
+  tapToEdit,
+} from './ChecklistEditor.testSupport';
 import { createChecklist, getChecklist } from './repository';
-
-const { getByGestureTestId } = jest.requireActual(
-  'react-native-gesture-handler/lib/commonjs/jestUtils',
-) as typeof import('react-native-gesture-handler/lib/typescript/jestUtils');
-
-async function setupDb() {
-  const db = createTestDatabase();
-  await runMigrations(db);
-  return db;
-}
-
-async function flushGestureCommit() {
-  await Promise.resolve();
-  await Promise.resolve();
-}
-
-async function dragRow(index: number, startY: number, endY: number) {
-  const gesture = await beginRowDrag(index, startY, endY);
-  await finishRowDrag(gesture);
-}
-
-async function beginRowDrag(
-  index: number,
-  startY: number,
-  currentY: number,
-): Promise<GestureType> {
-  const localId = screen.getByTestId(`item-row-${index}`).props.nativeID;
-  let gesture = getByGestureTestId(`item-hold-gesture-${localId}-${index}`);
-  await act(async () => {
-    gesture.handlers.onStart?.({ absoluteY: startY } as never);
-    await Promise.resolve();
-  });
-  gesture = getByGestureTestId(`item-hold-gesture-${localId}-${index}`);
-  await act(async () => {
-    gesture.handlers.onUpdate?.({ absoluteY: currentY } as never);
-    await flushGestureCommit();
-  });
-  return gesture;
-}
-
-async function releaseRowDrag(gesture: GestureType) {
-  await act(async () => {
-    gesture.handlers.onEnd?.({} as never, true);
-    gesture.handlers.onFinalize?.({} as never, true);
-    await Promise.resolve();
-  });
-}
-
-async function finishRowDrag(gesture: GestureType) {
-  await releaseRowDrag(gesture);
-}
-
-async function cancelRowDrag(gesture: GestureType) {
-  await act(async () => {
-    gesture.handlers.onFinalize?.({} as never, false);
-    await Promise.resolve();
-  });
-}
-
-function tapToEdit(index: number) {
-  const localId = screen.getByTestId(`item-row-${index}`).props.nativeID;
-  const gesture = getByGestureTestId(`item-edit-gesture-${localId}-${index}`);
-  act(() => {
-    gesture.handlers.onEnd?.({} as never, true);
-  });
-}
-
-function primeRowLayouts(heights: number[], gap = 0) {
-  let y = 0;
-  heights.forEach((height, index) => {
-    fireEvent(screen.getByTestId(`item-row-${index}`), 'layout', {
-      nativeEvent: { layout: { y, height } },
-    });
-    y += height + gap;
-  });
-}
 
 describe('ChecklistEditor', () => {
   afterEach(() => {
@@ -658,6 +592,67 @@ describe('ChecklistEditor', () => {
         await flushGestureCommit();
       });
       expect(onRender).not.toHaveBeenCalled();
+      await cancelRowDrag(gesture);
+    });
+
+    it('ignores a second row gesture while another row is being dragged', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'one drag at a time',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+      primeRowLayouts([50, 50, 50]);
+
+      const firstGesture = await beginRowDrag(0, 25, 125);
+      const secondGesture = rowGesture(1);
+      await act(async () => {
+        secondGesture.handlers.onStart?.({ absoluteY: 75 } as never);
+        secondGesture.handlers.onUpdate?.({ absoluteY: 20 } as never);
+        secondGesture.handlers.onEnd?.({} as never, true);
+        secondGesture.handlers.onFinalize?.({} as never, true);
+        await flushGestureCommit();
+      });
+
+      expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('a');
+      expect(screen.getByTestId('item-text-0').props.value).toBe('a');
+
+      await releaseRowDrag(firstGesture);
+      expect(screen.getByTestId('item-text-2').props.value).toBe('a');
+    });
+
+    it('forgets deleted row measurements before calculating the bottom slot', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'delete then drag',
+        items: [
+          { text: 'a' },
+          { text: 'b' },
+          { text: 'c' },
+          { text: 'd' },
+        ],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+      primeRowLayouts([50, 50, 50, 50]);
+      fireEvent.press(screen.getByTestId('item-delete-3'));
+
+      const gesture = await beginRowDrag(0, 25, 180);
+
+      expect(screen.getByTestId('item-drop-target-2')).toBeOnTheScreen();
       await cancelRowDrag(gesture);
     });
 

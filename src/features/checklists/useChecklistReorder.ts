@@ -174,6 +174,12 @@ export function useChecklistReorder({
     rowLayoutsValue.value = [...rowLayouts.current];
   };
 
+  useEffect(() => {
+    if (rowLayouts.current.length <= items.length) return;
+    rowLayouts.current.length = items.length;
+    rowLayoutsValue.value = [...rowLayouts.current];
+  }, [items.length, rowLayoutsValue]);
+
   const autoscrollNearEdge = (pageY: number, elapsedMs: number): boolean => {
     const maxY = Math.max(0, contentHeight.current - viewportHeight.current);
     if (!viewportHeight.current || !maxY) return false;
@@ -224,12 +230,8 @@ export function useChecklistReorder({
       current.startCenterY +
       (pageY - current.startPageY) +
       (scrollY.current - current.startScrollY);
-    const activeIndex = itemsRef.current.findIndex(
-      (item) => item.localId === current.localId,
-    );
-    if (activeIndex < 0) return;
     dragOffset.value = contentY - current.height / 2 - current.previewTop;
-    commitDropTarget(getDropIndex(rowLayouts.current, activeIndex, contentY));
+    commitDropTarget(getDropIndex(rowLayouts.current, current.from, contentY));
   };
 
   const continueEdgeAutoscroll = (timestamp: number) => {
@@ -278,16 +280,6 @@ export function useChecklistReorder({
       startPageY: pageY,
       startScrollY: scrollY.current,
     };
-    if (!dragActive.value) {
-      dragActive.value = 1;
-      dragFrom.value = index;
-      dragTarget.value = index;
-      dragStartPageY.value = pageY;
-      dragStartScrollY.value = scrollY.current;
-      dragNearEdge.value = 0;
-    }
-    dragPreviewOpacity.value = 1;
-    dragOffset.value = 0;
     dragRef.current = current;
     setDrag(dragStateFrom(current));
   };
@@ -308,17 +300,6 @@ export function useChecklistReorder({
     }
   };
 
-  const updateDragFromRN = (pageY: number) => {
-    if (!dragRef.current) return;
-    updateDragPosition(pageY);
-    const viewportY = pageY - viewportTop.current;
-    const nearEdge =
-      viewportHeight.current > 0 &&
-      (viewportY < EDGE_AUTOSCROLL_THRESHOLD ||
-        viewportHeight.current - viewportY < EDGE_AUTOSCROLL_THRESHOLD);
-    updateEdgeDrag(pageY, nearEdge);
-  };
-
   const resetDragMotion = () => {
     dragActive.value = 0;
     dragFrom.value = -1;
@@ -332,11 +313,11 @@ export function useChecklistReorder({
     );
   };
 
-  const finishDrag = () => {
+  const finishDrag = (localId: string) => {
     const current = dragRef.current;
+    if (!current || current.localId !== localId) return;
     dragRef.current = null;
     cancelEdgeAutoscroll();
-    if (!current) return;
     const targetOffset = getDropTargetOffset(
       rowLayouts.current,
       current.from,
@@ -364,8 +345,8 @@ export function useChecklistReorder({
     resetDragMotion();
   };
 
-  const cancelDrag = () => {
-    if (!dragRef.current) return;
+  const cancelDrag = (localId: string) => {
+    if (dragRef.current?.localId !== localId) return;
     dragRef.current = null;
     cancelEdgeAutoscroll();
     animateEditorRows();
@@ -388,21 +369,21 @@ export function useChecklistReorder({
       .onStart((event) => {
         'worklet';
         const layout = rowLayoutsValue.value[itemIndex];
-        scheduleOnRN(startDrag, item.localId, event.absoluteY);
-        if (!layout) return;
+        if (!layout || dragActive.value) return;
         dragActive.value = 1;
         dragFrom.value = itemIndex;
         dragTarget.value = itemIndex;
         dragStartPageY.value = event.absoluteY;
         dragStartScrollY.value = scrollYValue.value;
         dragNearEdge.value = 0;
+        dragPreviewOpacity.value = 1;
         dragOffset.value = 0;
+        scheduleOnRN(startDrag, item.localId, event.absoluteY);
       })
       .onUpdate((event) => {
         'worklet';
         const layout = rowLayoutsValue.value[itemIndex];
         if (!layout || !dragActive.value || dragFrom.value !== itemIndex) {
-          scheduleOnRN(updateDragFromRN, event.absoluteY);
           return;
         }
         const contentY =
@@ -427,11 +408,15 @@ export function useChecklistReorder({
       })
       .onEnd(() => {
         'worklet';
-        scheduleOnRN(finishDrag);
+        if (dragFrom.value === itemIndex) {
+          scheduleOnRN(finishDrag, item.localId);
+        }
       })
       .onFinalize((_event, success) => {
         'worklet';
-        if (!success) scheduleOnRN(cancelDrag);
+        if (!success && dragFrom.value === itemIndex) {
+          scheduleOnRN(cancelDrag, item.localId);
+        }
       });
 
   useEffect(

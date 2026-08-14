@@ -7,4 +7,19 @@ jest.mock('react-native-reanimated', () =>
   require('react-native-reanimated/mock')
 );
 
-require('react-native-reanimated').setUpTests();
+const React = require('react');
+const Reanimated = require('react-native-reanimated');
+
+Reanimated.setUpTests();
+
+// Reanimated's stock mock returns a new SharedValue on every render, unlike
+// the native hook. Preserve identity so gesture tests exercise the same
+// cross-render ownership rules as the Android runtime.
+const makeSharedValue = Reanimated.useSharedValue;
+Reanimated.useSharedValue = (initialValue) => {
+  const sharedValue = React.useRef(null);
+  if (sharedValue.current === null) {
+    sharedValue.current = makeSharedValue(initialValue);
+  }
+  return sharedValue.current;
+};

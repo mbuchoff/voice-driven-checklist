@@ -6,9 +6,11 @@ import {
 } from 'react-native';
 import {
   cancelAnimation,
+  ReduceMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import type { CueAction } from '@/src/services/audio/cues';
 import type {
@@ -90,7 +92,8 @@ export function RunScreen({
   const voiceRunStartupTokenRef = useRef(0);
   const voiceRunStopRef = useRef<Promise<void>>(Promise.resolve());
   const cueStartedRef = useRef<Promise<boolean> | null>(null);
-  const stopHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopHoldGenerationRef = useRef(0);
+  const activeStopHoldRef = useRef<number | null>(null);
   const stopHoldCompletedRef = useRef(false);
   const stopHoldProgress = useSharedValue(0);
   const animatedCurrentIndex = useSharedValue(0);
@@ -162,37 +165,41 @@ export function RunScreen({
     [onCue, state.currentItemIndex, state.snapshot],
   );
 
+  const completeStopHold = useCallback((generation: number) => {
+    if (activeStopHoldRef.current !== generation) return;
+    activeStopHoldRef.current = null;
+    stopHoldCompletedRef.current = true;
+    void onExit();
+  }, [onExit]);
+
   const beginStopHold = useCallback(() => {
-    if (talkBackEnabled || stopHoldTimerRef.current) return;
+    if (talkBackEnabled || activeStopHoldRef.current !== null) return;
+    const generation = stopHoldGenerationRef.current + 1;
+    stopHoldGenerationRef.current = generation;
+    activeStopHoldRef.current = generation;
     stopHoldCompletedRef.current = false;
     setHoldingStop(true);
     stopHoldProgress.value = 0;
-    stopHoldProgress.value = withTiming(1, { duration: STOP_HOLD_DURATION_MS });
-    stopHoldTimerRef.current = setTimeout(() => {
-      stopHoldTimerRef.current = null;
-      stopHoldCompletedRef.current = true;
-      void onExit();
-    }, STOP_HOLD_DURATION_MS);
-  }, [onExit, stopHoldProgress, talkBackEnabled]);
+    stopHoldProgress.value = withTiming(
+      1,
+      {
+        duration: STOP_HOLD_DURATION_MS,
+        reduceMotion: ReduceMotion.Never,
+      },
+      (finished) => {
+        if (finished) scheduleOnRN(completeStopHold, generation);
+      },
+    );
+  }, [completeStopHold, stopHoldProgress, talkBackEnabled]);
 
   const releaseStopHold = useCallback(() => {
-    if (stopHoldTimerRef.current) {
-      clearTimeout(stopHoldTimerRef.current);
-      stopHoldTimerRef.current = null;
-    }
+    activeStopHoldRef.current = null;
     if (!stopHoldCompletedRef.current) {
       cancelAnimation(stopHoldProgress);
       stopHoldProgress.value = withTiming(0, { duration: 140 });
     }
     setHoldingStop(false);
   }, [stopHoldProgress]);
-
-  useEffect(
-    () => () => {
-      if (stopHoldTimerRef.current) clearTimeout(stopHoldTimerRef.current);
-    },
-    [],
-  );
 
   const spokenPlaybackReady = !state.voiceControlAvailable || voiceServiceReady;
 
