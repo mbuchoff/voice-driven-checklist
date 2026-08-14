@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ComponentRef,
@@ -18,20 +17,16 @@ import {
 } from 'react-native';
 import { Gesture, ScrollView } from 'react-native-gesture-handler';
 import {
-  cancelAnimation,
   Easing,
-  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-  type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { moveItem } from './reorder';
 
 export const CHECKLIST_REORDER_HOLD_MS = 350;
-export const CHECKLIST_EDITOR_ROW_GAP = 9;
 export const CHECKLIST_REORDER_RELEASE_MS = 120;
 const EDGE_AUTOSCROLL_THRESHOLD = 56;
 const EDGE_AUTOSCROLL_MAX_SPEED = 480;
@@ -74,13 +69,6 @@ type ChecklistReorderOptions = {
   scrollRef: RefObject<ComponentRef<typeof ScrollView> | null>;
 };
 
-export type ChecklistReorderMotion = {
-  active: SharedValue<number>;
-  from: SharedValue<number>;
-  to: SharedValue<number>;
-  height: SharedValue<number>;
-};
-
 type MutableNumber = { value: number };
 type ChecklistDragMotion = {
   active: MutableNumber;
@@ -108,8 +96,6 @@ export function beginChecklistDragRelease(
     duration: CHECKLIST_REORDER_RELEASE_MS,
     easing: REORDER_ROW_EASING,
   });
-  // Keep neighboring rows translated until React commits their reordered
-  // layout. Resetting them before that commit briefly reopens the source gap.
 }
 
 export function resetChecklistDragMotion(motion: ChecklistDragMotion) {
@@ -120,18 +106,6 @@ export function resetChecklistDragMotion(motion: ChecklistDragMotion) {
   motion.nearEdge.value = 0;
   // The preview remains mounted until React commits the reordered rows. Keep
   // it under the pointer during that handoff; the next drag initializes it.
-}
-
-export function getReorderRowOffset(
-  rowIndex: number,
-  from: number,
-  to: number,
-  distance: number,
-): number {
-  'worklet';
-  if (from < to && rowIndex > from && rowIndex <= to) return -distance;
-  if (to < from && rowIndex >= to && rowIndex < from) return distance;
-  return 0;
 }
 
 export function getDropTargetOffset(
@@ -165,40 +139,6 @@ function getDropIndex(
   return index;
 }
 
-export function useChecklistReorderRowStyle(
-  rowIndex: number,
-  motion: ChecklistReorderMotion,
-) {
-  const { active, from, to, height } = motion;
-  const rowOffset = useSharedValue(0);
-  useAnimatedReaction(
-    () => active.value
-      ? getReorderRowOffset(
-          rowIndex,
-          from.value,
-          to.value,
-          height.value + CHECKLIST_EDITOR_ROW_GAP,
-        )
-      : 0,
-    (offset, previousOffset) => {
-      if (!active.value) {
-        cancelAnimation(rowOffset);
-        rowOffset.value = 0;
-        return;
-      }
-      if (offset !== previousOffset) {
-        rowOffset.value = withTiming(offset, {
-          duration: REORDER_ROW_DURATION_MS,
-          easing: REORDER_ROW_EASING,
-        });
-      }
-    },
-  );
-  return useAnimatedStyle(() => {
-    return { transform: [{ translateY: rowOffset.value }] };
-  });
-}
-
 function dragStateFrom(context: DragContext): ChecklistDragState {
   return {
     localId: context.localId,
@@ -217,6 +157,13 @@ export function animateEditorRows() {
     create: { type: LayoutAnimation.Types.easeInEaseOut, property: 'opacity' },
     update: { type: LayoutAnimation.Types.easeInEaseOut },
     delete: { type: LayoutAnimation.Types.easeInEaseOut, property: 'opacity' },
+  });
+}
+
+function animateReorderRows() {
+  LayoutAnimation.configureNext({
+    duration: REORDER_ROW_DURATION_MS,
+    update: { type: LayoutAnimation.Types.easeInEaseOut },
   });
 }
 
@@ -255,25 +202,6 @@ export function useChecklistReorder({
     opacity: dragPreviewOpacity.value,
     transform: [{ translateY: dragOffset.value }],
   }));
-  const dropTargetStyle = useAnimatedStyle(() => {
-    const offset = dragActive.value
-      ? getDropTargetOffset(
-          rowLayoutsValue.value,
-          dragFrom.value,
-          dragTarget.value,
-        )
-      : 0;
-    return {
-      transform: [
-        {
-          translateY: withTiming(offset, {
-            duration: REORDER_ROW_DURATION_MS,
-            easing: REORDER_ROW_EASING,
-          }),
-        },
-      ],
-    };
-  });
 
   const onRowLayout = (index: number, event: LayoutChangeEvent) => {
     if (dragRef.current) return;
@@ -340,7 +268,11 @@ export function useChecklistReorder({
     current.to = to;
     current.top = contentY - current.height / 2;
     dragOffset.value = current.top - current.previewTop;
-    if (targetChanged) dragTarget.value = to;
+    if (targetChanged) {
+      dragTarget.value = to;
+      animateReorderRows();
+      setDrag(dragStateFrom(current));
+    }
   };
 
   const continueEdgeAutoscroll = (timestamp: number) => {
@@ -408,8 +340,14 @@ export function useChecklistReorder({
     setDrag(dragStateFrom(current));
   };
 
-  const recordDragTarget = (to: number) => {
-    if (dragRef.current) dragRef.current.to = to;
+  const renderDragTarget = (to: number) => {
+    const current = dragRef.current;
+    if (!current) return;
+    const targetChanged = current.to !== to;
+    current.to = to;
+    if (!targetChanged) return;
+    animateReorderRows();
+    setDrag(dragStateFrom(current));
   };
 
   const updateEdgeDrag = (pageY: number, nearEdge: boolean) => {
@@ -464,6 +402,7 @@ export function useChecklistReorder({
       previewOffset: dragOffset,
       previewOpacity: dragPreviewOpacity,
     }, targetOffset);
+    resetDragMotion();
     releaseTimer.current = setTimeout(() => {
       releaseTimer.current = null;
       setDrag((activeDrag) =>
@@ -471,11 +410,6 @@ export function useChecklistReorder({
       );
     }, CHECKLIST_REORDER_RELEASE_MS);
   };
-
-  useLayoutEffect(() => {
-    if (drag?.phase !== 'settling') return;
-    resetDragMotion();
-  }, [drag?.phase]);
 
   const cancelDrag = () => {
     if (!dragRef.current) return;
@@ -527,8 +461,8 @@ export function useChecklistReorder({
         dragOffset.value = contentY - layout.height / 2 - layout.y;
         if (to !== dragTarget.value) {
           dragTarget.value = to;
-          scheduleOnRN(recordDragTarget, to);
         }
+        scheduleOnRN(renderDragTarget, to);
         const viewportY = event.absoluteY - viewportTopValue.value;
         const nearEdge =
           viewportHeightValue.value > 0 &&
@@ -574,18 +508,11 @@ export function useChecklistReorder({
   return {
     drag,
     dragPreviewStyle,
-    dropTargetStyle,
     gestureFor,
     moveItemByAction,
     onRowLayout,
     onScroll,
     onViewportLayout,
-    reorderMotion: {
-      active: dragActive,
-      from: dragFrom,
-      to: dragTarget,
-      height: dragHeight,
-    },
     setContentHeight: (height: number) => {
       contentHeight.current = height;
     },

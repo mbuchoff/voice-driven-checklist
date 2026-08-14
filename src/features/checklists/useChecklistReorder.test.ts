@@ -2,7 +2,6 @@ import {
   beginChecklistDragRelease,
   getDropTargetOffset,
   getEdgeAutoscrollDelta,
-  getReorderRowOffset,
   resetChecklistDragMotion,
 } from './useChecklistReorder';
 
@@ -71,20 +70,6 @@ describe('checklist row motion', () => {
       nearEdge: { value: 0 },
       previewOffset: { value: 97 },
     });
-  });
-
-  it('slides only the rows displaced by a downward drag', () => {
-    expect(getReorderRowOffset(0, 0, 2, 59)).toBe(0);
-    expect(getReorderRowOffset(1, 0, 2, 59)).toBe(-59);
-    expect(getReorderRowOffset(2, 0, 2, 59)).toBe(-59);
-    expect(getReorderRowOffset(3, 0, 2, 59)).toBe(0);
-  });
-
-  it('slides only the rows displaced by an upward drag', () => {
-    expect(getReorderRowOffset(0, 3, 1, 59)).toBe(0);
-    expect(getReorderRowOffset(1, 3, 1, 59)).toBe(59);
-    expect(getReorderRowOffset(2, 3, 1, 59)).toBe(59);
-    expect(getReorderRowOffset(3, 3, 1, 59)).toBe(0);
   });
 
   it('places the insertion target correctly among variable-height rows', () => {

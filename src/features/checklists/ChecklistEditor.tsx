@@ -4,7 +4,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type ComponentProps,
   type ComponentRef,
 } from 'react';
 import {
@@ -36,8 +35,6 @@ import {
   CHECKLIST_REORDER_HOLD_MS,
   animateEditorRows,
   useChecklistReorder,
-  useChecklistReorderRowStyle,
-  type ChecklistReorderMotion,
   type ReorderItem,
 } from './useChecklistReorder';
 import {
@@ -72,21 +69,6 @@ function initialItems(checklist?: Checklist): EditorItem[] {
   return [makeBlankItem()];
 }
 
-type ReorderableChecklistRowProps = ComponentProps<typeof Animated.View> & {
-  itemIndex: number;
-  reorderMotion: ChecklistReorderMotion;
-};
-
-function ReorderableChecklistRow({
-  itemIndex,
-  reorderMotion,
-  style,
-  ...props
-}: ReorderableChecklistRowProps) {
-  const reorderStyle = useChecklistReorderRowStyle(itemIndex, reorderMotion);
-  return <Animated.View {...props} style={[style, reorderStyle]} />;
-}
-
 export function ChecklistEditor({
   initialChecklist,
   onSaved,
@@ -110,13 +92,11 @@ export function ChecklistEditor({
   const {
     drag,
     dragPreviewStyle,
-    dropTargetStyle,
     gestureFor,
     moveItemByAction,
     onRowLayout,
     onScroll,
     onViewportLayout,
-    reorderMotion,
     setContentHeight,
   } = useChecklistReorder({ items, setItems, scrollRef });
 
@@ -202,7 +182,6 @@ export function ChecklistEditor({
             borderColor: theme.primary,
             backgroundColor: theme.surfaceAlt,
           },
-          dropTargetStyle,
         ]}
       />
     ) : null;
@@ -388,9 +367,7 @@ export function ChecklistEditor({
                   <Fragment key={item.localId}>
                     {dropTarget}
                     <GestureDetector gesture={rowInteraction}>
-                      <ReorderableChecklistRow
-                        itemIndex={index}
-                        reorderMotion={reorderMotion}
+                      <Animated.View
                         testID={`item-row-${index}`}
                         nativeID={item.localId}
                         accessibilityLabel={`Hold row ${index + 1} to reorder`}
@@ -494,7 +471,7 @@ export function ChecklistEditor({
                             testID={`delete-step-icon-${index}`}
                           />
                         </Pressable>
-                      </ReorderableChecklistRow>
+                      </Animated.View>
                     </GestureDetector>
                   </Fragment>
                 );

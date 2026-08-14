@@ -40,6 +40,7 @@ async function beginRowDrag(
   await act(async () => {
     gesture.handlers.onUpdate?.({ absoluteY: currentY } as never);
     await Promise.resolve();
+    await Promise.resolve();
   });
   return gesture;
 }
@@ -502,7 +503,7 @@ describe('ChecklistEditor', () => {
       fireEvent(screen.getByTestId('item-row-2'), 'layout', {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
-      const gesture = await beginRowDrag(0, 25, 125);
+      const gesture = await beginRowDrag(0, 25, 25);
 
       expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
       expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('a');
@@ -576,7 +577,7 @@ describe('ChecklistEditor', () => {
       expect(screen.queryByTestId('item-drag-preview')).toBeNull();
     });
 
-    it('keeps one preview coordinate base as consecutive insertion targets open', async () => {
+    it('moves the real insertion target while keeping the preview coordinate base fixed', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
         title: 'smooth targets',
@@ -601,28 +602,27 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
 
-      const gesture = await beginRowDrag(0, 25, 25);
+      const gesture = await beginRowDrag(0, 25, 125);
       const previewTop = () =>
         StyleSheet.flatten(screen.getByTestId('item-drag-preview').props.style)
           .top;
       expect(previewTop()).toBe(0);
+      expect(screen.getByTestId('item-drop-target-2')).toBeOnTheScreen();
 
       act(() => {
-        gesture.handlers.onUpdate?.({ absoluteY: 80 } as never);
+        gesture.handlers.onUpdate?.({ absoluteY: 125 } as never);
       });
-      expect(screen.getByTestId('item-drop-target-0')).toBeOnTheScreen();
-      expect(previewTop()).toBe(0);
-
-      act(() => {
-        gesture.handlers.onUpdate?.({ absoluteY: 130 } as never);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
       });
-      expect(screen.getByTestId('item-drop-target-0')).toBeOnTheScreen();
+      expect(screen.getByTestId('item-drop-target-2')).toBeOnTheScreen();
       expect(previewTop()).toBe(0);
 
       await cancelRowDrag(gesture);
     });
 
-    it('moves across insertion slots without rerendering the editor', async () => {
+    it('does not rerender again while the pointer stays in one insertion slot', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
         title: 'smooth drag',
@@ -650,12 +650,15 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 100, height: 50 } },
       });
 
-      const gesture = await beginRowDrag(0, 25, 25);
+      const gesture = await beginRowDrag(0, 25, 125);
       onRender.mockClear();
       act(() => {
-        gesture.handlers.onUpdate?.({ absoluteY: 80 } as never);
+        gesture.handlers.onUpdate?.({ absoluteY: 130 } as never);
       });
-
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
       expect(onRender).not.toHaveBeenCalled();
       await cancelRowDrag(gesture);
     });
