@@ -69,10 +69,12 @@ export function ActiveRunView({
       <RunTexture color={theme.runText} />
 
       <View
+        testID="run-header"
         style={{
           height: 76,
           paddingHorizontal: 20,
           position: 'relative',
+          zIndex: 3,
           flexDirection: 'row',
           alignItems: 'center',
         }}

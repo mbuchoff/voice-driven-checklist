@@ -95,8 +95,10 @@ export function RunScreen({
   const stopHoldGenerationRef = useRef(0);
   const activeStopHoldRef = useRef<number | null>(null);
   const stopHoldCompletedRef = useRef(false);
+  const runCompletedRef = useRef(false);
   const stopHoldProgress = useSharedValue(0);
   const animatedCurrentIndex = useSharedValue(0);
+  runCompletedRef.current = state.status === 'completed';
 
   const stopVoiceRun = useCallback(() => {
     const stop = voiceRunStopRef.current
@@ -166,7 +168,10 @@ export function RunScreen({
   );
 
   const completeStopHold = useCallback((generation: number) => {
-    if (activeStopHoldRef.current !== generation) return;
+    if (
+      runCompletedRef.current ||
+      activeStopHoldRef.current !== generation
+    ) return;
     activeStopHoldRef.current = null;
     stopHoldCompletedRef.current = true;
     void onExit();
@@ -200,6 +205,16 @@ export function RunScreen({
     }
     setHoldingStop(false);
   }, [stopHoldProgress]);
+
+  useEffect(() => {
+    if (state.status !== 'completed') return;
+    stopHoldGenerationRef.current += 1;
+    activeStopHoldRef.current = null;
+    stopHoldCompletedRef.current = false;
+    cancelAnimation(stopHoldProgress);
+    stopHoldProgress.value = 0;
+    setHoldingStop(false);
+  }, [state.status, stopHoldProgress]);
 
   const spokenPlaybackReady = !state.voiceControlAvailable || voiceServiceReady;
 

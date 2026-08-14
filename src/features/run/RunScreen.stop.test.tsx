@@ -132,6 +132,44 @@ describe('RunScreen stop control', () => {
     await releaseStopHold(secondGesture);
   });
 
+  it('does not dismiss the completion screen when a held X finishes late', async () => {
+    const holdCallbacks: ((finished?: boolean) => void)[] = [];
+    const { onExit } = setup({
+      screenReaderEnabled: false,
+      snapshot: {
+        checklistId: 'one-step',
+        checklistTitle: 'One step',
+        items: [{ id: 'only', text: 'Only step', order: 0 }],
+      },
+    });
+    await flush();
+    jest.useFakeTimers();
+    jest.spyOn(Reanimated, 'withTiming').mockImplementation(
+      ((value, _config, callback) => {
+        if (callback) holdCallbacks.push(callback);
+        return value;
+      }) as typeof Reanimated.withTiming,
+    );
+
+    await beginStopHold();
+    const stopCompletion = holdCallbacks.at(-1);
+    fireEvent.press(screen.getByTestId('manual-next'));
+    await act(async () => {
+      jest.advanceTimersByTime(0);
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('completion-restart')).toBeOnTheScreen();
+
+    await act(async () => {
+      stopCompletion?.(true);
+      jest.advanceTimersByTime(0);
+      await Promise.resolve();
+    });
+
+    expect(onExit).not.toHaveBeenCalled();
+    expect(screen.getByTestId('completion-restart')).toBeOnTheScreen();
+  });
+
   it('opens confirmation when TalkBack activates the X', async () => {
     const { onExit, onRequestStop } = setup({ screenReaderEnabled: true });
     await flush();

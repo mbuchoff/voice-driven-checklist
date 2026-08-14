@@ -628,6 +628,38 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-text-2').props.value).toBe('a');
     });
 
+    it('allows another drag when the claimed row disappears before drag setup', async () => {
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'recover a claimed drag',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+      primeRowLayouts([50, 50, 50]);
+
+      const removedRowGesture = rowGesture(0);
+      act(() => {
+        removedRowGesture.handlers.onStart?.({ absoluteY: 25 } as never);
+        fireEvent.press(screen.getByTestId('item-delete-0'));
+        removedRowGesture.handlers.onFinalize?.({} as never, false);
+      });
+      await act(async () => {
+        await flushGestureCommit();
+      });
+
+      primeRowLayouts([50, 50]);
+      await beginRowDrag(0, 25, 25);
+
+      expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('b');
+    });
+
     it('forgets deleted row measurements before calculating the bottom slot', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {

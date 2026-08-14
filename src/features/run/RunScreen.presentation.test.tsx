@@ -7,6 +7,7 @@ import {
   setupRunScreen as setup,
 } from './RunScreen.testSupport';
 import {
+  applyHeldStopControlSizeIfActive,
   getHeldStopControlSize,
   getStopControlPosition,
 } from './StopRunControl';
@@ -94,6 +95,19 @@ describe('RunScreen presentation', () => {
       expect(orbitStyle.zIndex).toBeGreaterThan(stageStyle.zIndex ?? 0);
     });
 
+    it('stacks the held stop control above the progress orbit', async () => {
+      setup();
+      await flush();
+
+      const headerStyle = StyleSheet.flatten(
+        screen.getByTestId('run-header').props.style,
+      );
+      const orbitStyle = StyleSheet.flatten(
+        screen.getByTestId('run-progress-orbit').props.style,
+      );
+      expect(headerStyle.zIndex).toBeGreaterThan(orbitStyle.zIndex ?? 0);
+    });
+
     it('centers the title independently of the stop control width', async () => {
       setup();
       await flush();
@@ -119,6 +133,20 @@ describe('RunScreen presentation', () => {
         left: 22,
         top: -28,
       });
+    });
+
+    it('ignores pointer contact sizing after the hold has ended', () => {
+      const size = { value: 44 };
+
+      expect(
+        applyHeldStopControlSizeIfActive(size, { value: false }, 56, 48),
+      ).toBe(false);
+      expect(size.value).toBe(44);
+
+      expect(
+        applyHeldStopControlSizeIfActive(size, { value: true }, 56, 48),
+      ).toBe(true);
+      expect(size.value).toBe(80);
     });
 
     it('begins playback of the first item when playback is available', async () => {

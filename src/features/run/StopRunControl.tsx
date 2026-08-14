@@ -13,7 +13,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
-import { scheduleOnRN } from 'react-native-worklets';
+import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 
 import { Icon } from '@/src/components/Icon';
 import type { Palette } from '@/src/theme/palette';
@@ -27,6 +27,7 @@ const STOP_CONTROL_CONTACT_PADDING = 24;
 const STOP_CONTROL_RETURN_MS = 140;
 
 export function getHeldStopControlSize(width: number, height: number) {
+  'worklet';
   return Math.min(
     STOP_CONTROL_MAX_HELD_SIZE,
     Math.max(
@@ -34,6 +35,18 @@ export function getHeldStopControlSize(width: number, height: number) {
       Math.max(width, height) + STOP_CONTROL_CONTACT_PADDING,
     ),
   );
+}
+
+export function applyHeldStopControlSizeIfActive(
+  size: Pick<SharedValue<number>, 'value'>,
+  holdActive: Pick<SharedValue<boolean>, 'value'>,
+  width: number,
+  height: number,
+) {
+  'worklet';
+  if (!holdActive.value) return false;
+  size.value = getHeldStopControlSize(width, height);
+  return true;
 }
 
 export function getStopControlPosition(
@@ -66,6 +79,7 @@ export function StopRunControl({
   onRequestStop: () => void | Promise<void>;
 }) {
   const stopControlSize = useSharedValue(STOP_CONTROL_REST_SIZE);
+  const stopGestureActive = useSharedValue(false);
   const pointerX = useSharedValue(STOP_CONTROL_REST_SIZE / 2);
   const pointerY = useSharedValue(STOP_CONTROL_REST_SIZE / 2);
   const stopControlPositionStyle = useAnimatedStyle(() =>
@@ -86,7 +100,13 @@ export function StopRunControl({
   ) => {
     if (talkBackEnabled) return;
     const { width, height } = event.nativeEvent;
-    stopControlSize.value = getHeldStopControlSize(width, height);
+    scheduleOnUI(
+      applyHeldStopControlSizeIfActive,
+      stopControlSize,
+      stopGestureActive,
+      width,
+      height,
+    );
   };
 
   const stopGesture = Gesture.Pan()
@@ -97,6 +117,7 @@ export function StopRunControl({
     .shouldCancelWhenOutside(false)
     .onBegin((event) => {
       'worklet';
+      stopGestureActive.value = true;
       stopControlSize.value = Math.max(
         stopControlSize.value,
         STOP_CONTROL_MIN_HELD_SIZE,
@@ -112,6 +133,7 @@ export function StopRunControl({
     })
     .onFinalize(() => {
       'worklet';
+      stopGestureActive.value = false;
       const timing = { duration: STOP_CONTROL_RETURN_MS };
       stopControlSize.value = withTiming(STOP_CONTROL_REST_SIZE, timing);
       pointerX.value = withTiming(STOP_CONTROL_REST_SIZE / 2, timing);
