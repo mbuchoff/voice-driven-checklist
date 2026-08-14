@@ -2,6 +2,7 @@ import { Profiler } from 'react';
 import { act, fireEvent, screen, within } from '@testing-library/react-native';
 import { Keyboard, ScrollView, StyleSheet } from 'react-native';
 import { type GestureType } from 'react-native-gesture-handler';
+import * as Reanimated from 'react-native-reanimated';
 
 import { runMigrations } from '@/src/db/migrations';
 import { createTestDatabase } from '@/src/test/createTestDatabase';
@@ -18,6 +19,11 @@ async function setupDb() {
   const db = createTestDatabase();
   await runMigrations(db);
   return db;
+}
+
+async function flushGestureCommit() {
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 async function dragRow(index: number, startY: number, endY: number) {
@@ -39,8 +45,7 @@ async function beginRowDrag(
   gesture = getByGestureTestId(`item-hold-gesture-${localId}-${index}`);
   await act(async () => {
     gesture.handlers.onUpdate?.({ absoluteY: currentY } as never);
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushGestureCommit();
   });
   return gesture;
 }
@@ -55,9 +60,6 @@ async function releaseRowDrag(gesture: GestureType) {
 
 async function finishRowDrag(gesture: GestureType) {
   await releaseRowDrag(gesture);
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 140));
-  });
 }
 
 async function cancelRowDrag(gesture: GestureType) {
@@ -75,8 +77,21 @@ function tapToEdit(index: number) {
   });
 }
 
+function primeRowLayouts(heights: number[], gap = 0) {
+  let y = 0;
+  heights.forEach((height, index) => {
+    fireEvent(screen.getByTestId(`item-row-${index}`), 'layout', {
+      nativeEvent: { layout: { y, height } },
+    });
+    y += height + gap;
+  });
+}
+
 describe('ChecklistEditor', () => {
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
 
   it('requests native focus when a step enters editing', () => {
     const focus = jest.fn();
@@ -368,15 +383,7 @@ describe('ChecklistEditor', () => {
         { database },
       );
 
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
-        nativeEvent: { layout: { y: 0, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
-        nativeEvent: { layout: { y: 50, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
-        nativeEvent: { layout: { y: 100, height: 50 } },
-      });
+      primeRowLayouts([50, 50, 50]);
 
       expect(screen.queryByTestId('item-drag-handle-0')).toBeNull();
       expect(screen.getByTestId('item-row-0').props.accessibilityLabel).toMatch(
@@ -462,15 +469,7 @@ describe('ChecklistEditor', () => {
         { database },
       );
 
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
-        nativeEvent: { layout: { y: 0, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
-        nativeEvent: { layout: { y: 50, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
-        nativeEvent: { layout: { y: 100, height: 50 } },
-      });
+      primeRowLayouts([50, 50, 50]);
       await dragRow(0, 25, 125);
       fireEvent.press(screen.getByTestId('save'));
 
@@ -494,15 +493,7 @@ describe('ChecklistEditor', () => {
         { database },
       );
 
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
-        nativeEvent: { layout: { y: 0, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
-        nativeEvent: { layout: { y: 50, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
-        nativeEvent: { layout: { y: 100, height: 50 } },
-      });
+      primeRowLayouts([50, 50, 50]);
       const gesture = await beginRowDrag(0, 25, 25);
 
       expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
@@ -531,7 +522,7 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-row-2')).toBeOnTheScreen();
     });
 
-    it('settles the released preview while preserving displaced native rows', async () => {
+    it('replaces the gap with reordered rows without remounting displaced rows', async () => {
       const database = await setupDb();
       const existing = await createChecklist(database, {
         title: 'settle smoothly',
@@ -546,15 +537,7 @@ describe('ChecklistEditor', () => {
         { database },
       );
 
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
-        nativeEvent: { layout: { y: 0, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
-        nativeEvent: { layout: { y: 50, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
-        nativeEvent: { layout: { y: 100, height: 50 } },
-      });
+      primeRowLayouts([50, 50, 50]);
       const gesture = await beginRowDrag(0, 25, 125);
       const firstDisplacedRow = screen.getByTestId('item-row-1');
       const secondDisplacedRow = screen.getByTestId('item-row-2');
@@ -569,10 +552,43 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-row-0')).toBe(firstDisplacedRow);
       expect(screen.getByTestId('item-row-1')).toBe(secondDisplacedRow);
       expect(screen.queryByTestId('item-drop-target-2')).toBeNull();
+    });
+
+    it('keeps the settling preview mounted until its release animation finishes', async () => {
+      const releaseCallbacks: ((finished?: boolean) => void)[] = [];
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'finish the release',
+        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      });
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+      primeRowLayouts([50, 50, 50]);
+
+      const gesture = await beginRowDrag(0, 25, 125);
+      jest.spyOn(Reanimated, 'withTiming').mockImplementation(
+        ((value, _config, callback) => {
+          if (callback) releaseCallbacks.push(callback);
+          return value;
+        }) as typeof Reanimated.withTiming,
+      );
+      jest.useFakeTimers();
+      await releaseRowDrag(gesture);
       expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
 
+      act(() => jest.advanceTimersByTime(10_000));
+      expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
+
+      jest.useRealTimers();
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 140));
+        releaseCallbacks.at(-1)?.(true);
+        await flushGestureCommit();
       });
       expect(screen.queryByTestId('item-drag-preview')).toBeNull();
     });
@@ -592,15 +608,7 @@ describe('ChecklistEditor', () => {
         { database },
       );
 
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
-        nativeEvent: { layout: { y: 0, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
-        nativeEvent: { layout: { y: 50, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
-        nativeEvent: { layout: { y: 100, height: 50 } },
-      });
+      primeRowLayouts([50, 50, 50]);
 
       const gesture = await beginRowDrag(0, 25, 125);
       const previewTop = () =>
@@ -613,8 +621,7 @@ describe('ChecklistEditor', () => {
         gesture.handlers.onUpdate?.({ absoluteY: 125 } as never);
       });
       await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
+        await flushGestureCommit();
       });
       expect(screen.getByTestId('item-drop-target-2')).toBeOnTheScreen();
       expect(previewTop()).toBe(0);
@@ -640,15 +647,7 @@ describe('ChecklistEditor', () => {
         { database },
       );
 
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
-        nativeEvent: { layout: { y: 0, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
-        nativeEvent: { layout: { y: 50, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
-        nativeEvent: { layout: { y: 100, height: 50 } },
-      });
+      primeRowLayouts([50, 50, 50]);
 
       const gesture = await beginRowDrag(0, 25, 125);
       onRender.mockClear();
@@ -656,8 +655,7 @@ describe('ChecklistEditor', () => {
         gesture.handlers.onUpdate?.({ absoluteY: 130 } as never);
       });
       await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
+        await flushGestureCommit();
       });
       expect(onRender).not.toHaveBeenCalled();
       await cancelRowDrag(gesture);
@@ -678,15 +676,7 @@ describe('ChecklistEditor', () => {
         { database },
       );
 
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
-        nativeEvent: { layout: { y: 0, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
-        nativeEvent: { layout: { y: 50, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
-        nativeEvent: { layout: { y: 100, height: 50 } },
-      });
+      primeRowLayouts([50, 50, 50]);
       await dragRow(2, 125, 20);
 
       expect(screen.getByTestId('item-text-0').props.value).toBe('c');
@@ -715,15 +705,7 @@ describe('ChecklistEditor', () => {
         { database },
       );
 
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
-        nativeEvent: { layout: { y: 0, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
-        nativeEvent: { layout: { y: 50, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
-        nativeEvent: { layout: { y: 100, height: 50 } },
-      });
+      primeRowLayouts([50, 50, 50]);
       await dragRow(2, 125, 20);
 
       await dragRow(0, 25, 125);
@@ -765,15 +747,7 @@ describe('ChecklistEditor', () => {
         nativeEvent: { layout: { y: 64, height: 300 } },
       });
       fireEvent(screen.getByTestId('checklist-editor-scroll'), 'contentSizeChange', 0, 1000);
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
-        nativeEvent: { layout: { y: 0, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
-        nativeEvent: { layout: { y: 50, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
-        nativeEvent: { layout: { y: 100, height: 50 } },
-      });
+      primeRowLayouts([50, 50, 50]);
 
       await beginRowDrag(2, 289, 340);
       act(() => frames.shift()?.(0));
@@ -896,15 +870,7 @@ describe('ChecklistEditor', () => {
         { database },
       );
 
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
-        nativeEvent: { layout: { y: 0, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
-        nativeEvent: { layout: { y: 50, height: 50 } },
-      });
-      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
-        nativeEvent: { layout: { y: 100, height: 50 } },
-      });
+      primeRowLayouts([50, 50, 50]);
       const gesture = await beginRowDrag(0, 25, 125);
       await cancelRowDrag(gesture);
 

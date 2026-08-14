@@ -19,7 +19,8 @@ import { useTheme } from '@/src/theme/useTheme';
 
 import { parseCommand, parseInterimCommand } from './commandParser';
 import { initialRunState, runReducer } from './runReducer';
-import { ActiveRunView, CompletionView } from './RunScreenView';
+import { CompletionView } from './CompletionView';
+import { ActiveRunView } from './RunScreenView';
 import { RUN_TRANSITION_CONFIG } from './runPresentation';
 import type { ChecklistRunSnapshot } from './types';
 

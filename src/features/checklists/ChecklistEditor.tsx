@@ -91,6 +91,7 @@ export function ChecklistEditor({
   const [keyboardClearance, setKeyboardClearance] = useState(0);
   const {
     drag,
+    dragPreview,
     dragPreviewStyle,
     gestureFor,
     moveItemByAction,
@@ -169,7 +170,7 @@ export function ChecklistEditor({
   };
 
   const renderDropTarget = (index: number) =>
-    drag?.phase === 'dragging' && drag.to === index ? (
+    drag?.to === index ? (
       <Animated.View
         key={`drop-target-${index}`}
         testID={`item-drop-target-${index}`}
@@ -274,7 +275,7 @@ export function ChecklistEditor({
           }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
-          scrollEnabled={drag?.phase !== 'dragging'}
+          scrollEnabled={!drag}
           testID="checklist-editor-scroll"
           onLayout={handleViewportLayout}
           onContentSizeChange={(_, height) => {
@@ -344,8 +345,7 @@ export function ChecklistEditor({
               let dropIndex = 0;
               return items.map((item, index) => {
                 const error = itemErrors[item.localId];
-                const isActive =
-                  drag?.phase === 'dragging' && drag.localId === item.localId;
+                const isActive = drag?.localId === item.localId;
                 const isEditing = focusItemId === item.localId;
                 const editGesture = Gesture.Tap()
                   .withTestId(`item-edit-gesture-${item.localId}-${index}`)
@@ -480,17 +480,17 @@ export function ChecklistEditor({
 
             {renderDropTarget(items.length - 1)}
 
-            {drag ? (
+            {dragPreview ? (
               <Animated.View
                 testID="item-drag-preview"
                 pointerEvents="none"
                 style={[
                   {
                     position: 'absolute',
-                    top: drag.top,
+                    top: dragPreview.top,
                     left: 0,
                     right: 0,
-                    minHeight: drag.height,
+                    minHeight: dragPreview.height,
                     borderWidth: 2,
                     borderColor: theme.primary,
                     borderRadius: 18,
@@ -519,10 +519,10 @@ export function ChecklistEditor({
                     justifyContent: 'center',
                   }}
                 >
-                  <Text style={{ color: theme.primaryDark, fontWeight: '800', fontSize: 12 }}>{drag.from + 1}</Text>
+                  <Text style={{ color: theme.primaryDark, fontWeight: '800', fontSize: 12 }}>{dragPreview.from + 1}</Text>
                 </View>
                 <Text testID="item-drag-preview-text" style={{ color: theme.text, fontSize: 16, flex: 1 }}>
-                  {drag.text}
+                  {dragPreview.text}
                 </Text>
               </Animated.View>
             ) : null}

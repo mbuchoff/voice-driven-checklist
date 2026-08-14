@@ -1,11 +1,5 @@
 import { memo, useEffect, useRef } from 'react';
-import {
-  Pressable,
-  Text,
-  View,
-  type NativePointerEvent,
-  type NativeSyntheticEvent,
-} from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import Animated, {
   useAnimatedProps,
   useAnimatedStyle,
@@ -13,8 +7,6 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { scheduleOnRN } from 'react-native-worklets';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
@@ -32,163 +24,12 @@ import {
   type RunItemBackgroundStatus,
   type RunItemStatus,
 } from './runPresentation';
+import { StopRunControl } from './StopRunControl';
 import type { ChecklistRunState } from './types';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type RunCommand = 'next' | 'previous' | 'repeat';
-
-const STOP_CONTROL_REST_SIZE = 44;
-const STOP_CONTROL_MIN_HELD_SIZE = 66;
-const STOP_CONTROL_MAX_HELD_SIZE = 108;
-const STOP_CONTROL_CONTACT_PADDING = 24;
-
-export function getStopControlPresentation({
-  width,
-  height,
-  offsetX,
-  offsetY,
-}: Pick<NativePointerEvent, 'width' | 'height' | 'offsetX' | 'offsetY'>) {
-  const size = Math.min(
-    STOP_CONTROL_MAX_HELD_SIZE,
-    Math.max(
-      STOP_CONTROL_MIN_HELD_SIZE,
-      Math.max(width, height) + STOP_CONTROL_CONTACT_PADDING,
-    ),
-  );
-  return {
-    size,
-    left: offsetX - size / 2,
-    top: offsetY - size / 2,
-  };
-}
-
-export function CompletionView({
-  totalItems,
-  checklistTitle,
-  onRestart,
-  onExit,
-}: {
-  totalItems: number;
-  checklistTitle?: string;
-  onRestart: () => void;
-  onExit: () => void | Promise<void>;
-}) {
-  return (
-    <View
-      testID="completion-screen"
-      style={{ flex: 1, overflow: 'hidden', backgroundColor: '#173d31' }}
-    >
-      <ScreenBackground variant="completion" />
-      <CompletionConfetti />
-      <SafeAreaView style={{ flex: 1 }}>
-      <View
-        testID="completion-content"
-        style={{
-          flex: 1,
-          paddingHorizontal: 24,
-          paddingVertical: 28,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <View
-          style={{
-            width: 96,
-            height: 96,
-            borderTopLeftRadius: 34,
-            borderTopRightRadius: 34,
-            borderBottomRightRadius: 34,
-            borderBottomLeftRadius: 12,
-            borderWidth: 1,
-            borderColor: 'rgba(255, 255, 255, 0.25)',
-            backgroundColor: '#f3a284',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 30,
-            boxShadow: '0 24px 60px rgba(0, 0, 0, 0.22)',
-          }}
-        >
-          <Icon name="check" color="#183d31" size={47} strokeWidth={2.5} />
-        </View>
-        <Text
-          style={{
-            color: '#f4bca6',
-            fontSize: 12,
-            fontWeight: '800',
-            letterSpacing: 1.56,
-            marginBottom: 8,
-          }}
-        >
-          CHECKLIST COMPLETE
-        </Text>
-        <Text
-          style={{
-            color: '#fffaf1',
-            fontSize: 40,
-            lineHeight: 39,
-            fontWeight: '700',
-            letterSpacing: -2.2,
-            marginBottom: 12,
-          }}
-        >
-          Nicely done.
-        </Text>
-        <Text
-          style={{
-            color: 'rgba(255, 250, 241, 0.66)',
-            fontSize: 16,
-            lineHeight: 25,
-            textAlign: 'center',
-            marginBottom: 36,
-          }}
-        >
-          All {totalItems} steps in “{checklistTitle}” are checked off.
-        </Text>
-        <View style={{ width: '100%', gap: 10 }}>
-          <Pressable
-            accessibilityRole="button"
-            testID="completion-restart"
-            onPress={onRestart}
-            style={{
-              minHeight: 52,
-              backgroundColor: '#f3a284',
-              borderRadius: 15,
-              flexDirection: 'row',
-              gap: 8,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Icon name="repeat" color="#173d31" size={18} />
-            <Text style={{ color: '#173d31', fontWeight: '700', fontSize: 16 }}>
-              Run it again
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            testID="completion-return"
-            onPress={onExit}
-            style={{
-              minHeight: 50,
-              borderWidth: 1,
-              borderColor: 'rgba(255, 255, 255, 0.16)',
-              backgroundColor: 'rgba(255, 255, 255, 0.08)',
-              borderRadius: 15,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ color: '#fffaf1', fontWeight: '700', fontSize: 16 }}>
-              Back to my checklists
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-      </SafeAreaView>
-    </View>
-  );
-}
 
 export function ActiveRunView({
   state,
@@ -221,58 +62,6 @@ export function ActiveRunView({
   const trackStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: getRunTrackOffset(animatedCurrentIndex.value) }],
   }));
-  const stopControlSize = useSharedValue(STOP_CONTROL_REST_SIZE);
-  const stopControlLeft = useSharedValue(0);
-  const stopControlTop = useSharedValue(0);
-  const stopControlStyle = useAnimatedStyle(() => ({
-    width: stopControlSize.value,
-    height: stopControlSize.value,
-    borderRadius: stopControlSize.value / 2,
-    left: stopControlLeft.value,
-    top: stopControlTop.value,
-  }));
-  const stopHintStyle = useAnimatedStyle(() => ({
-    left: stopControlLeft.value + stopControlSize.value + 10,
-    top: stopControlTop.value + (stopControlSize.value - 28) / 2,
-  }));
-
-  const sizeStopControlForPointer = (
-    event: NativeSyntheticEvent<NativePointerEvent>,
-  ) => {
-    const pointer = event.nativeEvent;
-    const presentation = getStopControlPresentation(pointer);
-    stopControlSize.value = presentation.size;
-    stopControlLeft.value = presentation.left;
-    stopControlTop.value = presentation.top;
-  };
-  const stopGesture = Gesture.Pan()
-    .withTestId('stop-hold-gesture')
-    .enabled(!talkBackEnabled)
-    .minDistance(0)
-    .maxPointers(1)
-    .shouldCancelWhenOutside(false)
-    .onBegin((event) => {
-      'worklet';
-      if (stopControlSize.value < STOP_CONTROL_MIN_HELD_SIZE) {
-        stopControlSize.value = STOP_CONTROL_MIN_HELD_SIZE;
-      }
-      stopControlLeft.value = event.x - stopControlSize.value / 2;
-      stopControlTop.value = event.y - stopControlSize.value / 2;
-      scheduleOnRN(onBeginStopHold);
-    })
-    .onUpdate((event) => {
-      'worklet';
-      stopControlLeft.value = event.x - stopControlSize.value / 2;
-      stopControlTop.value = event.y - stopControlSize.value / 2;
-    })
-    .onFinalize(() => {
-      'worklet';
-      const timing = { duration: 140 };
-      stopControlSize.value = withTiming(STOP_CONTROL_REST_SIZE, timing);
-      stopControlLeft.value = withTiming(0, timing);
-      stopControlTop.value = withTiming(0, timing);
-      scheduleOnRN(onReleaseStopHold);
-    });
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.runBackground }}>
@@ -291,86 +80,17 @@ export function ActiveRunView({
         <View
           style={{
             zIndex: 2,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 10,
           }}
         >
-          <GestureDetector gesture={stopGesture}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Stop run"
-            accessibilityHint={
-              talkBackEnabled
-                ? 'Opens a confirmation dialog'
-                : 'Press and hold for one point two seconds'
-            }
-            testID="stop-run"
-            onPointerDown={(event) => {
-              if (!talkBackEnabled) sizeStopControlForPointer(event);
-            }}
-            onPress={() => {
-              if (talkBackEnabled) void onRequestStop();
-            }}
-            style={{
-              width: STOP_CONTROL_REST_SIZE,
-              height: STOP_CONTROL_REST_SIZE,
-              overflow: 'visible',
-            }}
-          >
-            <Animated.View
-              pointerEvents="none"
-              testID="stop-hold-control"
-              style={[
-                {
-                  position: 'absolute',
-                  width: STOP_CONTROL_REST_SIZE,
-                  height: STOP_CONTROL_REST_SIZE,
-                  borderRadius: STOP_CONTROL_REST_SIZE / 2,
-                  borderWidth: 1,
-                  borderColor: theme.runBorder,
-                  backgroundColor: theme.runSurface,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                },
-                stopControlStyle,
-              ]}
-            >
-              <HoldProgressRing
-                progress={stopHoldProgress}
-                color={theme.accent}
-                trackColor={theme.runBorder}
-              />
-              <Icon
-                name="close"
-                color={theme.runText}
-                size={holdingStop ? 26 : 20}
-                testID="stop-run-icon"
-              />
-            </Animated.View>
-            {holdingStop ? (
-              <Animated.Text
-                pointerEvents="none"
-                style={[
-                  {
-                    position: 'absolute',
-                    color: '#17382e',
-                    backgroundColor: theme.accent,
-                    borderRadius: 9,
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    fontWeight: '800',
-                    fontSize: 12,
-                    width: 104,
-                  },
-                  stopHintStyle,
-                ]}
-              >
-                Keep holding
-              </Animated.Text>
-            ) : null}
-          </Pressable>
-          </GestureDetector>
+          <StopRunControl
+            theme={theme}
+            talkBackEnabled={talkBackEnabled}
+            holdingStop={holdingStop}
+            stopHoldProgress={stopHoldProgress}
+            onBeginStopHold={onBeginStopHold}
+            onReleaseStopHold={onReleaseStopHold}
+            onRequestStop={onRequestStop}
+          />
         </View>
         <View
           pointerEvents="none"
@@ -757,52 +477,6 @@ function ProgressOrbit({
   );
 }
 
-function HoldProgressRing({
-  progress,
-  color,
-  trackColor,
-}: {
-  progress: SharedValue<number>;
-  color: string;
-  trackColor: string;
-}) {
-  const circumference = 2 * Math.PI * 24;
-  const animatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: circumference * (1 - progress.value),
-  }));
-
-  return (
-    <View
-      pointerEvents="none"
-      style={{ position: 'absolute', top: -4, right: -4, bottom: -4, left: -4 }}
-    >
-      <Svg testID="stop-progress-arc" width="100%" height="100%" viewBox="0 0 52 52">
-        <Circle
-          cx="26"
-          cy="26"
-          r="24"
-          fill="none"
-          stroke={trackColor}
-          strokeWidth="3"
-        />
-        <AnimatedCircle
-          animatedProps={animatedProps}
-          cx="26"
-          cy="26"
-          r="24"
-          fill="none"
-          stroke={color}
-          strokeWidth="3"
-          strokeDasharray={`${circumference} ${circumference}`}
-          strokeLinecap="round"
-          rotation={-90}
-          origin="26, 26"
-        />
-      </Svg>
-    </View>
-  );
-}
-
 function RunControl({
   testID,
   label,
@@ -859,33 +533,6 @@ function RunTexture({ color }: { color: string }) {
             right: 0,
             height: 1,
             backgroundColor: color,
-          }}
-        />
-      ))}
-    </View>
-  );
-}
-
-function CompletionConfetti() {
-  const pieces = [
-    { top: 60, left: 28, color: '#d7ad7e', rotate: '28deg' },
-    { top: 104, right: 26, color: '#94bba8', rotate: '72deg' },
-    { bottom: 116, left: 21, color: '#79a999', rotate: '38deg' },
-    { bottom: 78, right: 33, color: '#d8bb73', rotate: '54deg' },
-  ] as const;
-  return (
-    <View pointerEvents="none" style={{ position: 'absolute', inset: 0 }}>
-      {pieces.map((piece, index) => (
-        <View
-          key={index}
-          style={{
-            position: 'absolute',
-            width: 8,
-            height: 20,
-            borderRadius: 4,
-            ...piece,
-            backgroundColor: piece.color,
-            transform: [{ rotate: piece.rotate }],
           }}
         />
       ))}

@@ -1,17 +1,15 @@
 import { act, fireEvent, screen } from '@testing-library/react-native';
 import { Platform, processColor, StyleSheet } from 'react-native';
-import { type GestureType } from 'react-native-gesture-handler';
 
 import {
   flushRunEffects as flush,
   runSnapshot as snapshot,
   setupRunScreen as setup,
 } from './RunScreen.testSupport';
-import { getStopControlPresentation } from './RunScreenView';
-
-const { getByGestureTestId } = jest.requireActual(
-  'react-native-gesture-handler/lib/commonjs/jestUtils',
-) as typeof import('react-native-gesture-handler/lib/typescript/jestUtils');
+import {
+  getHeldStopControlSize,
+  getStopControlPosition,
+} from './StopRunControl';
 import { RUN_ITEM_GAP } from './runPresentation';
 import type { ChecklistRunSnapshot } from './types';
 const defaultPlatformOS = Platform.OS;
@@ -107,26 +105,20 @@ describe('RunScreen presentation', () => {
       expect(titleFrame.left).toBe(titleFrame.right);
     });
 
-    it('surrounds the pointer contact and follows it while stopping', async () => {
-      setup({ screenReaderEnabled: false });
-      await flush();
+    it('grows with the pointer contact and stays centered as the pointer moves', () => {
+      expect(getHeldStopControlSize(1, 1)).toBe(66);
+      expect(getHeldStopControlSize(52, 44)).toBe(76);
+      expect(getHeldStopControlSize(56, 48)).toBe(80);
+      expect(getHeldStopControlSize(200, 200)).toBe(108);
 
-      expect(getStopControlPresentation({
-        width: 52,
-        height: 44,
-        offsetX: 31,
-        offsetY: 27,
-      })).toEqual({ size: 76, left: -7, top: -11 });
-      expect(getStopControlPresentation({
-        width: 56,
-        height: 48,
-        offsetX: 43,
-        offsetY: 35,
-      })).toEqual({ size: 80, left: 3, top: -5 });
-      const gesture = getByGestureTestId('stop-hold-gesture') as GestureType;
-      expect(gesture.handlers.onBegin).toEqual(expect.any(Function));
-      expect(gesture.handlers.onUpdate).toEqual(expect.any(Function));
-      expect(gesture.handlers.onFinalize).toEqual(expect.any(Function));
+      expect(getStopControlPosition(76, 31, 27)).toEqual({
+        left: -7,
+        top: -11,
+      });
+      expect(getStopControlPosition(76, 60, 10)).toEqual({
+        left: 22,
+        top: -28,
+      });
     });
 
     it('begins playback of the first item when playback is available', async () => {

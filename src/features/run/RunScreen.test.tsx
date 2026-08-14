@@ -15,19 +15,21 @@ const { getByGestureTestId } = jest.requireActual(
   'react-native-gesture-handler/lib/commonjs/jestUtils',
 ) as typeof import('react-native-gesture-handler/lib/typescript/jestUtils');
 
-function beginStopHold() {
+async function beginStopHold() {
   const gesture = getByGestureTestId('stop-hold-gesture') as GestureType;
-  act(() => {
+  await act(async () => {
     gesture.handlers.onBegin?.({ x: 22, y: 22 } as never);
-    jest.runOnlyPendingTimers();
+    jest.advanceTimersByTime(0);
+    await Promise.resolve();
   });
   return gesture;
 }
 
-function releaseStopHold(gesture: GestureType) {
-  act(() => {
+async function releaseStopHold(gesture: GestureType) {
+  await act(async () => {
     gesture.handlers.onFinalize?.({} as never, false);
-    jest.runOnlyPendingTimers();
+    jest.advanceTimersByTime(0);
+    await Promise.resolve();
   });
 }
 
@@ -457,11 +459,11 @@ describe('RunScreen', () => {
       await flush();
       jest.useFakeTimers();
 
-      const gesture = beginStopHold();
+      const gesture = await beginStopHold();
       expect(screen.queryByText(snapshot.checklistTitle)).toBeNull();
       expect(screen.getByText(/keep holding/i)).toBeOnTheScreen();
       act(() => jest.advanceTimersByTime(600));
-      releaseStopHold(gesture);
+      await releaseStopHold(gesture);
 
       act(() => jest.advanceTimersByTime(1200));
       expect(onExit).not.toHaveBeenCalled();
@@ -478,7 +480,7 @@ describe('RunScreen', () => {
       await flush();
       jest.useFakeTimers();
 
-      beginStopHold();
+      await beginStopHold();
       act(() => jest.advanceTimersByTime(1200));
 
       expect(onExit).toHaveBeenCalledTimes(1);
