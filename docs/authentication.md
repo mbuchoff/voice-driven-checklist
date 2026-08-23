@@ -1,9 +1,11 @@
 # Google authentication configuration
 
 Voice Checklist uses Amazon Cognito federated to Google. Identity resources are
-defined in the versioned OpenTofu stack at `infra/aws/auth`. See that
-directory's README for Google Cloud setup, separate environment state,
-validation, planning, approval, and app configuration.
+exclusively owned by the public
+[`voice-driven-checklist-backend`](https://github.com/mbuchoff/voice-driven-checklist-backend)
+repository. Its authentication root documents Google Cloud setup, separate
+environment state, validation, planning, approval, and app configuration. This
+app repository contains no infrastructure apply path.
 
 ## Required Cognito behavior
 
@@ -33,8 +35,9 @@ environment's Cognito URL:
 https://<cognito-domain>/oauth2/idpresponse
 ```
 
-The Google client secret belongs only in the identity-infrastructure secret
-store. It must never enter this repository, an Expo build variable, or the app.
+The Google client secret belongs only in the backend repository's
+environment-scoped AWS Secrets Manager resource. It must never enter this
+repository, GitHub secrets, an Expo build variable, or the app.
 
 ## Local development
 
@@ -70,8 +73,8 @@ COGNITO_ANDROID_CLIENT_ID
 ```
 
 The workflow must fail before building if any production value is missing.
-Production Cognito deployment and changes remain manually approved outside this
-repository.
+Production Cognito deployment and changes remain protected and manually
+approved in the backend repository.
 
 ## Credential and data boundaries
 
