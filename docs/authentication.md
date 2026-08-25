@@ -3,9 +3,9 @@
 Voice Checklist uses Amazon Cognito federated to Google. Identity resources are
 exclusively owned by the public
 [`voice-driven-checklist-backend`](https://github.com/mbuchoff/voice-driven-checklist-backend)
-repository. Its authentication root documents Google Cloud setup, separate
-environment state, validation, planning, approval, and app configuration. This
-app repository contains no infrastructure apply path.
+repository. Its authentication root documents separate environment state,
+policy validation, planning, approval, and public app configuration. This app
+repository contains no infrastructure apply path.
 
 ## App authentication behavior
 
@@ -13,7 +13,8 @@ The app requests authorization code flow with S256 PKCE and the `openid`,
 `email`, `profile`, and `aws.cognito.signin.user.admin` scopes through the
 Google identity provider.
 
-Register these callback URLs exactly:
+The backend authentication root registers exactly these callbacks, and the app
+derives matching redirect URIs:
 
 - Android: `voicechecklist://auth/callback`
 - Development web: `http://localhost:8082/auth/callback`
@@ -57,6 +58,10 @@ COGNITO_USER_POOL_ID
 COGNITO_DOMAIN
 COGNITO_ANDROID_CLIENT_ID
 ```
+
+Obtain the production values from the same backend authentication root after
+initializing it with `environment=production`, then set the repository
+variables above.
 
 The workflow must fail before building if any production value is missing.
 Production Cognito deployment and changes remain protected and manually
