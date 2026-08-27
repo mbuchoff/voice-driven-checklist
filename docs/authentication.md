@@ -1,40 +1,27 @@
 # Google authentication configuration
 
 Voice Checklist uses Amazon Cognito federated to Google. Identity resources are
-defined in the versioned OpenTofu stack at `infra/aws/auth`. See that
-directory's README for Google Cloud setup, separate environment state,
-validation, planning, approval, and app configuration.
+exclusively owned by the public
+[`voice-driven-checklist-backend`](https://github.com/mbuchoff/voice-driven-checklist-backend)
+repository. Its authentication root documents separate environment state,
+policy validation, planning, approval, and public app configuration. This app
+repository contains no infrastructure apply path.
 
-## Required Cognito behavior
+## App authentication behavior
 
-Each environment needs a Cognito user pool, managed-login domain, Google
-identity provider, and public app clients with no client secrets:
+The app requests authorization code flow with S256 PKCE and the `openid`,
+`email`, `profile`, and `aws.cognito.signin.user.admin` scopes through the
+Google identity provider.
 
-- Development Android client for debug builds.
-- Development web client for `http://localhost:8082`.
-- Production Android client for Play builds.
-- No production web client until production web hosting is selected.
-
-Clients use authorization code with S256 PKCE and only the Google provider.
-Allowed scopes are `openid`, `email`, `profile`, and
-`aws.cognito.signin.user.admin`. Access and ID tokens last 60 minutes. Rotating
-refresh tokens last 30 days with a 10-second retry grace period, and token
-revocation is enabled.
-
-Register these callback URLs exactly:
+The backend authentication root registers exactly these callbacks, and the app
+derives matching redirect URIs:
 
 - Android: `voicechecklist://auth/callback`
 - Development web: `http://localhost:8082/auth/callback`
 
-The Google OAuth web client for an environment redirects only to that
-environment's Cognito URL:
-
-```text
-https://<cognito-domain>/oauth2/idpresponse
-```
-
-The Google client secret belongs only in the identity-infrastructure secret
-store. It must never enter this repository, an Expo build variable, or the app.
+The Google client secret belongs only in the backend repository's
+environment-scoped AWS Secrets Manager resource. It must never enter this
+repository, GitHub secrets, an Expo build variable, or the app.
 
 ## Local development
 
@@ -47,6 +34,9 @@ EXPO_PUBLIC_COGNITO_DOMAIN
 EXPO_PUBLIC_COGNITO_ANDROID_CLIENT_ID
 EXPO_PUBLIC_COGNITO_WEB_CLIENT_ID
 ```
+
+Retrieve those values from the backend authentication root as documented in
+its [public app configuration instructions](https://github.com/mbuchoff/voice-driven-checklist-backend/tree/main/infra/aws/auth#read-public-app-configuration).
 
 Run Expo web on the registered origin:
 
@@ -69,9 +59,13 @@ COGNITO_DOMAIN
 COGNITO_ANDROID_CLIENT_ID
 ```
 
+Obtain the production values from the same backend authentication root after
+initializing it with `environment=production`, then set the repository
+variables above.
+
 The workflow must fail before building if any production value is missing.
-Production Cognito deployment and changes remain manually approved outside this
-repository.
+Production Cognito deployment and changes remain protected and manually
+approved in the backend repository.
 
 ## Credential and data boundaries
 
@@ -86,10 +80,9 @@ repository.
 - This release sends no checklist title, item, order, or database identifier to
   Google, Cognito, or any application API.
 
-## Boundary for issue #21
+## Boundary for issue #29
 
-Cloud synchronization is deferred to issue #21. Cognito `sub` will be the
-canonical account identifier. A future checklist API must validate Cognito
-JWTs, scope every cloud record to `sub`, and define an explicit migration or
-linking path for any users of older custom authentication. It must not infer
-identity from email, and it must preserve local-mode isolation.
+Cloud synchronization is deferred to backend issue #29. This app release
+uploads no checklist content and preserves local-mode isolation. Backend API
+authorization, record ownership, and account-migration requirements belong to
+that backend issue and repository.

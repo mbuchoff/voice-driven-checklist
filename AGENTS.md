@@ -2,6 +2,12 @@
 
 Operational notes for agents working on this repo inside the devcontainer. Codebase conventions live in the code itself; this file is only for environment quirks and workflows that aren't obvious.
 
+## Infrastructure ownership
+
+The public `mbuchoff/voice-driven-checklist-backend` repository exclusively
+owns the Cognito and backend OpenTofu state. This app repository consumes only
+public Cognito configuration and must not add an AWS infrastructure apply path.
+
 ## GitHub authentication
 
 This repository belongs to the `mbuchoff` GitHub account. The container's

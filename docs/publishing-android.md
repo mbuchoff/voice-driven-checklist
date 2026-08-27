@@ -254,5 +254,6 @@ COGNITO_ANDROID_CLIENT_ID
 
 The release workflow injects them into the Expo bundle and must stop if one is
 missing. Do not add the Google OAuth client secret to GitHub, Expo, Gradle, or
-the app. See `docs/authentication.md` for the exact Cognito flows, callbacks,
-and live validation checklist.
+the app. See `docs/authentication.md` for the app's Cognito flow and callbacks.
+Before release, manually verify production Google sign-in and token refresh
+against the backend-owned production Cognito environment.

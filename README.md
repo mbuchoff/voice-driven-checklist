@@ -27,9 +27,20 @@ to `.env.local` and add the development Cognito public values. See
 [Google authentication configuration](docs/authentication.md) for callbacks,
 client behavior, release variables, and security boundaries.
 
+AWS authentication and sync infrastructure are exclusively owned by the
+[`voice-driven-checklist-backend`](https://github.com/mbuchoff/voice-driven-checklist-backend)
+repository. This app consumes public configuration and has no infrastructure
+deployment path.
+
 ## Privacy and publishing
 
 - [Privacy policy](docs/PRIVACY.md)
 - [Account deletion instructions](docs/delete-account.md)
 - [Google Play listing and Data Safety guidance](docs/store-listing.md)
 - [Android publishing guide](docs/publishing-android.md)
+
+## License
+
+The app is available under the [MIT License](LICENSE). See
+[third-party notices](THIRD_PARTY_NOTICES.md) for assets and scaffold portions
+that retain separate attribution or branding terms.
