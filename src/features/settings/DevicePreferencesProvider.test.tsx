@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { render, screen, waitFor } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Pressable, Text } from 'react-native';
 
 import {
   DevicePreferencesProvider,
@@ -18,12 +18,21 @@ function preferenceStore(
     load,
     saveTheme: async () => undefined,
     saveSound: async () => undefined,
+    dismissRoutineReorderHint: async () => undefined,
   };
 }
 
 function PreferenceConsumer() {
-  const { preferences } = useDevicePreferences();
-  return <Text>{`${preferences.theme}:${preferences.sound}`}</Text>;
+  const { preferences, dismissRoutineReorderHint } = useDevicePreferences();
+  return (
+    <>
+      <Text>{`${preferences.theme}:${preferences.sound}:${preferences.routineReorderHintDismissed}`}</Text>
+      <Pressable
+        testID="dismiss-routine-reorder-hint"
+        onPress={() => void dismissRoutineReorderHint()}
+      />
+    </>
+  );
 }
 
 class TestErrorBoundary extends Component<
@@ -63,8 +72,42 @@ describe('DevicePreferencesProvider', () => {
     );
 
     expect(screen.queryByText(/:/)).toBeNull();
-    finishLoad({ theme: 'dark', sound: 'wood' });
-    await waitFor(() => expect(screen.getByText('dark:wood')).toBeOnTheScreen());
+    finishLoad({
+      theme: 'dark',
+      sound: 'wood',
+      routineReorderHintDismissed: false,
+    });
+    await waitFor(() =>
+      expect(screen.getByText('dark:wood:false')).toBeOnTheScreen(),
+    );
+  });
+
+  it('dismisses the routine reorder hint through the device store', async () => {
+    let persisted = false;
+    const store: DevicePreferenceStore = {
+      load: async () => ({
+        theme: 'system',
+        sound: 'chime',
+        routineReorderHintDismissed: persisted,
+      }),
+      saveTheme: async () => undefined,
+      saveSound: async () => undefined,
+      dismissRoutineReorderHint: async () => {
+        persisted = true;
+      },
+    };
+    render(
+      <DevicePreferencesProvider store={store}>
+        <PreferenceConsumer />
+      </DevicePreferencesProvider>,
+    );
+    await screen.findByText('system:chime:false');
+
+    fireEvent.press(screen.getByTestId('dismiss-routine-reorder-hint'));
+
+    await waitFor(() =>
+      expect(screen.getByText('system:chime:true')).toBeOnTheScreen(),
+    );
   });
 
   it('surfaces preference load failures to the app error boundary', async () => {
