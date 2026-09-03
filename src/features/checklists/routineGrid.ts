@@ -61,6 +61,7 @@ export function getRoutinePosition(
   index: number,
   layout: RoutineGridMetrics,
 ) {
+  'worklet';
   return {
     x:
       layout.leftOffset +

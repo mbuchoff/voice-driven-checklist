@@ -1,25 +1,29 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   Pressable,
-  ScrollView,
+  ScrollView as NativeScrollView,
   Text,
   View,
   useWindowDimensions,
-  type LayoutChangeEvent,
 } from 'react-native';
+import Reanimated, {
+  useAnimatedRef,
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/src/components/Icon';
+import { notify } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
 import { useTheme } from '@/src/theme/useTheme';
 
-import { listChecklists } from './repository';
-import { RoutineCard } from './RoutineCard';
-import {
-  getRoutineGridMetrics,
-  getRoutinePosition,
-} from './routineGrid';
+import { moveItem } from './reorder';
+import { listChecklists, reorderChecklists } from './repository';
+import { getRoutineGridMetrics } from './routineGrid';
+import { RoutineReorderGrid } from './RoutineReorderGrid';
 import type { ChecklistSummary } from './types';
 import { useRoutineSelectionFeedback } from './useRoutineSelectionFeedback';
 
@@ -92,12 +96,24 @@ export function LibraryScreen({
   const theme = useTheme();
   const window = useWindowDimensions();
   const [items, setItems] = useState<ChecklistSummary[]>([]);
+  const [savingOrder, setSavingOrder] = useState(false);
   const [gridWidth, setGridWidth] = useState(() =>
     Math.max(1, window.width - 32),
   );
+  const itemsRef = useRef(items);
+  const persistedItems = useRef(items);
+  const savingOrderRef = useRef(false);
+  const scrollRef = useAnimatedRef<NativeScrollView>();
+  const scrollY = useSharedValue(0);
+  const viewportHeight = useSharedValue(0);
+  const contentHeight = useSharedValue(0);
+  itemsRef.current = items;
 
   const refresh = useCallback(() => {
-    listChecklists(db).then(setItems);
+    listChecklists(db).then((loaded) => {
+      persistedItems.current = loaded;
+      setItems(loaded);
+    });
   }, [db]);
 
   useEffect(() => {
@@ -113,12 +129,67 @@ export function LibraryScreen({
     [gridWidth, items.length],
   );
 
-  const handleGridLayout = (event: LayoutChangeEvent) => {
-    const nextWidth = event.nativeEvent.layout.width;
+  const handleGridWidth = (nextWidth: number) => {
     if (nextWidth > 0 && Math.abs(nextWidth - gridWidth) > 1) {
       setGridWidth(nextWidth);
     }
   };
+
+  const handleScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const persistOrder = useCallback(
+    async (orderedIds: string[]) => {
+      if (savingOrderRef.current) return false;
+      const byId = new Map(itemsRef.current.map((item) => [item.id, item]));
+      const orderedItems = orderedIds
+        .map((id) => byId.get(id))
+        .filter((item): item is ChecklistSummary => item !== undefined);
+      if (orderedItems.length !== itemsRef.current.length) return false;
+
+      const previous = persistedItems.current;
+      savingOrderRef.current = true;
+      setSavingOrder(true);
+      setItems(orderedItems);
+      try {
+        await reorderChecklists(db, orderedIds);
+        persistedItems.current = orderedItems;
+        return true;
+      } catch {
+        setItems(previous);
+        await notify(
+          'Couldn’t save order',
+          'Your routines were restored to their previous order.',
+        );
+        return false;
+      } finally {
+        savingOrderRef.current = false;
+        setSavingOrder(false);
+      }
+    },
+    [db],
+  );
+
+  const moveByAccessibility = useCallback(
+    async (id: string, delta: -1 | 1) => {
+      const current = itemsRef.current;
+      const from = current.findIndex((item) => item.id === id);
+      if (from < 0) return;
+      const to = Math.max(0, Math.min(current.length - 1, from + delta));
+      if (from === to) return;
+      const ordered = moveItem(current, from, to);
+      const saved = await persistOrder(ordered.map((item) => item.id));
+      if (!saved) return;
+      const moved = ordered[to];
+      AccessibilityInfo.announceForAccessibility(
+        `${moved.title}, position ${to + 1} of ${ordered.length}`,
+      );
+    },
+    [persistOrder],
+  );
 
   return (
     <SafeAreaView
@@ -126,7 +197,8 @@ export function LibraryScreen({
       testID="library-safe-area"
       style={{ flex: 1, backgroundColor: theme.background }}
     >
-      <ScrollView
+      <Reanimated.ScrollView
+        ref={scrollRef}
         testID="library-scroll"
         stickyHeaderIndices={[0]}
         style={{ flex: 1, backgroundColor: theme.background }}
@@ -134,6 +206,14 @@ export function LibraryScreen({
           paddingHorizontal: 16,
           paddingBottom: 48,
         }}
+        onLayout={(event) => {
+          viewportHeight.value = event.nativeEvent.layout.height;
+        }}
+        onContentSizeChange={(_width, height) => {
+          contentHeight.value = height;
+        }}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
         <View
           testID="library-header"
@@ -216,39 +296,27 @@ export function LibraryScreen({
             </Text>
           </View>
         ) : (
-          <View
-            testID="routine-grid"
-            onLayout={handleGridLayout}
-            style={{
-              height: layout.gridHeight,
-              marginTop: 16,
+          <RoutineReorderGrid
+            items={items}
+            layout={layout}
+            theme={theme}
+            scrollRef={scrollRef}
+            scrollY={scrollY}
+            viewportHeight={viewportHeight}
+            contentHeight={contentHeight}
+            enabled={!savingOrder}
+            onWidthChange={handleGridWidth}
+            onEdit={onEdit}
+            onStart={onStart}
+            onReorder={(orderedIds) => {
+              void persistOrder(orderedIds);
             }}
-          >
-            {items.map((item, index) => {
-              const position = getRoutinePosition(index, layout);
-              return (
-                <View
-                  key={item.id}
-                  testID={`routine-position-${item.id}`}
-                  style={{
-                    position: 'absolute',
-                    left: position.x,
-                    top: position.y,
-                  }}
-                >
-                  <RoutineCard
-                    item={item}
-                    layout={layout}
-                    theme={theme}
-                    onEdit={() => onEdit(item.id)}
-                    onStart={() => onStart(item.id)}
-                  />
-                </View>
-              );
-            })}
-          </View>
+            onMoveByAccessibility={(id, delta) => {
+              void moveByAccessibility(id, delta);
+            }}
+          />
         )}
-      </ScrollView>
+      </Reanimated.ScrollView>
     </SafeAreaView>
   );
 }

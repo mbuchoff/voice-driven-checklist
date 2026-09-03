@@ -1,4 +1,14 @@
-import { Animated, Pressable, Text, View } from 'react-native';
+import type { ComponentProps } from 'react';
+import {
+  Animated,
+  Pressable,
+  Text,
+  View,
+} from 'react-native';
+import {
+  GestureDetector,
+  type GestureType,
+} from 'react-native-gesture-handler';
 
 import { Icon } from '@/src/components/Icon';
 import type { Palette } from '@/src/theme/palette';
@@ -26,6 +36,18 @@ function paletteIndex(id: string, length: number) {
   return hash % length;
 }
 
+export function getRoutineCardColors(
+  id: string,
+  mode: Palette['mode'],
+) {
+  const palette = cardPalette[mode];
+  const colorIndex = paletteIndex(id, palette.inks.length);
+  return {
+    fill: palette.fills[colorIndex],
+    ink: palette.inks[colorIndex],
+  };
+}
+
 function stepCountLabel(count: number) {
   return count === 1 ? '1 step' : `${count} steps`;
 }
@@ -36,20 +58,90 @@ export function RoutineCard({
   theme,
   onEdit,
   onStart,
+  gesture,
+  accessibilityActions,
+  onAccessibilityAction,
 }: {
   item: ChecklistSummary;
   layout: RoutineGridMetrics;
   theme: Palette;
   onEdit: () => void;
   onStart: () => void;
+  gesture?: GestureType;
+  accessibilityActions?: ComponentProps<typeof Pressable>['accessibilityActions'];
+  onAccessibilityAction?: ComponentProps<typeof Pressable>['onAccessibilityAction'];
 }) {
-  const palette = cardPalette[theme.mode];
-  const colorIndex = paletteIndex(item.id, palette.inks.length);
-  const ink = palette.inks[colorIndex];
-  const fill = palette.fills[colorIndex];
+  const { ink, fill } = getRoutineCardColors(item.id, theme.mode);
   const empty = item.itemCount === 0;
   const cardSelection = useRoutineSelectionFeedback('card', onEdit);
   const playSelection = useRoutineSelectionFeedback('control', onStart);
+
+  const cardBody = (
+    <Pressable
+      testID={`routine-card-action-${item.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={`Edit ${item.title}`}
+      accessibilityHint="Opens this routine for editing."
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
+      onPress={cardSelection.run}
+      style={{
+        flex: 1,
+        padding: 15,
+        paddingBottom: layout.contentBottomPadding,
+        borderRadius: 22,
+        overflow: 'hidden',
+        backgroundColor: fill,
+      }}
+    >
+      <View
+        testID={`routine-card-content-${item.id}`}
+        style={{
+          flex: 1,
+          justifyContent: 'flex-start',
+          overflow: 'hidden',
+        }}
+      >
+        <Text
+          style={{
+            color: theme.text,
+            fontSize: layout.compact ? 14 : 18,
+            lineHeight: layout.compact ? 18 : 22,
+            fontWeight: '800',
+            letterSpacing: layout.compact ? -0.35 : -0.6,
+          }}
+        >
+          {item.title}
+        </Text>
+        <Text
+          style={{
+            color: ink,
+            fontSize: layout.compact ? 11 : 12,
+            fontWeight: '700',
+            marginTop: layout.compact ? 4 : 5,
+          }}
+        >
+          {stepCountLabel(item.itemCount)}
+        </Text>
+        {item.items.length > 0 ? (
+          <Text
+            testID={`routine-step-list-${item.id}`}
+            style={{
+              color: theme.textMuted,
+              fontSize: layout.compact ? 10 : 11,
+              lineHeight: layout.compact ? 13 : 15,
+              marginTop: layout.compact ? 6 : 8,
+              paddingTop: layout.compact ? 6 : 8,
+              borderTopWidth: 1,
+              borderTopColor: 'rgba(128, 128, 128, 0.22)',
+            }}
+          >
+            {item.items.map(({ text }) => text).join(' · ')}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
 
   return (
     <Animated.View
@@ -66,68 +158,11 @@ export function RoutineCard({
         ],
       }}
     >
-      <Pressable
-        testID={`routine-card-action-${item.id}`}
-        accessibilityRole="button"
-        accessibilityLabel={`Edit ${item.title}`}
-        accessibilityHint="Opens this routine for editing."
-        onPress={cardSelection.run}
-        style={{
-          flex: 1,
-          padding: 15,
-          paddingBottom: layout.contentBottomPadding,
-          borderRadius: 22,
-          overflow: 'hidden',
-          backgroundColor: fill,
-        }}
-      >
-        <View
-          testID={`routine-card-content-${item.id}`}
-          style={{
-            flex: 1,
-            justifyContent: 'flex-start',
-            overflow: 'hidden',
-          }}
-        >
-          <Text
-            style={{
-              color: theme.text,
-              fontSize: layout.compact ? 14 : 18,
-              lineHeight: layout.compact ? 18 : 22,
-              fontWeight: '800',
-              letterSpacing: layout.compact ? -0.35 : -0.6,
-            }}
-          >
-            {item.title}
-          </Text>
-          <Text
-            style={{
-              color: ink,
-              fontSize: layout.compact ? 11 : 12,
-              fontWeight: '700',
-              marginTop: layout.compact ? 4 : 5,
-            }}
-          >
-            {stepCountLabel(item.itemCount)}
-          </Text>
-          {item.items.length > 0 ? (
-            <Text
-              testID={`routine-step-list-${item.id}`}
-              style={{
-                color: theme.textMuted,
-                fontSize: layout.compact ? 10 : 11,
-                lineHeight: layout.compact ? 13 : 15,
-                marginTop: layout.compact ? 6 : 8,
-                paddingTop: layout.compact ? 6 : 8,
-                borderTopWidth: 1,
-                borderTopColor: 'rgba(128, 128, 128, 0.22)',
-              }}
-            >
-              {item.items.map(({ text }) => text).join(' · ')}
-            </Text>
-          ) : null}
-        </View>
-      </Pressable>
+      {gesture ? (
+        <GestureDetector gesture={gesture}>{cardBody}</GestureDetector>
+      ) : (
+        cardBody
+      )}
       <Animated.View
         testID={`routine-play-feedback-${item.id}`}
         style={{

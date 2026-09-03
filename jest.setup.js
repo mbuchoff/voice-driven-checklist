@@ -23,3 +23,7 @@ Reanimated.useSharedValue = (initialValue) => {
   }
   return sharedValue.current;
 };
+
+// The Reanimated 4 Jest mock does not expose the UI-frame hook. Frame-driven
+// behavior is covered through its pure calculations and connected-device E2E.
+Reanimated.useFrameCallback = () => undefined;
