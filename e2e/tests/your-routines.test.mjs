@@ -90,7 +90,12 @@ async function returnFromSettings() {
 
 async function selectDocument(fileName) {
   await tapLabel(driver, 'Show roots');
-  await tapText(driver, 'Downloads');
+  const downloads = driver.$(
+    'android=new UiSelector().resourceId("android:id/title").text("Downloads")',
+  );
+  await waitForDisplayed(downloads);
+  await downloads.click();
+  await waitForDisplayed(byText(driver, 'Files in Downloads'));
   const file = await scrollToTextContaining(driver, fileName);
   await file.click();
 }
