@@ -29,10 +29,12 @@ Set `ANDROID_SERIAL` when more than one device is available. A remote ADB
 server can be selected with `ADB_SERVER_SOCKET`; those variables are inherited
 by both the harness and Appium.
 
-The build command regenerates the ignored Android project and creates an
-arm64 optimized debug APK. The runner starts a private Appium server, installs
-only the isolated E2E package, seeds test data through that package's sandbox,
-and restores any temporary font-scale or viewport changes in cleanup.
+The build command regenerates the ignored Android project and creates a
+standalone arm64 release APK with its JavaScript bundle embedded. It signs only
+the isolated E2E package with Android's debug key, so production release
+signing remains unchanged. The runner starts a private Appium server, installs
+the isolated package, seeds test data through that package's sandbox, and
+restores any temporary font-scale or viewport changes in cleanup.
 
 Evidence is written to the ignored `e2e/artifacts/<timestamp>/` directory:
 screenshots, accessibility trees, a real v2 migration fixture, Appium logs,

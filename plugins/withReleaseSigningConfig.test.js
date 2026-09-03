@@ -47,7 +47,7 @@ describe('release signing config transform', () => {
       /debug\s*\{\s*signingConfig signingConfigs\.debug\s*\}/,
     );
     expect(result).toMatch(
-      /release\s*\{[\s\S]*?reactnative\.dev\/docs\/signed-apk-android\.[\s\S]*?signingConfig signingConfigs\.release/,
+      /release\s*\{[\s\S]*?reactnative\.dev\/docs\/signed-apk-android\.[\s\S]*?signingConfig project\.hasProperty\('VOICE_CHECKLIST_E2E'\) \? signingConfigs\.debug : signingConfigs\.release/,
     );
   });
 

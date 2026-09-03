@@ -5,16 +5,13 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { waitForExit } from '../support/process.mjs';
+import { androidBuildPlan } from '../support/build.mjs';
 
 const e2eRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const projectRoot = resolve(e2eRoot, '..');
 const appium = resolve(e2eRoot, 'node_modules/.bin/appium');
 const apk = resolve(
-  process.env.E2E_APK
-    ?? resolve(
-      projectRoot,
-      'android/app/build/outputs/apk/debugOptimized/app-debugOptimized.apk',
-    ),
+  process.env.E2E_APK ?? androidBuildPlan(projectRoot).apk,
 );
 const host = process.env.APPIUM_HOST ?? '127.0.0.1';
 const port = Number(process.env.APPIUM_PORT ?? 4723);
