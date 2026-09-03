@@ -242,6 +242,7 @@ export async function collectRoutineTitles(driver) {
     unchangedPasses = seen.size === before ? unchangedPasses + 1 : 0;
     const canContinue = await scrollViewport(driver, 'down', 0.72);
     if (!canContinue) break;
+    await driver.pause(300);
   }
 
   return titles;
