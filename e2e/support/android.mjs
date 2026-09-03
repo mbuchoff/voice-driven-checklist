@@ -157,7 +157,10 @@ export function grantRunPermissions() {
 }
 
 export function resetFrameMetrics() {
-  adb(['shell', 'dumpsys', 'gfxinfo', APP_PACKAGE, 'reset']);
+  adb(
+    ['shell', 'dumpsys', 'gfxinfo', APP_PACKAGE, 'reset'],
+    { capture: true },
+  );
 }
 
 export function readFrameMetrics() {
