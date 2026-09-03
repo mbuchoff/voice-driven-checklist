@@ -30,6 +30,14 @@ export function clearIsolatedApp() {
   adb(['shell', 'am', 'force-stop', APP_PACKAGE]);
 }
 
+export function collapseSystemPanelsArguments() {
+  return ['shell', 'cmd', 'statusbar', 'collapse'];
+}
+
+export function collapseSystemPanels() {
+  adb(collapseSystemPanelsArguments());
+}
+
 export function createVersionTwoDatabase(filePath) {
   mkdirSync(dirname(filePath), { recursive: true });
   rmSync(filePath, { force: true });

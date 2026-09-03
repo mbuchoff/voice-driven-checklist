@@ -1,7 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { mediaScanArguments } from '../support/android.mjs';
+import {
+  collapseSystemPanelsArguments,
+  mediaScanArguments,
+} from '../support/android.mjs';
+
+test('collapses Android system panels before activating the app', () => {
+  assert.deepEqual(collapseSystemPanelsArguments(), [
+    'shell',
+    'cmd',
+    'statusbar',
+    'collapse',
+  ]);
+});
 
 test('asks Android to index a pushed document for the system picker', () => {
   assert.deepEqual(

@@ -9,6 +9,7 @@ import {
   adb,
   captureDevicePresentation,
   clearIsolatedApp,
+  collapseSystemPanels,
   createVersionTwoDatabase,
   grantRunPermissions,
   installVersionTwoDatabase,
@@ -63,6 +64,7 @@ async function isDisplayed(element) {
 }
 
 async function activateLibrary() {
+  collapseSystemPanels();
   await driver.activateApp(APP_PACKAGE);
   await waitForDisplayed(byId(driver, 'library-safe-area'), 30_000);
 }
@@ -223,6 +225,7 @@ test(
     const backupName = 'voice-checklist-gh36.json';
     pushFixture(fixturePath, backupName);
 
+    collapseSystemPanels();
     await driver.activateApp(APP_PACKAGE);
     await tapText(driver, 'Use on this device');
     await waitForDisplayed(byId(driver, 'library-empty-state'));
