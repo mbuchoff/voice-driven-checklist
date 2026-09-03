@@ -24,6 +24,11 @@ export async function waitForDisplayed(element, timeout = 15_000) {
   return element;
 }
 
+export async function elementRect(driver, element) {
+  const resolvedElement = await element;
+  return driver.getElementRect(resolvedElement.elementId);
+}
+
 export async function tapLabel(driver, label) {
   const element = byLabel(driver, label);
   await waitForDisplayed(element);
@@ -81,7 +86,7 @@ export async function visibleRoutineCards(driver) {
     visible.push({
       element: card,
       label: await card.getAttribute('content-desc'),
-      rect: await card.getRect(),
+      rect: await elementRect(driver, card),
     });
   }
   visible.sort((left, right) =>
@@ -91,7 +96,7 @@ export async function visibleRoutineCards(driver) {
 }
 
 export async function dragCardToEdge(driver, card, direction) {
-  const cardRect = await card.getRect();
+  const cardRect = await elementRect(driver, card);
   const window = await driver.getWindowRect();
   const start = {
     x: Math.round(cardRect.x + cardRect.width / 2),
@@ -123,7 +128,7 @@ export async function dragCardToEdge(driver, card, direction) {
 }
 
 export async function beginCardDrag(driver, card, destination) {
-  const rect = await card.getRect();
+  const rect = await elementRect(driver, card);
   const start = {
     x: Math.round(rect.x + rect.width / 2),
     y: Math.round(rect.y + rect.height / 2),
@@ -144,7 +149,7 @@ export async function beginCardDrag(driver, card, destination) {
 }
 
 export async function scrollBeforeHoldActivation(driver, card) {
-  const rect = await card.getRect();
+  const rect = await elementRect(driver, card);
   const start = {
     x: Math.round(rect.x + rect.width / 2),
     y: Math.round(rect.y + rect.height * 0.7),
@@ -176,7 +181,7 @@ export async function swipeHintAway(driver) {
   const hint = await waitForDisplayed(
     byLabel(driver, 'Learn how to move routines'),
   );
-  const rect = await hint.getRect();
+  const rect = await elementRect(driver, hint);
   const y = Math.round(rect.y + rect.height / 2);
   await driver.performActions([
     {

@@ -28,6 +28,7 @@ import {
   capture,
   collectRoutineTitles,
   dragCardToEdge,
+  elementRect,
   scrollToLabel,
   scrollToTextContaining,
   scrollToTop,
@@ -205,8 +206,8 @@ test(
     const firstCard = byLabel(driver, `Edit ${firstTitle}`);
     const secondCard = byLabel(driver, `Edit ${secondTitle}`);
     const [firstRect, secondRect] = await Promise.all([
-      firstCard.getRect(),
-      secondCard.getRect(),
+      elementRect(driver, firstCard),
+      elementRect(driver, secondCard),
     ]);
     assert.equal(firstRect.y, secondRect.y, 'phone layout should have two columns');
     assert.equal(firstRect.height, secondRect.height, 'cards should have fixed heights');
@@ -217,10 +218,10 @@ test(
       'the accessibility tree should retain the full clipped step list',
     );
 
-    const firstYBeforeScroll = (await firstCard.getRect()).y;
+    const firstYBeforeScroll = (await elementRect(driver, firstCard)).y;
     await scrollBeforeHoldActivation(driver, firstCard);
     assert.ok(
-      (await firstCard.getRect()).y < firstYBeforeScroll - 20,
+      (await elementRect(driver, firstCard)).y < firstYBeforeScroll - 20,
       'moving before hold activation should scroll instead of beginning a drag',
     );
     assert.equal(await isDisplayed(byId(driver, 'editor-safe-area')), false);
@@ -277,7 +278,7 @@ test(
     const stableOrder = await collectRoutineTitles(driver);
     await expectTopTitle(firstTitle);
     const interruptCard = byLabel(driver, `Edit ${secondTitle}`);
-    const interruptRect = await interruptCard.getRect();
+    const interruptRect = await elementRect(driver, interruptCard);
     await beginCardDrag(driver, interruptCard, {
       x: Math.round(interruptRect.x + interruptRect.width / 2),
       y: Math.round(interruptRect.y + interruptRect.height * 1.7),
@@ -299,7 +300,7 @@ test(
     await lastStepInput.setValue('Make coffee and place the mug beside breakfast');
     assert.equal(await driver.isKeyboardShown(), true);
     const [inputRect, windowRect] = await Promise.all([
-      lastStepInput.getRect(),
+      elementRect(driver, lastStepInput),
       driver.getWindowRect(),
     ]);
     assert.ok(
