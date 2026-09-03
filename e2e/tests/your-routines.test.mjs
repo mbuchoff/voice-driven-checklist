@@ -140,12 +140,18 @@ async function openEditor(title) {
 async function returnFromRunWithBackConfirmation() {
   await driver.back();
   await waitForDisplayed(byText(driver, 'Stop run?'));
-  await tapText(driver, 'Cancel');
+  const cancelButton = await waitForDisplayed(
+    driver.$('id=android:id/button2'),
+  );
+  await cancelButton.click();
   await waitForDisplayed(byId(driver, 'run-header'));
 
   await driver.back();
   await waitForDisplayed(byText(driver, 'Stop run?'));
-  await tapText(driver, 'Stop');
+  const stopButton = await waitForDisplayed(
+    driver.$('id=android:id/button1'),
+  );
+  await stopButton.click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));
 }
 
