@@ -369,7 +369,10 @@ test(
     );
     await deleteRoutine.click();
     await waitForDisplayed(byText(driver, 'Delete checklist?'));
-    await tapText(driver, 'Delete');
+    const confirmDelete = await waitForDisplayed(
+      driver.$('id=android:id/button1'),
+    );
+    await confirmDelete.click();
     await waitForDisplayed(byId(driver, 'library-safe-area'));
     await expectTopTitle(firstTitle);
     assert.equal(await isDisplayed(byLabel(driver, `Edit ${temporaryTitle}`)), false);
