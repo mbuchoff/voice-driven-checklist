@@ -258,10 +258,50 @@ export function LibraryScreen({
       testID="library-safe-area"
       style={{ flex: 1, backgroundColor: theme.background }}
     >
+      <View
+        testID="library-header"
+        style={{
+          paddingHorizontal: 16,
+          paddingTop: 10,
+          paddingBottom: 6,
+          minHeight: 58,
+          backgroundColor: theme.background,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          zIndex: 30,
+          elevation: 8,
+          boxShadow: `0 5px 12px ${theme.shadow}`,
+        }}
+      >
+        <Text
+          style={{
+            flex: 1,
+            color: theme.text,
+            fontSize: 27,
+            fontWeight: '700',
+            letterSpacing: -1.2,
+          }}
+        >
+          Routines
+        </Text>
+        <HeaderControl
+          accessibilityLabel="New checklist"
+          filled
+          icon="plus"
+          onPress={onCreate}
+          testID="new-checklist"
+        />
+        <HeaderControl
+          accessibilityLabel="Settings"
+          icon="settings"
+          onPress={() => onSettings?.()}
+          testID="open-settings"
+        />
+      </View>
       <Reanimated.ScrollView
         ref={scrollRef}
         testID="library-scroll"
-        stickyHeaderIndices={[0]}
         style={{ flex: 1, backgroundColor: theme.background }}
         contentContainerStyle={{
           paddingHorizontal: 16,
@@ -276,49 +316,6 @@ export function LibraryScreen({
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
-        <View
-          testID="library-header"
-          style={{
-            marginHorizontal: -16,
-            paddingHorizontal: 16,
-            paddingTop: 10,
-            paddingBottom: 6,
-            minHeight: 58,
-            backgroundColor: theme.background,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            zIndex: 30,
-            elevation: 8,
-            boxShadow: `0 5px 12px ${theme.shadow}`,
-          }}
-        >
-          <Text
-            style={{
-              flex: 1,
-              color: theme.text,
-              fontSize: 27,
-              fontWeight: '700',
-              letterSpacing: -1.2,
-            }}
-          >
-            Routines
-          </Text>
-          <HeaderControl
-            accessibilityLabel="New checklist"
-            filled
-            icon="plus"
-            onPress={onCreate}
-            testID="new-checklist"
-          />
-          <HeaderControl
-            accessibilityLabel="Settings"
-            icon="settings"
-            onPress={() => onSettings?.()}
-            testID="open-settings"
-          />
-        </View>
-
         {items.length === 0 ? (
           <View
             testID="library-empty-state"

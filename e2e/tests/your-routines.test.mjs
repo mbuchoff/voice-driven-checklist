@@ -256,6 +256,23 @@ test(
       'the accessibility tree should retain the full clipped step list',
     );
 
+    const [titleRect, newRect, settingsRect] = await Promise.all([
+      elementRect(driver, byText(driver, 'Routines')),
+      elementRect(driver, byLabel(driver, 'New checklist')),
+      elementRect(driver, byLabel(driver, 'Settings')),
+    ]);
+    const centersY = [titleRect, newRect, settingsRect].map(
+      ({ y, height }) => y + height / 2,
+    );
+    assert.ok(
+      Math.max(...centersY) - Math.min(...centersY) <= 2,
+      'the title, New, and Settings controls should share one header row',
+    );
+    assert.ok(
+      titleRect.x < newRect.x && newRect.x < settingsRect.x,
+      'the header should arrange the title, New, and Settings from left to right',
+    );
+
     const firstYBeforeScroll = (await elementRect(driver, firstCard)).y;
     await scrollBeforeHoldActivation(driver, firstCard);
     assert.ok(

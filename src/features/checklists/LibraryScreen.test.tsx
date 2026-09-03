@@ -165,7 +165,7 @@ describe('LibraryScreen', () => {
     expect(screen.queryByTestId(`delete-icon-${routine.id}`)).toBeNull();
   });
 
-  it('keeps the header sticky and below Android system insets', async () => {
+  it('keeps the header fixed outside the scrolling content and below Android system insets', async () => {
     const database = await setupDb();
     await renderWithDatabase(
       <LibraryScreen
@@ -180,8 +180,10 @@ describe('LibraryScreen', () => {
       'additive',
     );
     expect(
-      screen.getByTestId('library-scroll').props.stickyHeaderIndices,
-    ).toEqual([0]);
+      within(screen.getByTestId('library-scroll')).queryByTestId(
+        'library-header',
+      ),
+    ).toBeNull();
     expect(
       screen.getByRole('button', { name: /new checklist/i }),
     ).toBeOnTheScreen();

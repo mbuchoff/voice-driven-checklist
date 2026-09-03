@@ -4,11 +4,12 @@ import { remote } from 'webdriverio';
 
 import { APP_PACKAGE } from './android.mjs';
 
-export async function openAndroidSession() {
+export function androidSessionCapabilities(apk) {
   const capabilities = {
     platformName: 'Android',
     'appium:automationName': 'UiAutomator2',
-    'appium:app': resolve(process.env.E2E_APK),
+    'appium:app': resolve(apk),
+    'appium:enforceAppInstall': true,
     'appium:autoLaunch': false,
     'appium:noReset': false,
     'appium:fullReset': false,
@@ -19,6 +20,12 @@ export async function openAndroidSession() {
   if (process.env.ANDROID_SERIAL) {
     capabilities['appium:udid'] = process.env.ANDROID_SERIAL;
   }
+
+  return capabilities;
+}
+
+export async function openAndroidSession() {
+  const capabilities = androidSessionCapabilities(process.env.E2E_APK);
 
   const driver = await remote({
     protocol: 'http',
