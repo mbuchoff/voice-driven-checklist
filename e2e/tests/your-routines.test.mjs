@@ -250,10 +250,10 @@ test(
     await scrollToTop(driver);
     await tapLabel(driver, 'Learn how to move routines');
     await driver.pause(300);
+    await capture(driver, '03-full-screen-arrange-lesson');
     await waitForDisplayed(
       byLabel(driver, 'Demonstrating how to move a routine'),
     );
-    await capture(driver, '03-full-screen-arrange-lesson');
     await driver.back();
     await waitForDisplayed(byLabel(driver, 'Learn how to move routines'));
 
