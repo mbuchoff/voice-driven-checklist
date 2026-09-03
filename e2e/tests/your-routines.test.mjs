@@ -249,6 +249,7 @@ test(
 
     await scrollToTop(driver);
     await tapLabel(driver, 'Learn how to move routines');
+    await driver.pause(300);
     await waitForDisplayed(
       byLabel(driver, 'Demonstrating how to move a routine'),
     );
