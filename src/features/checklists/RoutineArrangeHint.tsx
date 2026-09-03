@@ -379,6 +379,7 @@ export function RoutineArrangeLesson({
     >
       <View
         testID="routine-arrange-lesson"
+        accessible
         accessibilityViewIsModal
         accessibilityLabel="Demonstrating how to move a routine"
         pointerEvents="auto"

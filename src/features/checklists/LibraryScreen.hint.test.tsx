@@ -163,6 +163,9 @@ describe('LibraryScreen routine-arrangement teaching', () => {
     const modal = screen.getByTestId('routine-arrange-lesson-modal');
     expect(modal.props.statusBarTranslucent).toBe(true);
     expect(modal.props.navigationBarTranslucent).toBe(true);
+    expect(screen.getByTestId('routine-arrange-lesson').props.accessible).toBe(
+      true,
+    );
     expect(screen.getByTestId('routine-arrange-lesson-dimmer')).toBeOnTheScreen();
     expect(
       screen.getByTestId('routine-arrange-lesson-source', {
