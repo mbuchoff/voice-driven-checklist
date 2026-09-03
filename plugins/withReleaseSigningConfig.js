@@ -33,7 +33,8 @@ $3$4`,
 
   return withReleaseSigningConfig.replace(
     RELEASE_BUILD_TYPE_ANCHOR,
-    "$1signingConfig project.hasProperty('VOICE_CHECKLIST_E2E') ? signingConfigs.debug : signingConfigs.release",
+    `$1signingConfig project.hasProperty('VOICE_CHECKLIST_E2E') ? signingConfigs.debug : signingConfigs.release
+            debuggable project.hasProperty('VOICE_CHECKLIST_E2E')`,
   );
 }
 

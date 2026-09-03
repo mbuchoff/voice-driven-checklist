@@ -49,6 +49,9 @@ describe('release signing config transform', () => {
     expect(result).toMatch(
       /release\s*\{[\s\S]*?reactnative\.dev\/docs\/signed-apk-android\.[\s\S]*?signingConfig project\.hasProperty\('VOICE_CHECKLIST_E2E'\) \? signingConfigs\.debug : signingConfigs\.release/,
     );
+    expect(result).toMatch(
+      /release\s*\{[\s\S]*?debuggable project\.hasProperty\('VOICE_CHECKLIST_E2E'\)/,
+    );
   });
 
   it('is idempotent', () => {

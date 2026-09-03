@@ -122,9 +122,22 @@ export function restoreDevicePresentation({ fontScale, override }) {
   adb(['shell', 'wm', 'size', override ?? 'reset']);
 }
 
+export function mediaScanArguments(remotePath) {
+  return [
+    'shell',
+    'am',
+    'broadcast',
+    '-a',
+    'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+    '-d',
+    `file://${remotePath}`,
+  ];
+}
+
 export function pushFixture(localPath, fileName) {
   const remotePath = `/sdcard/Download/${fileName}`;
   adb(['push', localPath, remotePath]);
+  adb(mediaScanArguments(remotePath));
   return remotePath;
 }
 
