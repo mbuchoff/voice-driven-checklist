@@ -93,22 +93,29 @@ async function selectDocument(fileName) {
 }
 
 async function finishAndroidSaveDialog() {
-  const saveById = driver.$(
-    'id=com.google.android.documentsui:id/action_menu_save',
+  const candidates = [
+    driver.$('id=com.google.android.documentsui:id/action_menu_save'),
+    byText(driver, 'Save'),
+    byText(driver, 'SAVE'),
+  ];
+  let saveButton;
+  await driver.waitUntil(
+    async () => {
+      for (const candidate of candidates) {
+        if (await isDisplayed(candidate)) {
+          saveButton = candidate;
+          return true;
+        }
+      }
+      return false;
+    },
+    {
+      timeout: 20_000,
+      interval: 250,
+      timeoutMsg: 'Android save dialog did not expose its Save action.',
+    },
   );
-  if (await isDisplayed(saveById)) {
-    await saveById.click();
-    return;
-  }
-
-  for (const label of ['Save', 'SAVE']) {
-    const button = byText(driver, label);
-    if (await isDisplayed(button)) {
-      await button.click();
-      return;
-    }
-  }
-  throw new Error('Android save dialog did not expose its Save action.');
+  await saveButton.click();
 }
 
 async function openEditor(title) {
@@ -274,7 +281,11 @@ test(
       y: Math.round(interruptRect.y + interruptRect.height * 1.7),
     });
     await driver.background(2);
-    await driver.releaseActions();
+    try {
+      await driver.releaseActions();
+    } catch {
+      // App backgrounding may already dispose the active pointer source.
+    }
     await waitForDisplayed(byId(driver, 'library-safe-area'));
     assert.deepEqual(await collectRoutineTitles(driver), stableOrder);
 
@@ -284,6 +295,7 @@ test(
     await lastStep.click();
     const lastStepInput = await waitForDisplayed(byId(driver, 'item-text-10'));
     await lastStepInput.setValue('Make coffee and place the mug beside breakfast');
+    assert.equal(await driver.isKeyboardShown(), true);
     const [inputRect, windowRect] = await Promise.all([
       lastStepInput.getRect(),
       driver.getWindowRect(),
