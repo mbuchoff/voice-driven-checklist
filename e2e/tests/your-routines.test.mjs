@@ -138,6 +138,24 @@ async function openEditor(title) {
   await waitForDisplayed(byId(driver, 'editor-safe-area'));
 }
 
+async function selectLabeledOption(label) {
+  await tapLabel(driver, label);
+  await driver.waitUntil(
+    async () => {
+      try {
+        return await byLabel(driver, label).getAttribute('selected') === 'true';
+      } catch {
+        return false;
+      }
+    },
+    {
+      timeout: 15_000,
+      interval: 150,
+      timeoutMsg: `${label} did not become selected`,
+    },
+  );
+}
+
 async function returnFromRunWithBackConfirmation() {
   await driver.back();
   await waitForDisplayed(byText(driver, 'Stop run?'));
@@ -378,30 +396,26 @@ test(
     assert.equal(await isDisplayed(byLabel(driver, `Edit ${temporaryTitle}`)), false);
 
     await openSettings();
-    await tapLabel(driver, 'Dark. Deep forest');
-    assert.equal(
-      await byLabel(driver, 'Dark. Deep forest').getAttribute('selected'),
-      'true',
-    );
+    await selectLabeledOption('Dark. Deep forest');
     await returnFromSettings();
     await expectTopTitle(firstTitle);
     await capture(driver, '07-dark-theme-library');
 
     await openSettings();
-    await tapLabel(driver, 'Light. Warm and bright');
+    await selectLabeledOption('Light. Warm and bright');
     await returnFromSettings();
     await expectTopTitle(firstTitle);
     await capture(driver, '08-light-theme-library');
 
     await openSettings();
-    await tapLabel(driver, 'System. Match this device');
+    await selectLabeledOption('System. Match this device');
     for (const sound of [
       'Wooden Tap. Soft and tactile',
       'Bright Ping. Clear and upbeat',
       'Quiet. No sounds',
       'Soft Chime. Warm and gentle',
     ]) {
-      await tapLabel(driver, sound);
+      await selectLabeledOption(sound);
     }
 
     const localAccount = await scrollToLabel(
