@@ -195,7 +195,11 @@ describe('SettingsContent', () => {
         'Imported checklist',
       );
     });
-    await expect(store.load()).resolves.toEqual({ theme: 'dark', sound: 'ping' });
+    await expect(store.load()).resolves.toEqual({
+      theme: 'dark',
+      sound: 'ping',
+      routineReorderHintDismissed: false,
+    });
   });
 
   it('does not export an empty library', async () => {
