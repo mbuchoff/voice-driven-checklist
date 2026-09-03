@@ -41,6 +41,14 @@ export async function tapText(driver, text) {
   await element.click();
 }
 
+export async function tapElementCenter(driver, element) {
+  const rect = await elementRect(driver, element);
+  await driver.execute('mobile: clickGesture', {
+    x: Math.round(rect.x + rect.width / 2),
+    y: Math.round(rect.y + rect.height / 2),
+  });
+}
+
 export async function scrollToLabel(driver, label) {
   const selector =
     'android=new UiScrollable(new UiSelector().scrollable(true))'

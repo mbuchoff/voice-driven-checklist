@@ -34,6 +34,7 @@ import {
   scrollToTop,
   scrollBeforeHoldActivation,
   swipeHintAway,
+  tapElementCenter,
   tapLabel,
   tapText,
   visibleRoutineTitles,
@@ -248,7 +249,10 @@ test(
     await capture(driver, '02-library-seventeen-routines');
 
     await scrollToTop(driver);
-    await tapLabel(driver, 'Learn how to move routines');
+    const arrangeHint = await waitForDisplayed(
+      byLabel(driver, 'Learn how to move routines'),
+    );
+    await tapElementCenter(driver, arrangeHint);
     await driver.pause(300);
     await capture(driver, '03-full-screen-arrange-lesson');
     await waitForDisplayed(
