@@ -88,6 +88,8 @@ async function returnFromSettings() {
 }
 
 async function selectDocument(fileName) {
+  await tapLabel(driver, 'Show roots');
+  await tapText(driver, 'Downloads');
   const file = await scrollToTextContaining(driver, fileName);
   await file.click();
 }

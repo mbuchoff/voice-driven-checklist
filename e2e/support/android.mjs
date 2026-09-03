@@ -27,6 +27,7 @@ export function adb(args, options = {}) {
 
 export function clearIsolatedApp() {
   adb(['shell', 'pm', 'clear', APP_PACKAGE]);
+  adb(['shell', 'am', 'force-stop', APP_PACKAGE]);
 }
 
 export function createVersionTwoDatabase(filePath) {
@@ -90,14 +91,14 @@ export function installVersionTwoDatabase(localPath) {
   clearIsolatedApp();
   adb(['push', localPath, remotePath]);
   adb(['shell', 'chmod', '644', remotePath]);
-  adb(['shell', 'run-as', APP_PACKAGE, 'mkdir', '-p', 'databases']);
+  adb(['shell', 'run-as', APP_PACKAGE, 'mkdir', '-p', 'files/SQLite']);
   adb([
     'shell',
     'run-as',
     APP_PACKAGE,
     'cp',
     remotePath,
-    'databases/voice-checklist.db',
+    'files/SQLite/voice-checklist.db',
   ]);
   adb(['shell', 'rm', remotePath]);
 }
