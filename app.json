@@ -60,6 +60,7 @@
       ],
       "./plugins/withAndroidPointerEvents",
       "./plugins/withNotifeeMicrophoneForegroundService",
+      "./plugins/withArm64LinuxHermesCompiler",
       "./plugins/withReleaseSigningConfig",
       [
         "expo-splash-screen",
