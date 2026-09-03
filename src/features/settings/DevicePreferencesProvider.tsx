@@ -43,6 +43,16 @@ export function useDeviceThemePreference(): ThemePreference {
     ?? DEFAULT_DEVICE_PREFERENCES.theme;
 }
 
+export function useRoutineReorderHintPreference() {
+  const context = useContext(DevicePreferencesContext);
+  return {
+    dismissed:
+      context?.preferences.routineReorderHintDismissed
+      ?? DEFAULT_DEVICE_PREFERENCES.routineReorderHintDismissed,
+    dismiss: context?.dismissRoutineReorderHint,
+  };
+}
+
 export function DevicePreferencesProvider({
   store,
   children,

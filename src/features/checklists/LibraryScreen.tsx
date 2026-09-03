@@ -18,10 +18,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/src/components/Icon';
 import { notify } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
+import { useRoutineReorderHintPreference } from '@/src/features/settings/DevicePreferencesProvider';
 import { useTheme } from '@/src/theme/useTheme';
 
 import { moveItem } from './reorder';
 import { listChecklists, reorderChecklists } from './repository';
+import {
+  RoutineArrangeHint,
+  RoutineArrangeLesson,
+  shouldShowRoutineArrangeHint,
+} from './RoutineArrangeHint';
 import { getRoutineGridMetrics } from './routineGrid';
 import { RoutineReorderGrid } from './RoutineReorderGrid';
 import type { ChecklistSummary } from './types';
@@ -94,6 +100,10 @@ export function LibraryScreen({
 }: LibraryScreenProps) {
   const db = useDatabase();
   const theme = useTheme();
+  const {
+    dismissed: reorderHintDismissed,
+    dismiss: dismissReorderHint,
+  } = useRoutineReorderHintPreference();
   const window = useWindowDimensions();
   const [items, setItems] = useState<ChecklistSummary[]>([]);
   const [savingOrder, setSavingOrder] = useState(false);
@@ -103,6 +113,14 @@ export function LibraryScreen({
   const itemsRef = useRef(items);
   const persistedItems = useRef(items);
   const savingOrderRef = useRef(false);
+  const gridRef = useRef<View>(null);
+  const lessonMeasureFallback = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const [lessonOrigin, setLessonOrigin] = useState<{
+    x: number;
+    y: number;
+  }>();
   const scrollRef = useAnimatedRef<NativeScrollView>();
   const scrollY = useSharedValue(0);
   const viewportHeight = useSharedValue(0);
@@ -190,6 +208,49 @@ export function LibraryScreen({
     },
     [persistOrder],
   );
+
+  const openArrangeLesson = useCallback(() => {
+    const grid = gridRef.current;
+    if (!grid?.measureInWindow) {
+      setLessonOrigin({ x: 0, y: 0 });
+      return;
+    }
+    let measured = false;
+    grid.measureInWindow((x, y) => {
+      measured = true;
+      if (lessonMeasureFallback.current) {
+        clearTimeout(lessonMeasureFallback.current);
+      }
+      setLessonOrigin({ x, y });
+    });
+    lessonMeasureFallback.current = setTimeout(() => {
+      if (!measured) setLessonOrigin({ x: 0, y: 0 });
+    }, 32);
+  }, []);
+
+  const closeArrangeLesson = useCallback(() => {
+    setLessonOrigin(undefined);
+  }, []);
+
+  useEffect(() => () => {
+    if (lessonMeasureFallback.current) {
+      clearTimeout(lessonMeasureFallback.current);
+    }
+  }, []);
+
+  const dismissArrangeHint = useCallback(async () => {
+    if (!dismissReorderHint) return false;
+    try {
+      await dismissReorderHint();
+      return true;
+    } catch {
+      await notify(
+        'Couldn’t dismiss tip',
+        'The arrangement tip will remain available.',
+      );
+      return false;
+    }
+  }, [dismissReorderHint]);
 
   return (
     <SafeAreaView
@@ -296,25 +357,47 @@ export function LibraryScreen({
             </Text>
           </View>
         ) : (
-          <RoutineReorderGrid
-            items={items}
-            layout={layout}
-            theme={theme}
-            scrollRef={scrollRef}
-            scrollY={scrollY}
-            viewportHeight={viewportHeight}
-            contentHeight={contentHeight}
-            enabled={!savingOrder}
-            onWidthChange={handleGridWidth}
-            onEdit={onEdit}
-            onStart={onStart}
-            onReorder={(orderedIds) => {
-              void persistOrder(orderedIds);
-            }}
-            onMoveByAccessibility={(id, delta) => {
-              void moveByAccessibility(id, delta);
-            }}
-          />
+          <>
+            {shouldShowRoutineArrangeHint(
+              items.length,
+              reorderHintDismissed,
+            ) ? (
+              <RoutineArrangeHint
+                theme={theme}
+                onOpenLesson={openArrangeLesson}
+                onDismiss={dismissArrangeHint}
+              />
+            ) : null}
+            <RoutineReorderGrid
+              items={items}
+              layout={layout}
+              theme={theme}
+              scrollRef={scrollRef}
+              scrollY={scrollY}
+              viewportHeight={viewportHeight}
+              contentHeight={contentHeight}
+              enabled={!savingOrder && lessonOrigin === undefined}
+              containerRef={gridRef}
+              onWidthChange={handleGridWidth}
+              onEdit={onEdit}
+              onStart={onStart}
+              onReorder={(orderedIds) => {
+                void persistOrder(orderedIds);
+              }}
+              onMoveByAccessibility={(id, delta) => {
+                void moveByAccessibility(id, delta);
+              }}
+            />
+            {lessonOrigin && items[0] ? (
+              <RoutineArrangeLesson
+                item={items[0]}
+                layout={layout}
+                viewportOrigin={lessonOrigin}
+                theme={theme}
+                onFinish={closeArrangeLesson}
+              />
+            ) : null}
+          </>
         )}
       </Reanimated.ScrollView>
     </SafeAreaView>

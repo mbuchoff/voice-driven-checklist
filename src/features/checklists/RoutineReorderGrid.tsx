@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 import {
   AppState,
   BackHandler,
@@ -435,6 +441,7 @@ export function RoutineReorderGrid({
   viewportHeight,
   contentHeight,
   enabled,
+  containerRef,
   onWidthChange,
   onEdit,
   onStart,
@@ -449,6 +456,7 @@ export function RoutineReorderGrid({
   viewportHeight: SharedValue<number>;
   contentHeight: SharedValue<number>;
   enabled: boolean;
+  containerRef?: RefObject<View | null>;
   onWidthChange: (width: number) => void;
   onEdit: (id: string) => void;
   onStart: (id: string) => void;
@@ -758,6 +766,7 @@ export function RoutineReorderGrid({
 
   return (
     <View
+      ref={containerRef}
       testID="routine-grid"
       onLayout={(event) => onWidthChange(event.nativeEvent.layout.width)}
       style={{
