@@ -41,11 +41,11 @@ export async function tapText(driver, text) {
   await element.click();
 }
 
-export async function tapElementCenter(driver, element) {
+export async function tapElementAt(driver, element, { xRatio = 0.5, yRatio = 0.5 } = {}) {
   const rect = await elementRect(driver, element);
   await driver.execute('mobile: clickGesture', {
-    x: Math.round(rect.x + rect.width / 2),
-    y: Math.round(rect.y + rect.height / 2),
+    x: Math.round(rect.x + rect.width * xRatio),
+    y: Math.round(rect.y + rect.height * yRatio),
   });
 }
 
