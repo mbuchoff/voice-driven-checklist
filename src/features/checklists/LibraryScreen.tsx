@@ -1,32 +1,101 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AccessibilityInfo,
+  Animated,
+  Pressable,
+  ScrollView as NativeScrollView,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import Reanimated, {
+  useAnimatedRef,
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView as GestureScrollView } from 'react-native-gesture-handler';
 
 import { Icon } from '@/src/components/Icon';
-import { confirmAction } from '@/src/components/confirm';
+import { notify } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
+import { useRoutineReorderHintPreference } from '@/src/features/settings/DevicePreferencesProvider';
 import { useTheme } from '@/src/theme/useTheme';
 
+import { moveItem } from './reorder';
+import { listChecklists, reorderChecklists } from './repository';
 import {
-  deleteChecklist,
-  listChecklists,
-} from './repository';
+  RoutineArrangeHint,
+  RoutineArrangeLesson,
+  shouldShowRoutineArrangeHint,
+} from './RoutineArrangeHint';
+import { getRoutineGridMetrics } from './routineGrid';
+import { RoutineReorderGrid } from './RoutineReorderGrid';
 import type { ChecklistSummary } from './types';
+import { useRoutineSelectionFeedback } from './useRoutineSelectionFeedback';
+
+// The scroll ref must expose a gesture-handler tag for a pending card hold to
+// block scrolling until the approved drift allowance is exceeded.
+const RoutineScrollView = Reanimated.createAnimatedComponent(GestureScrollView);
 
 export type LibraryScreenProps = {
   onCreate: () => void;
   onEdit: (id: string) => void;
   onStart: (id: string) => void;
   onSettings?: () => void;
-  /**
-   * Increment to force a re-fetch of the checklist list. The route file bumps
-   * this on focus so the library reflects edits made on other screens.
-   */
+  /** Refreshes routines after returning from another screen. */
   refreshKey?: number;
 };
 
-function itemCountLabel(count: number): string {
-  return count === 1 ? '1 item' : `${count} items`;
+function HeaderControl({
+  accessibilityLabel,
+  filled,
+  icon,
+  onPress,
+  testID,
+}: {
+  accessibilityLabel: string;
+  filled?: boolean;
+  icon: 'plus' | 'settings';
+  onPress: () => void;
+  testID: string;
+}) {
+  const theme = useTheme();
+  const selection = useRoutineSelectionFeedback('control', onPress);
+
+  return (
+    <Animated.View
+      testID={`${testID}-feedback`}
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: filled ? theme.primary : 'transparent',
+        transform: [
+          { translateY: selection.translateY },
+          { scale: selection.scale },
+        ],
+      }}
+    >
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        onPress={selection.run}
+        onPressIn={selection.pressIn}
+        onPressOut={selection.pressOut}
+        style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Icon
+          name={icon}
+          color={filled ? theme.onPrimary : theme.textMuted}
+          size={icon === 'plus' ? 20 : 19}
+          strokeWidth={icon === 'plus' ? 2.4 : 2}
+          testID={icon === 'settings' ? 'settings-icon' : undefined}
+        />
+      </Pressable>
+    </Animated.View>
+  );
 }
 
 export function LibraryScreen({
@@ -38,27 +107,148 @@ export function LibraryScreen({
 }: LibraryScreenProps) {
   const db = useDatabase();
   const theme = useTheme();
+  const {
+    dismissed: reorderHintDismissed,
+    dismiss: dismissReorderHint,
+  } = useRoutineReorderHintPreference();
+  const window = useWindowDimensions();
   const [items, setItems] = useState<ChecklistSummary[]>([]);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [gridWidth, setGridWidth] = useState(() =>
+    Math.max(1, window.width - 32),
+  );
+  const itemsRef = useRef(items);
+  const persistedItems = useRef(items);
+  const savingOrderRef = useRef(false);
+  const gridRef = useRef<View>(null);
+  const lessonMeasurement = useRef(0);
+  const [lessonOrigin, setLessonOrigin] = useState<{
+    x: number;
+    y: number;
+  }>();
+  const scrollRef = useAnimatedRef<NativeScrollView>();
+  const scrollY = useSharedValue(0);
+  const viewportHeight = useSharedValue(0);
+  const contentHeight = useSharedValue(0);
+  itemsRef.current = items;
 
   const refresh = useCallback(() => {
-    listChecklists(db).then(setItems);
+    listChecklists(db).then((loaded) => {
+      persistedItems.current = loaded;
+      setItems(loaded);
+    });
   }, [db]);
 
   useEffect(() => {
     refresh();
   }, [refresh, refreshKey]);
 
-  const confirmDelete = async (id: string, title: string) => {
-    const ok = await confirmAction({
-      title: 'Delete checklist?',
-      message: `“${title}” will be permanently removed.`,
-      confirmLabel: 'Delete',
-      destructive: true,
-    });
-    if (!ok) return;
-    await deleteChecklist(db, id);
-    refresh();
+  useEffect(() => {
+    setGridWidth(Math.max(1, window.width - 32));
+  }, [window.width]);
+
+  const layout = useMemo(
+    () => getRoutineGridMetrics(gridWidth, items.length),
+    [gridWidth, items.length],
+  );
+
+  const handleGridWidth = (nextWidth: number) => {
+    if (nextWidth > 0 && Math.abs(nextWidth - gridWidth) > 1) {
+      setGridWidth(nextWidth);
+    }
   };
+
+  const handleScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const persistOrder = useCallback(
+    async (orderedIds: string[]) => {
+      if (savingOrderRef.current) return false;
+      const byId = new Map(itemsRef.current.map((item) => [item.id, item]));
+      const orderedItems = orderedIds
+        .map((id) => byId.get(id))
+        .filter((item): item is ChecklistSummary => item !== undefined);
+      if (orderedItems.length !== itemsRef.current.length) return false;
+
+      const previous = persistedItems.current;
+      savingOrderRef.current = true;
+      setSavingOrder(true);
+      setItems(orderedItems);
+      try {
+        await reorderChecklists(db, orderedIds);
+        persistedItems.current = orderedItems;
+        return true;
+      } catch {
+        setItems(previous);
+        await notify(
+          'Couldn’t save order',
+          'Your routines were restored to their previous order.',
+        );
+        return false;
+      } finally {
+        savingOrderRef.current = false;
+        setSavingOrder(false);
+      }
+    },
+    [db],
+  );
+
+  const moveByAccessibility = useCallback(
+    async (id: string, delta: -1 | 1) => {
+      const current = itemsRef.current;
+      const from = current.findIndex((item) => item.id === id);
+      if (from < 0) return;
+      const to = Math.max(0, Math.min(current.length - 1, from + delta));
+      if (from === to) return;
+      const ordered = moveItem(current, from, to);
+      const saved = await persistOrder(ordered.map((item) => item.id));
+      if (!saved) return;
+      const moved = ordered[to];
+      AccessibilityInfo.announceForAccessibility(
+        `${moved.title}, position ${to + 1} of ${ordered.length}`,
+      );
+    },
+    [persistOrder],
+  );
+
+  const openArrangeLesson = useCallback(() => {
+    const request = ++lessonMeasurement.current;
+    const grid = gridRef.current;
+    if (!grid?.measure) return;
+    // Both this root and the translucent lesson modal draw edge-to-edge.
+    // measureInWindow subtracts Android's visible-window/status-bar inset.
+    grid.measure((_x, _y, width, height, x, y) => {
+      if (request !== lessonMeasurement.current || width <= 0 || height <= 0
+        || !Number.isFinite(x) || !Number.isFinite(y)) return;
+      setLessonOrigin({ x, y });
+    });
+  }, []);
+
+  const closeArrangeLesson = useCallback(() => {
+    lessonMeasurement.current += 1;
+    setLessonOrigin(undefined);
+  }, []);
+
+  useEffect(() => () => {
+    lessonMeasurement.current += 1;
+  }, []);
+
+  const dismissArrangeHint = useCallback(async () => {
+    if (!dismissReorderHint) return false;
+    try {
+      await dismissReorderHint();
+      return true;
+    } catch {
+      await notify(
+        'Couldn’t dismiss tip',
+        'The arrangement tip will remain available.',
+      );
+      return false;
+    }
+  }, [dismissReorderHint]);
 
   return (
     <SafeAreaView
@@ -66,205 +256,145 @@ export function LibraryScreen({
       testID="library-safe-area"
       style={{ flex: 1, backgroundColor: theme.background }}
     >
-      <ScrollView
-        style={{ flex: 1, backgroundColor: theme.background }}
-        contentContainerStyle={{ padding: 20, paddingTop: 18, paddingBottom: 40 }}
+      <View
+        testID="library-header"
+        style={{
+          paddingHorizontal: 16,
+          paddingTop: 10,
+          paddingBottom: 6,
+          minHeight: 58,
+          backgroundColor: theme.background,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          zIndex: 30,
+          elevation: 8,
+          boxShadow: `0 5px 12px ${theme.shadow}`,
+        }}
       >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <View
+        <Text
           style={{
-            width: 36,
-            height: 36,
-            borderTopLeftRadius: 11,
-            borderTopRightRadius: 11,
-            borderBottomRightRadius: 11,
-            borderBottomLeftRadius: 4,
-            backgroundColor: theme.primary,
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: `0 6px 14px ${theme.shadow}`,
+            flex: 1,
+            color: theme.text,
+            fontSize: 27,
+            fontWeight: '700',
+            letterSpacing: -1.2,
           }}
         >
-          <Icon name="check" color={theme.onPrimary} size={19} strokeWidth={2.5} testID="brand-icon" />
-        </View>
-        <Text style={{ color: theme.text, fontSize: 20, fontWeight: '700', letterSpacing: -0.8, flex: 1 }}>
-          Voice Checklist
+          Routines
         </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Settings"
-          onPress={onSettings}
-          style={{
-            width: 44,
-            height: 44,
-            borderWidth: 1,
-            borderColor: theme.border,
-            borderRadius: 22,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.surface,
-          }}
-        >
-          <Icon name="settings" color={theme.text} size={20} testID="settings-icon" />
-        </Pressable>
-      </View>
-
-      <View style={{ paddingTop: 42, paddingBottom: 26 }}>
-        <Text style={{ color: theme.accentDark, fontSize: 12, fontWeight: '800', letterSpacing: 1.56, marginBottom: 8 }}>
-          READY WHEN YOU ARE
-        </Text>
-        <Text style={{ color: theme.text, fontSize: 40, lineHeight: 39, fontWeight: '700', letterSpacing: -2.2, marginBottom: 12 }}>
-          Your routines,{`\n`}one step at a time.
-        </Text>
-        <Text style={{ color: theme.textMuted, fontSize: 16, lineHeight: 25 }}>
-          Pick a checklist and Voice Checklist will keep you moving—hands-free when you need it.
-        </Text>
-      </View>
-
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, marginBottom: 16 }}>
-        <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700', letterSpacing: -0.2, flex: 1 }}>
-          My checklists · {items.length}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
+        <HeaderControl
           accessibilityLabel="New checklist"
-          onPress={onCreate}
-          style={{
-            minHeight: 44,
-            paddingHorizontal: 17,
-            backgroundColor: theme.primary,
-            borderRadius: 15,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            boxShadow: `0 7px 16px ${theme.shadow}`,
-          }}
-        >
-          <Icon name="plus" color={theme.onPrimary} size={18} />
-          <Text style={{ color: theme.onPrimary, fontWeight: '700', fontSize: 14 }}>New</Text>
-        </Pressable>
+          filled
+          icon="plus"
+          onPress={() => { closeArrangeLesson(); onCreate(); }}
+          testID="new-checklist"
+        />
+        <HeaderControl
+          accessibilityLabel="Settings"
+          icon="settings"
+          onPress={() => { closeArrangeLesson(); onSettings?.(); }}
+          testID="open-settings"
+        />
       </View>
-
-      {items.length === 0 ? (
-        <View
-          style={{
-            backgroundColor: theme.surface,
-            borderWidth: 1,
-            borderColor: theme.border,
-            borderRadius: 20,
-            padding: 22,
-          }}
-        >
-          <Text style={{ color: theme.text }}>No checklists yet. Create one to get started.</Text>
-        </View>
-      ) : (
-        <View style={{ gap: 12 }}>
-        {items.map((item, index) => {
-          const isEmpty = item.itemCount === 0;
-          const badgeColors = theme.mode === 'dark'
-            ? ['#422d26', '#203740', '#243a31', '#243a31']
-            : ['#f8dfd0', '#dcebf0', '#deebdf', '#ebe2f0'];
-          const badgeTextColors = theme.mode === 'dark'
-            ? ['#f0a58c', '#8ec3d6', '#99c5ac', '#99c5ac']
-            : ['#9b4a2f', '#32677d', '#3e6c55', '#6b5682'];
-          return (
-            <View
-              key={item.id}
+      <RoutineScrollView
+        ref={scrollRef}
+        testID="library-scroll"
+        style={{ flex: 1, backgroundColor: theme.background }}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingBottom: 48,
+        }}
+        onLayout={(event) => {
+          viewportHeight.value = event.nativeEvent.layout.height;
+        }}
+        onContentSizeChange={(_width, height) => {
+          contentHeight.value = height;
+        }}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
+        {items.length === 0 ? (
+          <View
+            testID="library-empty-state"
+            style={{
+              marginTop: 20,
+              minHeight: 160,
+              padding: 22,
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: 22,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: theme.surface,
+            }}
+          >
+            <Text
               style={{
-                padding: 15,
-                borderWidth: 1,
-                borderColor: theme.border,
-                borderRadius: 20,
-                gap: 14,
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: theme.surface,
-                boxShadow: `0 3px 8px ${theme.shadow}`,
+                color: theme.text,
+                fontSize: 18,
+                fontWeight: '700',
+                textAlign: 'center',
               }}
             >
-              <View
-                style={{
-                  width: 54,
-                  height: 58,
-                  borderTopLeftRadius: 18,
-                  borderTopRightRadius: 18,
-                  borderBottomRightRadius: 18,
-                  borderBottomLeftRadius: 6,
-                  backgroundColor: badgeColors[index % badgeColors.length],
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Icon
-                  name="checkCircle"
-                  color={badgeTextColors[index % badgeTextColors.length]}
-                  size={25}
-                />
-              </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={{ color: theme.text, fontWeight: '700', fontSize: 17, letterSpacing: -0.4 }}>{item.title}</Text>
-                <Text style={{ color: theme.textMuted, fontSize: 13 }}>
-                  {itemCountLabel(item.itemCount)} · Updated recently
-                </Text>
-                {isEmpty ? (
-                  <Text style={{ color: theme.danger, fontSize: 12 }}>
-                    Add at least one item to start this checklist.
-                  </Text>
-                ) : null}
-              </View>
-              <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center' }}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Edit ${item.title}`}
-                  testID={`edit-${item.id}`}
-                  onPress={() => onEdit(item.id)}
-                  style={{ width: 38, height: 44, alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Icon name="edit" color={theme.textMuted} size={19} />
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Delete ${item.title}`}
-                  testID={`delete-${item.id}`}
-                  onPress={() => confirmDelete(item.id, item.title)}
-                  style={{ width: 34, height: 44, alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Icon
-                    name="trash"
-                    color={theme.textMuted}
-                    size={17}
-                    testID={`delete-icon-${item.id}`}
-                  />
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Start ${item.title}`}
-                  testID={`start-${item.id}`}
-                  disabled={isEmpty}
-                  onPress={() => onStart(item.id)}
-                  style={{
-                    width: 44,
-                    height: 48,
-                    backgroundColor: isEmpty ? theme.disabled : theme.primary,
-                    borderRadius: 14,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Icon name="play" color={theme.onPrimary} size={19} />
-                </Pressable>
-              </View>
-            </View>
-          );
-        })}
-        </View>
-      )}
-      <View style={{ borderTopWidth: 1, borderTopColor: theme.border, marginTop: 18, paddingTop: 20 }}>
-        <Text style={{ color: theme.textMuted, textAlign: 'center', fontSize: 13 }}>
-          Checklists stay on this device.
-        </Text>
-      </View>
-      </ScrollView>
+              No routines yet
+            </Text>
+            <Text
+              style={{
+                color: theme.textMuted,
+                fontSize: 14,
+                lineHeight: 20,
+                textAlign: 'center',
+                marginTop: 6,
+              }}
+            >
+              Use + to create your first voice checklist.
+            </Text>
+          </View>
+        ) : (
+          <>
+            {shouldShowRoutineArrangeHint(
+              items.length,
+              reorderHintDismissed,
+            ) ? (
+              <RoutineArrangeHint
+                theme={theme}
+                onOpenLesson={openArrangeLesson}
+                onDismiss={dismissArrangeHint}
+              />
+            ) : null}
+            <RoutineReorderGrid
+              items={items}
+              layout={layout}
+              theme={theme}
+              scrollRef={scrollRef}
+              scrollY={scrollY}
+              viewportHeight={viewportHeight}
+              contentHeight={contentHeight}
+              enabled={!savingOrder && lessonOrigin === undefined}
+              containerRef={gridRef}
+              onWidthChange={handleGridWidth}
+              onEdit={(id) => { closeArrangeLesson(); onEdit(id); }}
+              onStart={(id) => { closeArrangeLesson(); onStart(id); }}
+              onReorder={(orderedIds) => {
+                void persistOrder(orderedIds);
+              }}
+              onMoveByAccessibility={(id, delta) => {
+                void moveByAccessibility(id, delta);
+              }}
+            />
+            {lessonOrigin && items[0] ? (
+              <RoutineArrangeLesson
+                item={items[0]}
+                layout={layout}
+                viewportOrigin={lessonOrigin}
+                theme={theme}
+                onFinish={closeArrangeLesson}
+              />
+            ) : null}
+          </>
+        )}
+      </RoutineScrollView>
     </SafeAreaView>
   );
 }

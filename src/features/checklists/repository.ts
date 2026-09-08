@@ -44,23 +44,56 @@ function prepareChecklist(input: ChecklistInput): Checklist {
   };
 }
 
-async function writeChecklist(db: Database, checklist: Checklist): Promise<void> {
+async function writeChecklist(
+  db: Database,
+  checklist: Checklist,
+  libraryPosition: number,
+): Promise<void> {
   const now = Date.now();
 
   await db.runAsync(
-    'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+    `INSERT INTO checklists
+       (id, title, created_at, updated_at, library_position)
+     VALUES (?, ?, ?, ?, ?)`,
     checklist.id,
     checklist.title,
     now,
     now,
+    libraryPosition,
   );
   await insertItems(db, checklist.id, checklist.items);
+}
+
+async function getLastLibraryPosition(db: Database): Promise<number> {
+  const row = await db.getFirstAsync<{ position: number }>(
+    `SELECT COALESCE(MAX(library_position), -1) AS position
+     FROM checklists`,
+  );
+  return row?.position ?? -1;
+}
+
+async function makeRoomForFirstChecklist(db: Database): Promise<void> {
+  const lastPosition = await getLastLibraryPosition(db);
+  if (lastPosition < 0) return;
+
+  const offset = lastPosition + 2;
+  await db.runAsync(
+    'UPDATE checklists SET library_position = library_position + ?',
+    offset,
+  );
+  await db.runAsync(
+    'UPDATE checklists SET library_position = library_position - ?',
+    offset - 1,
+  );
 }
 
 export async function createChecklist(db: Database, input: ChecklistInput): Promise<Checklist> {
   const checklist = prepareChecklist(input);
 
-  await db.withTransactionAsync(() => writeChecklist(db, checklist));
+  await db.withTransactionAsync(async () => {
+    await makeRoomForFirstChecklist(db);
+    await writeChecklist(db, checklist, 0);
+  });
 
   return checklist;
 }
@@ -96,28 +129,7 @@ export async function deleteChecklist(db: Database, id: string): Promise<void> {
 }
 
 export async function exportAllChecklists(db: Database): Promise<ChecklistInput[]> {
-  const rows = await db.getAllAsync<{ id: string; title: string; item_text: string | null }>(
-    `SELECT c.id AS id, c.title AS title, ci.text AS item_text
-     FROM checklists c
-     LEFT JOIN checklist_items ci ON ci.checklist_id = c.id
-     ORDER BY c.created_at ASC, c.title ASC, ci.position ASC`,
-  );
-
-  const inputs: ChecklistInput[] = [];
-  let currentId: string | null = null;
-  let current: ChecklistInput | null = null;
-
-  for (const row of rows) {
-    if (row.id !== currentId) {
-      currentId = row.id;
-      current = { title: row.title, items: [] };
-      inputs.push(current);
-    }
-    if (row.item_text != null) {
-      current?.items.push({ text: row.item_text });
-    }
-  }
-  return inputs;
+  return (await listChecklists(db)).map(({ title, items }) => ({ title, items }));
 }
 
 export async function importChecklists(
@@ -127,8 +139,9 @@ export async function importChecklists(
   const prepared = inputs.map(prepareChecklist);
 
   await db.withTransactionAsync(async () => {
-    for (const checklist of prepared) {
-      await writeChecklist(db, checklist);
+    const firstPosition = (await getLastLibraryPosition(db)) + 1;
+    for (const [index, checklist] of prepared.entries()) {
+      await writeChecklist(db, checklist, firstPosition + index);
     }
   });
 
@@ -159,22 +172,71 @@ export async function listChecklists(db: Database): Promise<ChecklistSummary[]> 
     id: string;
     title: string;
     updated_at: number;
-    item_count: number;
+    item_text: string | null;
   }>(
     `SELECT
        c.id AS id,
        c.title AS title,
        c.updated_at AS updated_at,
-       COUNT(ci.id) AS item_count
+       ci.text AS item_text
      FROM checklists c
      LEFT JOIN checklist_items ci ON ci.checklist_id = c.id
-     GROUP BY c.id
-     ORDER BY c.updated_at DESC, c.title ASC`,
+     ORDER BY c.library_position ASC, ci.position ASC`,
   );
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    updatedAt: row.updated_at,
-    itemCount: row.item_count,
-  }));
+
+  const summaries: ChecklistSummary[] = [];
+  let currentId: string | null = null;
+  let current: ChecklistSummary | null = null;
+  for (const row of rows) {
+    if (row.id !== currentId) {
+      currentId = row.id;
+      current = {
+        id: row.id,
+        title: row.title,
+        updatedAt: row.updated_at,
+        itemCount: 0,
+        items: [],
+      };
+      summaries.push(current);
+    }
+    if (row.item_text != null && current) {
+      current.items.push({ text: row.item_text });
+      current.itemCount += 1;
+    }
+  }
+  return summaries;
+}
+
+export async function reorderChecklists(
+  db: Database,
+  orderedIds: string[],
+): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    const rows = await db.getAllAsync<{ id: string }>(
+      'SELECT id FROM checklists ORDER BY library_position ASC',
+    );
+    const existingIds = new Set(rows.map((row) => row.id));
+    const requestedIds = new Set(orderedIds);
+    if (
+      orderedIds.length !== rows.length ||
+      requestedIds.size !== orderedIds.length ||
+      orderedIds.some((id) => !existingIds.has(id))
+    ) {
+      throw new Error('A complete library order is required.');
+    }
+
+    const lastPosition = await getLastLibraryPosition(db);
+    const offset = Math.max(1, lastPosition + orderedIds.length + 1);
+    await db.runAsync(
+      'UPDATE checklists SET library_position = library_position + ?',
+      offset,
+    );
+    for (const [position, id] of orderedIds.entries()) {
+      await db.runAsync(
+        'UPDATE checklists SET library_position = ? WHERE id = ?',
+        position,
+        id,
+      );
+    }
+  });
 }

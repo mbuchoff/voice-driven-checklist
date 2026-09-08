@@ -22,6 +22,7 @@ type DevicePreferencesContextValue = {
   preferences: DevicePreferences;
   setTheme(theme: ThemePreference): Promise<void>;
   setSound(sound: SoundPreference): Promise<void>;
+  dismissRoutineReorderHint(): Promise<void>;
 };
 
 const DevicePreferencesContext =
@@ -40,6 +41,16 @@ export function useDevicePreferences(): DevicePreferencesContextValue {
 export function useDeviceThemePreference(): ThemePreference {
   return useContext(DevicePreferencesContext)?.preferences.theme
     ?? DEFAULT_DEVICE_PREFERENCES.theme;
+}
+
+export function useRoutineReorderHintPreference() {
+  const context = useContext(DevicePreferencesContext);
+  return {
+    dismissed:
+      context?.preferences.routineReorderHintDismissed
+      ?? DEFAULT_DEVICE_PREFERENCES.routineReorderHintDismissed,
+    dismiss: context?.dismissRoutineReorderHint,
+  };
 }
 
 export function DevicePreferencesProvider({
@@ -92,6 +103,13 @@ export function DevicePreferencesProvider({
         setPreferences((current) => ({
           ...(current ?? DEFAULT_DEVICE_PREFERENCES),
           sound,
+        }));
+      },
+      async dismissRoutineReorderHint() {
+        await store.dismissRoutineReorderHint();
+        setPreferences((current) => ({
+          ...(current ?? DEFAULT_DEVICE_PREFERENCES),
+          routineReorderHintDismissed: true,
         }));
       },
     }),

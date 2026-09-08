@@ -5,6 +5,7 @@ import {
   getChecklist,
   importChecklists,
   listChecklists,
+  reorderChecklists,
   updateChecklist,
 } from './repository';
 import { runMigrations } from '@/src/db/migrations';
@@ -64,6 +65,17 @@ describe('checklist repository', () => {
       const created = await createChecklist(db, { title: 'Draft', items: [] });
       expect(created.items).toEqual([]);
     });
+
+    it('places each newly saved routine first', async () => {
+      const db = await setup();
+      const first = await createChecklist(db, { title: 'First', items: [] });
+      const second = await createChecklist(db, { title: 'Second', items: [] });
+
+      await expect(listChecklists(db)).resolves.toEqual([
+        expect.objectContaining({ id: second.id }),
+        expect.objectContaining({ id: first.id }),
+      ]);
+    });
   });
 
   describe('getChecklist', () => {
@@ -92,63 +104,79 @@ describe('checklist repository', () => {
       expect(await listChecklists(db)).toEqual([]);
     });
 
-    it('orders checklists by updated_at DESC', async () => {
+    it('orders checklists by their explicit library positions', async () => {
       const db = await setup();
-      // Insert three checklists with explicit timestamps so the ordering is
-      // independent of clock granularity.
       await db.runAsync(
-        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        `INSERT INTO checklists
+           (id, title, created_at, updated_at, library_position)
+         VALUES (?, ?, ?, ?, ?)`,
         'id-old',
         'Old',
         1000,
         1000,
+        2,
       );
       await db.runAsync(
-        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        `INSERT INTO checklists
+           (id, title, created_at, updated_at, library_position)
+         VALUES (?, ?, ?, ?, ?)`,
         'id-mid',
         'Mid',
         2000,
         2000,
+        1,
       );
       await db.runAsync(
-        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        `INSERT INTO checklists
+           (id, title, created_at, updated_at, library_position)
+         VALUES (?, ?, ?, ?, ?)`,
         'id-new',
         'New',
         3000,
         3000,
+        0,
       );
 
       const list = await listChecklists(db);
       expect(list.map((row) => row.id)).toEqual(['id-new', 'id-mid', 'id-old']);
     });
 
-    it('breaks updated_at ties using title ASC', async () => {
+    it('does not let title sorting override explicit positions', async () => {
       const db = await setup();
       const ts = 1_700_000_000_000;
       await db.runAsync(
-        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        `INSERT INTO checklists
+           (id, title, created_at, updated_at, library_position)
+         VALUES (?, ?, ?, ?, ?)`,
         'id-c',
         'Charlie',
         ts,
         ts,
+        0,
       );
       await db.runAsync(
-        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        `INSERT INTO checklists
+           (id, title, created_at, updated_at, library_position)
+         VALUES (?, ?, ?, ?, ?)`,
         'id-a',
         'Alpha',
         ts,
         ts,
+        1,
       );
       await db.runAsync(
-        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        `INSERT INTO checklists
+           (id, title, created_at, updated_at, library_position)
+         VALUES (?, ?, ?, ?, ?)`,
         'id-b',
         'Bravo',
         ts,
         ts,
+        2,
       );
 
       const list = await listChecklists(db);
-      expect(list.map((row) => row.title)).toEqual(['Alpha', 'Bravo', 'Charlie']);
+      expect(list.map((row) => row.title)).toEqual(['Charlie', 'Alpha', 'Bravo']);
     });
 
     it('returns the item count for each checklist', async () => {
@@ -166,6 +194,109 @@ describe('checklist repository', () => {
       expect(byId.get(b.id)).toBe(3);
       expect(byId.get(c.id)).toBe(0);
     });
+
+    it('returns every item in step order without another repository read', async () => {
+      const db = await setup();
+      await createChecklist(db, {
+        title: 'Morning',
+        items: [
+          { text: 'Open blinds' },
+          { text: 'Drink water' },
+          { text: 'Make bed' },
+        ],
+      });
+
+      await expect(listChecklists(db)).resolves.toEqual([
+        expect.objectContaining({
+          title: 'Morning',
+          items: [
+            { text: 'Open blinds' },
+            { text: 'Drink water' },
+            { text: 'Make bed' },
+          ],
+        }),
+      ]);
+    });
+
+    it('keeps a manually arranged routine in place after editing it', async () => {
+      const db = await setup();
+      const first = await createChecklist(db, { title: 'First', items: [] });
+      const second = await createChecklist(db, { title: 'Second', items: [] });
+      await reorderChecklists(db, [first.id, second.id]);
+
+      await updateChecklist(db, first.id, {
+        title: 'First renamed',
+        items: [{ text: 'Still first' }],
+      });
+
+      await expect(listChecklists(db)).resolves.toEqual([
+        expect.objectContaining({ id: first.id, title: 'First renamed' }),
+        expect.objectContaining({ id: second.id, title: 'Second' }),
+      ]);
+    });
+  });
+
+  describe('reorderChecklists', () => {
+    it('restores every position when SQLite rejects a later write in a reorder', async () => {
+      const db = await setup();
+      const alpha = await createChecklist(db, { title: 'Alpha', items: [{ text: 'Keep alpha' }] });
+      const bravo = await createChecklist(db, { title: 'Bravo', items: [{ text: 'Keep bravo' }] });
+      const before = await db.getAllAsync('SELECT * FROM checklists ORDER BY id');
+      await db.execAsync(`CREATE TRIGGER fail_second_position
+        BEFORE UPDATE OF library_position ON checklists
+        WHEN NEW.library_position = 1
+        BEGIN SELECT RAISE(ABORT, 'simulated disk write failure'); END;`);
+
+      await expect(reorderChecklists(db, [alpha.id, bravo.id]))
+        .rejects.toMatchObject({ message: 'simulated disk write failure' });
+
+      expect(await db.getAllAsync('SELECT * FROM checklists ORDER BY id')).toEqual(before);
+      expect((await exportAllChecklists(db)).map(({ title }) => title)).toEqual(['Bravo', 'Alpha']);
+    });
+
+    it('reorders a sparse library without colliding with existing unique positions', async () => {
+      const db = await setup();
+      const alpha = await createChecklist(db, { title: 'Alpha', items: [] });
+      const bravo = await createChecklist(db, { title: 'Bravo', items: [] });
+      await db.runAsync('UPDATE checklists SET library_position = 500 WHERE id = ?', alpha.id);
+      await reorderChecklists(db, [alpha.id, bravo.id]);
+      expect(await db.getAllAsync('SELECT id, library_position FROM checklists ORDER BY library_position'))
+        .toEqual([{ id: alpha.id, library_position: 0 }, { id: bravo.id, library_position: 1 }]);
+    });
+
+    it('persists the complete requested order', async () => {
+      const db = await setup();
+      const alpha = await createChecklist(db, { title: 'Alpha', items: [] });
+      const bravo = await createChecklist(db, { title: 'Bravo', items: [] });
+      const charlie = await createChecklist(db, { title: 'Charlie', items: [] });
+
+      await reorderChecklists(db, [bravo.id, alpha.id, charlie.id]);
+
+      await expect(listChecklists(db)).resolves.toEqual([
+        expect.objectContaining({ id: bravo.id }),
+        expect.objectContaining({ id: alpha.id }),
+        expect.objectContaining({ id: charlie.id }),
+      ]);
+    });
+
+    it.each([
+      ['omits a routine', (ids: string[]) => ids.slice(0, 1)],
+      ['duplicates a routine', (ids: string[]) => [ids[0], ids[0]]],
+      ['contains an unknown routine', (ids: string[]) => [ids[0], 'missing']],
+    ])('rejects an order that %s without changing the library', async (_name, arrange) => {
+      const db = await setup();
+      const first = await createChecklist(db, { title: 'First', items: [] });
+      const second = await createChecklist(db, { title: 'Second', items: [] });
+      const before = (await listChecklists(db)).map((checklist) => checklist.id);
+
+      await expect(
+        reorderChecklists(db, arrange([first.id, second.id])),
+      ).rejects.toThrow(/complete library order/i);
+
+      await expect(listChecklists(db)).resolves.toEqual(
+        before.map((id) => expect.objectContaining({ id })),
+      );
+    });
   });
 
   describe('exportAllChecklists', () => {
@@ -173,25 +304,34 @@ describe('checklist repository', () => {
       const db = await setup();
       const ts = 1_700_000_000_000;
       await db.runAsync(
-        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        `INSERT INTO checklists
+           (id, title, created_at, updated_at, library_position)
+         VALUES (?, ?, ?, ?, ?)`,
         'id-b',
         'Beta',
         ts,
         ts,
+        1,
       );
       await db.runAsync(
-        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        `INSERT INTO checklists
+           (id, title, created_at, updated_at, library_position)
+         VALUES (?, ?, ?, ?, ?)`,
         'id-a',
         'Alpha',
         ts,
         ts,
+        0,
       );
       await db.runAsync(
-        'INSERT INTO checklists (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        `INSERT INTO checklists
+           (id, title, created_at, updated_at, library_position)
+         VALUES (?, ?, ?, ?, ?)`,
         'id-c',
         'Later',
         ts + 1,
         ts + 1,
+        2,
       );
       await db.runAsync(
         'INSERT INTO checklist_items (id, checklist_id, position, text) VALUES (?, ?, ?, ?)',
@@ -219,9 +359,38 @@ describe('checklist repository', () => {
       const db = await setup();
       await expect(exportAllChecklists(db)).resolves.toEqual([]);
     });
+
+    it('exports routines in their manually arranged order', async () => {
+      const db = await setup();
+      const alpha = await createChecklist(db, { title: 'Alpha', items: [] });
+      const bravo = await createChecklist(db, { title: 'Bravo', items: [] });
+      await reorderChecklists(db, [alpha.id, bravo.id]);
+
+      await expect(exportAllChecklists(db)).resolves.toEqual([
+        { title: 'Alpha', items: [] },
+        { title: 'Bravo', items: [] },
+      ]);
+    });
   });
 
   describe('importChecklists', () => {
+    it('rolls back earlier routines and steps when SQLite rejects a later imported step', async () => {
+      const db = await setup();
+      await createChecklist(db, { title: 'Existing', items: [{ text: 'Keep this' }] });
+      const before = await exportAllChecklists(db);
+      await db.execAsync(`CREATE TRIGGER fail_import_step
+        BEFORE INSERT ON checklist_items WHEN NEW.text = 'Reject this step'
+        BEGIN SELECT RAISE(ABORT, 'simulated disk write failure'); END;`);
+
+      await expect(importChecklists(db, [
+        { title: 'First import', items: [{ text: 'Earlier write' }] },
+        { title: 'Second import', items: [{ text: 'Reject this step' }] },
+      ])).rejects.toMatchObject({ message: 'simulated disk write failure' });
+
+      expect(await exportAllChecklists(db)).toEqual(before);
+      expect(await db.getAllAsync('SELECT text FROM checklist_items')).toEqual([{ text: 'Keep this' }]);
+    });
+
     it('inserts every checklist and returns the count', async () => {
       const db = await setup();
 
@@ -253,6 +422,25 @@ describe('checklist repository', () => {
         id: existing.id,
         title: 'Existing',
       });
+    });
+
+    it('appends imported routines after existing routines in backup order', async () => {
+      const db = await setup();
+      const existing = await createChecklist(db, {
+        title: 'Existing',
+        items: [],
+      });
+
+      await importChecklists(db, [
+        { title: 'Zulu import', items: [] },
+        { title: 'Alpha import', items: [] },
+      ]);
+
+      await expect(listChecklists(db)).resolves.toEqual([
+        expect.objectContaining({ id: existing.id, title: 'Existing' }),
+        expect.objectContaining({ title: 'Zulu import' }),
+        expect.objectContaining({ title: 'Alpha import' }),
+      ]);
     });
 
     it('preserves item text and order', async () => {

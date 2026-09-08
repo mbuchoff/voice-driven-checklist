@@ -13,6 +13,7 @@ export type Checklist = {
 export type ChecklistSummary = {
   id: string;
   title: string;
+  items: ChecklistItemInput[];
   itemCount: number;
   updatedAt: number;
 };

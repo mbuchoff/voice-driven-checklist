@@ -176,7 +176,11 @@ describe('SettingsContent', () => {
   });
 
   it('imports a selected checklist backup and leaves preferences untouched', async () => {
-    const store = new MemoryDevicePreferenceStore({ theme: 'dark', sound: 'ping' });
+    const store = new MemoryDevicePreferenceStore({
+      theme: 'dark',
+      sound: 'ping',
+      routineReorderHintDismissed: false,
+    });
     pickBackupFileMock.mockResolvedValue(
       serializeBackup([
         { title: 'Imported checklist', items: [{ text: 'Review' }] },
@@ -191,7 +195,11 @@ describe('SettingsContent', () => {
         'Imported checklist',
       );
     });
-    await expect(store.load()).resolves.toEqual({ theme: 'dark', sound: 'ping' });
+    await expect(store.load()).resolves.toEqual({
+      theme: 'dark',
+      sound: 'ping',
+      routineReorderHintDismissed: false,
+    });
   });
 
   it('does not export an empty library', async () => {

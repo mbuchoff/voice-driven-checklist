@@ -47,8 +47,29 @@ describe('release signing config transform', () => {
       /debug\s*\{\s*signingConfig signingConfigs\.debug\s*\}/,
     );
     expect(result).toMatch(
-      /release\s*\{[\s\S]*?reactnative\.dev\/docs\/signed-apk-android\.[\s\S]*?signingConfig signingConfigs\.release/,
+      /reactnative\.dev\/docs\/signed-apk-android\.\s*signingConfig signingConfigs\.release/,
     );
+    expect(result).not.toContain('VOICE_CHECKLIST_E2E');
+    expect(result).not.toMatch(/debuggable\s+true/);
+  });
+
+  it('allows debug signing and sandbox access only for the isolated E2E package', () => {
+    const result = transformReleaseSigningConfig(FIXTURE, 'com.mbuchoff.voicechecklist.e2e');
+
+    expect(result).toMatch(
+      /reactnative\.dev\/docs\/signed-apk-android\.\s*signingConfig signingConfigs\.debug\s+debuggable true/,
+    );
+    expect(result).not.toContain('VOICE_CHECKLIST_E2E');
+    expect(transformReleaseSigningConfig(FIXTURE, 'com.example.e2e'))
+      .not.toMatch(/debuggable\s+true/);
+  });
+
+  it('restores production signing when prebuild switches back from the test package', () => {
+    const production = transformReleaseSigningConfig(FIXTURE, 'com.mbuchoff.voicechecklist');
+    const isolated = transformReleaseSigningConfig(production, 'com.mbuchoff.voicechecklist.e2e');
+
+    expect(isolated).toMatch(/debuggable\s+true/);
+    expect(transformReleaseSigningConfig(isolated, 'com.mbuchoff.voicechecklist')).toBe(production);
   });
 
   it('is idempotent', () => {

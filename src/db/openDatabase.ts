@@ -8,12 +8,25 @@ const DB_NAME = 'voice-checklist.db';
 let dbPromise: Promise<Database> | null = null;
 
 export function openDatabase(): Promise<Database> {
-  return (dbPromise ??= initDatabase());
+  dbPromise ??= initDatabase().catch((error) => {
+    dbPromise = null;
+    throw error;
+  });
+  return dbPromise;
 }
 
 async function initDatabase(): Promise<Database> {
   const sqlite = await SQLite.openDatabaseAsync(DB_NAME);
   const db = sqlite as unknown as Database;
-  await runMigrations(db);
-  return db;
+  try {
+    await runMigrations(db);
+    return db;
+  } catch (error) {
+    try {
+      await db.closeAsync();
+    } catch {
+      // Preserve the initialization error if closing the failed handle also fails.
+    }
+    throw error;
+  }
 }

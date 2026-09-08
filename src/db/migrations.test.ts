@@ -33,6 +33,7 @@ type AccountPreferenceRow = {
 type DevicePreferenceRow = {
   theme: string;
   sound: string;
+  routine_reorder_hint_dismissed: number;
 };
 
 async function accountPreference(db: Database): Promise<AccountPreferenceRow | null> {
@@ -45,7 +46,7 @@ async function accountPreference(db: Database): Promise<AccountPreferenceRow | n
 
 async function devicePreference(db: Database): Promise<DevicePreferenceRow | null> {
   return db.getFirstAsync<DevicePreferenceRow>(
-    `SELECT theme, sound
+    `SELECT theme, sound, routine_reorder_hint_dismissed
      FROM device_preferences
      WHERE id = 1`,
   );
@@ -65,10 +66,11 @@ describe('database migrations', () => {
     });
     await expect(
       db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'),
-    ).resolves.toEqual({ user_version: 2 });
+    ).resolves.toEqual({ user_version: 3 });
     await expect(devicePreference(db)).resolves.toEqual({
       theme: 'system',
       sound: 'chime',
+      routine_reorder_hint_dismissed: 0,
     });
   });
 
@@ -117,6 +119,7 @@ describe('database migrations', () => {
     await expect(devicePreference(db)).resolves.toEqual({
       theme: 'system',
       sound: 'chime',
+      routine_reorder_hint_dismissed: 0,
     });
   });
 
@@ -148,7 +151,110 @@ describe('database migrations', () => {
     await expect(devicePreference(db)).resolves.toEqual({
       theme: 'system',
       sound: 'chime',
+      routine_reorder_hint_dismissed: 0,
     });
+  });
+
+  it('preserves the visible version-two library order as explicit positions', async () => {
+    const db = createTestDatabase();
+    await db.execAsync(LEGACY_SCHEMA);
+    await db.execAsync(`
+      CREATE TABLE account_preferences (
+        id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+        mode TEXT NOT NULL,
+        cognito_sub TEXT,
+        display_name TEXT,
+        email TEXT
+      );
+      INSERT INTO account_preferences
+        (id, mode, cognito_sub, display_name, email)
+      VALUES (1, 'local', NULL, NULL, NULL);
+
+      CREATE TABLE device_preferences (
+        id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+        theme TEXT NOT NULL,
+        sound TEXT NOT NULL
+      );
+      INSERT INTO device_preferences (id, theme, sound)
+      VALUES (1, 'dark', 'wood');
+
+      INSERT INTO checklists (id, title, created_at, updated_at)
+      VALUES
+        ('older', 'Older', 10, 10),
+        ('zulu', 'Zulu', 20, 30),
+        ('alpha', 'Alpha', 30, 30);
+
+      PRAGMA user_version = 2;
+    `);
+
+    await runMigrations(db);
+
+    await expect(
+      db.getAllAsync<{ id: string; library_position: number }>(
+        `SELECT id, library_position
+         FROM checklists
+         ORDER BY library_position ASC`,
+      ),
+    ).resolves.toEqual([
+      { id: 'alpha', library_position: 0 },
+      { id: 'zulu', library_position: 1 },
+      { id: 'older', library_position: 2 },
+    ]);
+    await expect(devicePreference(db)).resolves.toEqual({
+      theme: 'dark',
+      sound: 'wood',
+      routine_reorder_hint_dismissed: 0,
+    });
+    await expect(
+      db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'),
+    ).resolves.toEqual({ user_version: 3 });
+  });
+
+  it('rolls back version-three ordering when its migration fails', async () => {
+    const database = createTestDatabase();
+    await database.execAsync(LEGACY_SCHEMA);
+    await database.execAsync(`
+      CREATE TABLE account_preferences (
+        id INTEGER PRIMARY KEY NOT NULL,
+        mode TEXT NOT NULL,
+        cognito_sub TEXT,
+        display_name TEXT,
+        email TEXT
+      );
+      INSERT INTO account_preferences
+        (id, mode, cognito_sub, display_name, email)
+      VALUES (1, 'local', NULL, NULL, NULL);
+      CREATE TABLE device_preferences (
+        id INTEGER PRIMARY KEY NOT NULL,
+        theme TEXT NOT NULL,
+        sound TEXT NOT NULL
+      );
+      INSERT INTO device_preferences (id, theme, sound)
+      VALUES (1, 'system', 'chime');
+      PRAGMA user_version = 2;
+    `);
+    const failingDatabase: Database = {
+      ...database,
+      async execAsync(source) {
+        if (source.includes('CREATE UNIQUE INDEX checklists_unique_library_position')) {
+          throw new Error('simulated ordering migration failure');
+        }
+        await database.execAsync(source);
+      },
+    };
+
+    await expect(runMigrations(failingDatabase)).rejects.toThrow(
+      'simulated ordering migration failure',
+    );
+
+    await expect(
+      database.getFirstAsync<{ user_version: number }>('PRAGMA user_version'),
+    ).resolves.toEqual({ user_version: 2 });
+    await expect(
+      database.getAllAsync<{ name: string }>('PRAGMA table_info(checklists)'),
+    ).resolves.not.toContainEqual(
+      expect.objectContaining({ name: 'library_position' }),
+    );
   });
 
   it('is idempotent and keeps a single preference record', async () => {
