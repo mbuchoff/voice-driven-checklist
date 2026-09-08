@@ -26,9 +26,11 @@ jobs:
       - uses: actions/setup-node@v6
         with: { node-version: 20, cache: npm }
       - run: npm ci
+      - run: npm ci --prefix e2e
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - run: npm run e2e:unit
 
   android-build:
     runs-on: ubuntu-latest
