@@ -4,11 +4,8 @@ The automated suite proves deterministic behavior. Perceptual and external
 service checks remain explicit assisted acceptance items rather than being
 reported as automated results.
 
-Current status (2026-09-08): this table describes the suite's coverage contract,
-not a claim that every row passed on the final build. The last complete Pixel 7
-run predates the performance flag, review follow-ups, and quick-tap fix. A fresh
-full run and assisted gates remain outstanding; see the
-[implementation handoff](../docs/your-routines-tuning-handoff.md).
+This matrix describes the suite's coverage contract, not the result of a
+particular run. Record build-specific results and remaining gaps in the PR.
 
 | Area | Automated physical-device evidence | Assisted acceptance |
 | --- | --- | --- |
