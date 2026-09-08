@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +21,7 @@ import {
   setDevicePresentation,
 } from '../support/android.mjs';
 import { parseGfxInfo } from '../support/performance.mjs';
+import { verifyAdaptiveEdgeHold, verifySmallHoldDrift } from '../support/routineTuning.mjs';
 import { openAndroidSession } from '../support/session.mjs';
 import {
   beginCardDrag,
@@ -34,6 +36,7 @@ import {
   scrollToTextContaining,
   scrollToTop,
   scrollBeforeHoldActivation,
+  scrollViewport,
   swipeHintAway,
   tapElementAt,
   tapLabel,
@@ -50,6 +53,8 @@ const firstTitle = expectedTitles[0];
 const secondTitle = expectedTitles[1];
 const lastTitle = expectedTitles.at(-1);
 const temporaryTitle = 'E2E Temporary Routine';
+const runId = randomUUID();
+const createdDocuments = new Set();
 
 let driver;
 let presentation;
@@ -96,19 +101,32 @@ async function selectDocument(fileName) {
     'android=new UiSelector().resourceId("android:id/title").text("Downloads")',
   );
   const filesInDownloads = byText(driver, 'Files in Downloads');
-  if (!(await isDisplayed(filesInDownloads))) {
-    if (!(await isDisplayed(downloads))) {
+  // The system picker may restore Downloads directly or show its drawer.
+  // Let its opening transition settle before deciding which state it is in.
+  await driver.updateSettings({ waitForIdleTimeout: 500 });
+  try {
+    await waitForDisplayed(byLabel(driver, 'Show roots'));
+    if (!(await isDisplayed(downloads)) && !(await isDisplayed(filesInDownloads))) {
       await tapLabel(driver, 'Show roots');
     }
-    await waitForDisplayed(downloads);
-    await downloads.click();
+    if (await isDisplayed(downloads)) {
+      await downloads.click();
+      // The file list is already exposed while the drawer is still closing.
+      await downloads.waitForDisplayed({ reverse: true });
+    }
     await waitForDisplayed(filesInDownloads);
+    const file = await scrollToTextContaining(driver, fileName);
+    await file.click();
+  } finally {
+    await driver.updateSettings({ waitForIdleTimeout: 0 });
   }
-  const file = await scrollToTextContaining(driver, fileName);
-  await file.click();
 }
 
-async function finishAndroidSaveDialog() {
+async function finishAndroidSaveDialog(fileName) {
+  const filenameInput = await waitForDisplayed(
+    driver.$('android=new UiSelector().className("android.widget.EditText")'),
+  );
+  await filenameInput.setValue(fileName);
   const candidates = [
     driver.$('id=com.google.android.documentsui:id/action_menu_save'),
     byText(driver, 'Save'),
@@ -182,10 +200,22 @@ before(async () => {
 });
 
 after(async () => {
+  for (const remotePath of createdDocuments) {
+    try {
+      adb(['shell', 'rm', '-f', remotePath]);
+    } catch (error) {
+      console.error(`Could not remove this run's document ${remotePath}: ${error.message}`);
+    }
+  }
   if (presentationChanged && presentation) {
     restoreDevicePresentation(presentation);
   }
   if (driver) {
+    try {
+      await capture(driver, '99-final-state');
+    } catch {
+      // Preserve the original test failure if the device disconnected.
+    }
     try {
       await driver.releaseActions();
     } catch {
@@ -222,7 +252,8 @@ test(
   { timeout: 16 * 60_000 },
   async () => {
     clearIsolatedApp();
-    const backupName = 'voice-checklist-gh36.json';
+    const backupName = `voice-checklist-e2e-import-${runId}.json`;
+    createdDocuments.add(`/sdcard/Download/${backupName}`);
     pushFixture(fixturePath, backupName);
 
     collapseSystemPanels();
@@ -238,6 +269,7 @@ test(
     await tapText(driver, 'OK');
     await returnFromSettings();
 
+    console.info('Checking imported order, layout, and gesture arbitration');
     assert.deepEqual(await collectRoutineTitles(driver), expectedTitles);
     await expectTopTitle(firstTitle);
 
@@ -281,21 +313,55 @@ test(
     );
     assert.equal(await isDisplayed(byId(driver, 'editor-safe-area')), false);
 
+    await expectTopTitle(firstTitle);
+    await verifySmallHoldDrift(driver, byLabel(driver, `Edit ${firstTitle}`));
+    console.info('Small thumb drift activated drag');
+    const beforeFeedbackScroll = (await elementRect(driver, firstCard)).y;
+    await scrollBeforeHoldActivation(driver, byLabel(driver, `Edit ${firstTitle}`), { holdMs: 260 });
+    assert.ok((await elementRect(driver, firstCard)).y < beforeFeedbackScroll - 20,
+      'moving after hold feedback starts should still scroll before activation');
+    assert.equal(await isDisplayed(byId(driver, 'editor-safe-area')), false);
+    assert.equal(await isDisplayed(byId(driver, 'routine-drop-slot')), false);
+    await expectTopTitle(firstTitle);
+    await verifyAdaptiveEdgeHold(driver, 'bottom');
+    console.info('Adaptive bottom-edge hold, outward scroll, and retreat passed');
+    assert.deepEqual(await collectRoutineTitles(driver), expectedTitles,
+      'native touch cancellation should restore the original routine order');
+    await expectTopTitle(firstTitle);
+
+    resetFrameMetrics();
+    for (let swipe = 0; swipe < 3; swipe += 1) {
+      await scrollViewport(driver, 'down', 0.65);
+      await scrollViewport(driver, 'up', 0.65);
+    }
+    const scrollFrames = readFrameMetrics();
+    assert.ok(parseGfxInfo(scrollFrames).totalFrames > 0);
+    await writeFile(resolve(process.env.E2E_ARTIFACT_DIR, 'scroll-gfxinfo.txt'), scrollFrames);
+    await writeFile(resolve(process.env.E2E_ARTIFACT_DIR, 'scroll-frame-summary.json'),
+      JSON.stringify(parseGfxInfo(scrollFrames), null, 2));
+
     await scrollToLabel(driver, `Edit ${lastTitle}`);
     assert.equal(await byLabel(driver, 'New checklist').isDisplayed(), true);
     assert.equal(await byLabel(driver, 'Settings').isDisplayed(), true);
     await capture(driver, '02-library-seventeen-routines');
+    console.info('Ordinary scrolling measured; checking lesson and reordering');
 
     await scrollToTop(driver);
     const arrangeHint = await waitForDisplayed(
       byLabel(driver, 'Learn how to move routines'),
     );
     await tapElementAt(driver, arrangeHint, { yRatio: 0.2 });
-    await driver.pause(300);
-    await capture(driver, '03-full-screen-arrange-lesson');
     await waitForDisplayed(
       byLabel(driver, 'Demonstrating how to move a routine'),
     );
+    await capture(driver, '03-full-screen-arrange-lesson');
+    await byLabel(driver, 'Demonstrating how to move a routine')
+      .waitForDisplayed({ reverse: true, timeout: 10_000 });
+    await waitForDisplayed(byLabel(driver, 'Learn how to move routines'));
+
+    // Capture can outlast the short lesson. Check Back on a fresh showing.
+    await tapElementAt(driver, arrangeHint, { yRatio: 0.2 });
+    await waitForDisplayed(byLabel(driver, 'Demonstrating how to move a routine'));
     await driver.back();
     await waitForDisplayed(byLabel(driver, 'Learn how to move routines'));
 
@@ -312,16 +378,20 @@ test(
     await expectTopTitle(firstTitle);
     await dragCardToEdge(driver, byLabel(driver, `Edit ${firstTitle}`), 'down');
     await expectTopTitle(secondTitle);
+    assert.deepEqual(await collectRoutineTitles(driver), [...expectedTitles.slice(1), firstTitle]);
     await capture(driver, '04-first-routine-moved-last');
 
     await driver.terminateApp(APP_PACKAGE);
     await activateLibrary();
     await expectTopTitle(secondTitle);
+    assert.deepEqual(await collectRoutineTitles(driver), [...expectedTitles.slice(1), firstTitle]);
 
     const movedFirstCard = await scrollToLabel(driver, `Edit ${firstTitle}`);
     await dragCardToEdge(driver, movedFirstCard, 'up');
     await expectTopTitle(firstTitle);
+    assert.deepEqual(await collectRoutineTitles(driver), expectedTitles);
     await capture(driver, '05-last-routine-restored-first');
+    console.info('Offscreen reorder and relaunch persistence passed');
 
     const frameOutput = readFrameMetrics();
     const frameMetrics = parseGfxInfo(frameOutput);
@@ -355,6 +425,7 @@ test(
 
     await expectTopTitle(firstTitle);
     await openEditor(firstTitle);
+    console.info('Checking editor keyboard, runs, create/delete, and Settings');
     const lastStep = await scrollToLabel(driver, 'Hold row 11 to reorder');
     await lastStep.click();
     const lastStepInput = await waitForDisplayed(byId(driver, 'item-text-10'));
@@ -444,10 +515,12 @@ test(
     );
     assert.equal(await localAccount.isDisplayed(), true);
 
-    adb(['shell', 'rm', '-f', '/sdcard/Download/voice-checklist-backup.json']);
+    const exportName = `voice-checklist-e2e-export-${runId}.json`;
+    const exportPath = `/sdcard/Download/${exportName}`;
+    createdDocuments.add(exportPath);
     const exportButton = await scrollToLabel(driver, 'Export backup');
     await exportButton.click();
-    await finishAndroidSaveDialog();
+    await finishAndroidSaveDialog(exportName);
     await waitForDisplayed(byId(driver, 'settings-safe-area'), 30_000);
     const exportedFiles = adb(
       [
@@ -457,11 +530,22 @@ test(
         '-maxdepth',
         '1',
         '-name',
-        'voice-checklist-backup*.json',
+        exportName,
       ],
       { capture: true },
     ).trim();
     assert.notEqual(exportedFiles, '', 'Android export should write a backup file');
+    const exportedText = adb(['shell', 'cat', exportPath], { capture: true });
+    await writeFile(resolve(process.env.E2E_ARTIFACT_DIR, 'exported-backup.json'), exportedText);
+    const exported = JSON.parse(exportedText);
+    assert.deepEqual(Object.keys(exported).sort(), ['checklists', 'exportedAt', 'format', 'version']);
+    assert.equal(exported.format, 'voice-driven-checklist-backup');
+    assert.equal(exported.version, 1);
+    assert.equal(Number.isNaN(Date.parse(exported.exportedAt)), false);
+    const expectedBackup = structuredClone(fixture.checklists);
+    expectedBackup[0].items[10].text = 'Make coffee and place the mug beside breakfast';
+    assert.deepEqual(exported.checklists, expectedBackup,
+      'backup must retain routine/step order and edits, with checklist-only data');
     await returnFromSettings();
 
     presentationChanged = true;

@@ -5,7 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react-native';
-import { Vibration } from 'react-native';
+import { Vibration, type MeasureOnSuccessCallback } from 'react-native';
 import type { GestureType } from 'react-native-gesture-handler';
 
 import type { Database } from '@/src/db/database';
@@ -41,7 +41,11 @@ async function setupDb(routineCount: number): Promise<Database> {
   return database;
 }
 
-async function renderLibrary(database: Database, routineCount: number) {
+async function renderLibrary(
+  database: Database,
+  routineCount: number,
+  measureGrid: (callback: MeasureOnSuccessCallback) => void = callback => callback(0, 0, 361, 396, 16, 180),
+) {
   const view = render(
     <DatabaseProvider database={database}>
       <DevicePreferencesProvider
@@ -59,6 +63,11 @@ async function renderLibrary(database: Database, routineCount: number) {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   });
   await screen.findByTestId(routineCount ? 'routine-grid' : 'library-empty-state');
+  if (routineCount) {
+    // RN's mocked native host owns measure on its instance, above the host node.
+    const nativeGrid = screen.getByTestId('routine-grid').parent?.instance;
+    jest.spyOn(nativeGrid, 'measure').mockImplementation(measureGrid);
+  }
   return view;
 }
 
@@ -156,10 +165,6 @@ describe('LibraryScreen routine-arrangement teaching', () => {
     fireEvent.press(
       screen.getByRole('button', { name: /learn how to move routines/i }),
     );
-    act(() => {
-      jest.advanceTimersByTime(32);
-    });
-
     const modal = screen.getByTestId('routine-arrange-lesson-modal');
     expect(modal.props.statusBarTranslucent).toBe(true);
     expect(modal.props.navigationBarTranslucent).toBe(true);
@@ -201,6 +206,44 @@ describe('LibraryScreen routine-arrangement teaching', () => {
       'requestClose',
     );
 
+    expect(screen.queryByTestId('routine-arrange-lesson-modal')).toBeNull();
+    expect(screen.getByTestId('routine-arrange-hint')).toBeOnTheScreen();
+  });
+
+  it('waits for real geometry instead of briefly showing the lesson at the screen origin', async () => {
+    const database = await setupDb(2);
+    const pending: MeasureOnSuccessCallback[] = [];
+    await renderLibrary(database, 2, callback => { pending.push(callback); });
+    jest.useFakeTimers();
+    fireEvent.press(screen.getByRole('button', { name: /learn how to move routines/i }));
+    expect(pending).toHaveLength(1);
+    act(() => { jest.advanceTimersByTime(100); });
+    expect(screen.queryByTestId('routine-arrange-lesson-modal')).toBeNull();
+
+    act(() => { pending[0](0, 0, 361, 396, 16, 180); });
+    expect(screen.getByTestId('routine-arrange-lesson-source', { includeHiddenElements: true }))
+      .toHaveStyle({ left: 16, top: 180 });
+  });
+
+  it('does not reopen a closed lesson when an older measurement returns late', async () => {
+    const database = await setupDb(2);
+    const pending: MeasureOnSuccessCallback[] = [];
+    await renderLibrary(database, 2, callback => { pending.push(callback); });
+    const hint = screen.getByRole('button', { name: /learn how to move routines/i });
+    fireEvent.press(hint);
+    fireEvent.press(hint);
+    expect(pending).toHaveLength(2);
+    act(() => { pending[1](0, 0, 361, 396, 16, 180); });
+    fireEvent(screen.getByTestId('routine-arrange-lesson-modal'), 'requestClose');
+    act(() => { pending[0](0, 0, 361, 396, 16, 180); });
+    expect(screen.queryByTestId('routine-arrange-lesson-modal')).toBeNull();
+    expect(screen.getByTestId('routine-arrange-hint')).toBeOnTheScreen();
+  });
+
+  it('leaves the hint available when the native view cannot be measured', async () => {
+    const database = await setupDb(2);
+    await renderLibrary(database, 2, callback => callback(0, 0, 0, 0, 0, 0));
+    fireEvent.press(screen.getByRole('button', { name: /learn how to move routines/i }));
     expect(screen.queryByTestId('routine-arrange-lesson-modal')).toBeNull();
     expect(screen.getByTestId('routine-arrange-hint')).toBeOnTheScreen();
   });

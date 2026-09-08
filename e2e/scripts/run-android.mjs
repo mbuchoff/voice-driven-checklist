@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { waitForExit } from '../support/process.mjs';
 import { androidBuildPlan } from '../support/build.mjs';
+import { assertIsolatedApk } from '../support/android.mjs';
 
 const e2eRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const projectRoot = resolve(e2eRoot, '..');
@@ -21,6 +22,7 @@ const artifactDirectory = resolve(
 );
 
 await access(apk);
+assertIsolatedApk(apk);
 await mkdir(artifactDirectory, { recursive: true });
 
 const serverEnvironment = { ...process.env };

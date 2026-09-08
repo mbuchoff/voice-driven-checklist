@@ -10,6 +10,7 @@ export function androidSessionCapabilities(apk) {
     'appium:automationName': 'UiAutomator2',
     'appium:app': resolve(apk),
     'appium:enforceAppInstall': true,
+    'appium:androidInstallTimeout': 300_000,
     'appium:autoLaunch': false,
     'appium:noReset': false,
     'appium:fullReset': false,
@@ -33,6 +34,8 @@ export async function openAndroidSession() {
     port: Number(process.env.APPIUM_PORT ?? 4723),
     path: '/',
     logLevel: process.env.WDIO_LOG_LEVEL ?? 'warn',
+    // Wireless APK transfer can outlast WebdriverIO's two-minute default.
+    connectionRetryTimeout: 360_000,
     capabilities,
   });
   await driver.updateSettings({ waitForIdleTimeout: 0 });

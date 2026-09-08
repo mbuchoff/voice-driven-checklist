@@ -5,6 +5,8 @@ import {
   getRoutineAutoScrollDelta,
   getRoutineRockingTilt,
   getRoutineTargetIndex,
+  getRoutineScrollThresholds,
+  routineHoldShouldYield,
 } from './routineMotion';
 
 describe('routine drag placement', () => {
@@ -27,6 +29,25 @@ describe('routine drag placement', () => {
 });
 
 describe('routine edge autoscroll', () => {
+  it.each([
+    { start: 770, retreat: 750, direction: 1, normal: 750 },
+    { start: 30, retreat: 45, direction: -1, normal: 50 },
+  ])('adapts an edge hold at $start and restores the normal boundary', ({ start, retreat, direction, normal }) => {
+    let thresholds = getRoutineScrollThresholds(start, 0, 800);
+    const delta = (pointerY: number) => {
+      thresholds = getRoutineScrollThresholds(pointerY, 0, 800, thresholds);
+      const depth = direction > 0 ? pointerY - thresholds.bottom : thresholds.top - pointerY;
+      return getRoutineAutoScrollDelta(depth, 16);
+    };
+    expect(delta(start)).toBe(0);
+    expect(delta(start + direction * 10)).toBeGreaterThan(0);
+    expect(delta(retreat)).toBe(0);
+    expect(delta(retreat + direction * 5)).toBeGreaterThan(0);
+    expect(delta(400)).toBe(0);
+    expect(delta(normal)).toBeGreaterThan(0);
+    thresholds = getRoutineScrollThresholds(start, 0, 800);
+    expect(delta(start)).toBe(0);
+  });
   it('travels the same controlled distance at different refresh rates', () => {
     const distanceAt60Hz = Array.from(
       { length: 60 },
@@ -41,6 +62,14 @@ describe('routine edge autoscroll', () => {
     expect(distanceAt60Hz).toBeGreaterThan(300);
     expect(distanceAt60Hz).toBeLessThan(800);
     expect(getRoutineAutoScrollDelta(0, 16)).toBe(0);
+  });
+});
+
+describe('routine hold arbitration', () => {
+  it('uses a radial allowance rather than separate horizontal and vertical limits', () => {
+    expect(routineHoldShouldYield(12, 16)).toBe(false);
+    expect(routineHoldShouldYield(14, 15)).toBe(true);
+    expect(routineHoldShouldYield(0, -21)).toBe(true);
   });
 });
 

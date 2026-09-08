@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Pressable, Text, useColorScheme, View } from 'react-native';
 
+import { dark, light } from '@/src/theme/palette';
+
 import type { Database } from './database';
 import { openDatabase } from './openDatabase';
 
@@ -52,7 +54,7 @@ export function AppDatabaseProvider({
   }, [attempt, open]);
 
   if (failed) {
-    const dark = colorScheme === 'dark';
+    const theme = colorScheme === 'dark' ? dark : light;
     return (
       <View
         testID="database-open-error"
@@ -62,12 +64,12 @@ export function AppDatabaseProvider({
           alignItems: 'center',
           justifyContent: 'center',
           gap: 18,
-          backgroundColor: dark ? '#101814' : '#f8f4ec',
+          backgroundColor: theme.background,
         }}
       >
         <Text
           style={{
-            color: dark ? '#f4efe5' : '#17372d',
+            color: theme.text,
             fontSize: 28,
             lineHeight: 32,
             fontWeight: '700',
@@ -78,7 +80,7 @@ export function AppDatabaseProvider({
         </Text>
         <Text
           style={{
-            color: dark ? '#bac7c0' : '#64756e',
+            color: theme.textMuted,
             fontSize: 16,
             lineHeight: 22,
             textAlign: 'center',
@@ -97,12 +99,12 @@ export function AppDatabaseProvider({
             borderRadius: 16,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: dark ? '#8fd5b6' : '#1f684f',
+            backgroundColor: theme.primary,
           }}
         >
           <Text
             style={{
-              color: dark ? '#10261f' : '#ffffff',
+              color: colorScheme === 'dark' ? theme.background : theme.onPrimary,
               fontSize: 15,
               fontWeight: '800',
             }}

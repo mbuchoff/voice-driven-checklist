@@ -9,6 +9,7 @@ touching an installed `com.mbuchoff.voicechecklist` app or its library.
 
 - Node.js 20 and Java 17
 - `ANDROID_HOME` (or `ANDROID_SDK_ROOT`) pointing to an SDK with `adb`
+- Android SDK Command-line Tools (latest), providing `apkanalyzer`
 - One authorized physical Android device visible in `adb devices`
 - The root app dependencies installed
 
@@ -32,7 +33,9 @@ by both the harness and Appium.
 The build command regenerates the ignored Android project and creates a
 standalone arm64 release APK with its JavaScript bundle embedded. It signs only
 the isolated E2E package with Android's debug key, so production release
-signing remains unchanged. The runner starts a private Appium server, installs
+signing remains unchanged. Before starting Appium, the runner reads the actual
+APK manifest and rejects an unreadable or non-E2E package. The runner then
+starts a private Appium server, installs
 the isolated package, seeds test data through that package's sandbox, and
 restores any temporary font-scale or viewport changes in cleanup.
 

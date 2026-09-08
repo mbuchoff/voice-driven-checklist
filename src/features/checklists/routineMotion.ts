@@ -4,6 +4,8 @@ const AUTOSCROLL_EDGE_SIZE = 64;
 const AUTOSCROLL_MAX_SPEED = 540;
 const FULL_TILT_SPEED = 420;
 const VERTICAL_SWAY_WEIGHT = 0.9;
+export const ROUTINE_HOLD_DRIFT_ALLOWANCE = 20;
+export const ROUTINE_HOLD_FEEDBACK_DELAY_MS = 192;
 
 const ROCKING = {
   startFrequencyHz: 2.4,
@@ -65,6 +67,26 @@ export function getRoutineAutoScrollDelta(
     Math.max(0, distanceIntoEdge) / AUTOSCROLL_EDGE_SIZE,
   );
   return AUTOSCROLL_MAX_SPEED * intensity * Math.max(0, elapsedMs) / 1000;
+}
+
+export type RoutineScrollThresholds = { top: number; bottom: number };
+
+export function getRoutineScrollThresholds(
+  pointerY: number,
+  viewportTop: number,
+  viewportBottom: number,
+  previous?: RoutineScrollThresholds,
+): RoutineScrollThresholds {
+  'worklet';
+  return {
+    top: Math.min(viewportTop + AUTOSCROLL_EDGE_SIZE, Math.max(previous?.top ?? pointerY, pointerY)),
+    bottom: Math.max(viewportBottom - AUTOSCROLL_EDGE_SIZE, Math.min(previous?.bottom ?? pointerY, pointerY)),
+  };
+}
+
+export function routineHoldShouldYield(dx: number, dy: number) {
+  'worklet';
+  return Math.hypot(dx, dy) > ROUTINE_HOLD_DRIFT_ALLOWANCE;
 }
 
 export function getDirectionalDragTilt(velocityX: number, velocityY: number) {

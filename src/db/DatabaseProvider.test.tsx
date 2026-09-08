@@ -1,16 +1,23 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { Text, useColorScheme } from 'react-native';
 
 import { runMigrations } from './migrations';
 import { AppDatabaseProvider } from './DatabaseProvider';
 import { createTestDatabase } from '@/src/test/createTestDatabase';
+import { dark, light } from '@/src/theme/palette';
+
+jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({
+  __esModule: true,
+  default: jest.fn(),
+}));
 
 jest.mock('./openDatabase', () => ({
   openDatabase: () => Promise.reject(new Error('Use the injected test opener.')),
 }));
 
 describe('AppDatabaseProvider', () => {
-  it('keeps data intact and retries after the database cannot open', async () => {
+  it.each(['light', 'dark'] as const)('uses the %s palette and retries without changing data', async (scheme) => {
+    jest.mocked(useColorScheme).mockReturnValue(scheme);
     const database = createTestDatabase();
     await runMigrations(database);
     let attempts = 0;
@@ -27,6 +34,9 @@ describe('AppDatabaseProvider', () => {
     );
 
     expect(await screen.findByTestId('database-open-error')).toBeOnTheScreen();
+    expect(screen.getByTestId('database-open-error')).toHaveStyle({
+      backgroundColor: (scheme === 'dark' ? dark : light).background,
+    });
     expect(screen.queryByTestId('database-child')).not.toBeOnTheScreen();
 
     fireEvent.press(screen.getByTestId('database-open-retry'));

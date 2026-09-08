@@ -129,28 +129,7 @@ export async function deleteChecklist(db: Database, id: string): Promise<void> {
 }
 
 export async function exportAllChecklists(db: Database): Promise<ChecklistInput[]> {
-  const rows = await db.getAllAsync<{ id: string; title: string; item_text: string | null }>(
-    `SELECT c.id AS id, c.title AS title, ci.text AS item_text
-     FROM checklists c
-     LEFT JOIN checklist_items ci ON ci.checklist_id = c.id
-     ORDER BY c.library_position ASC, ci.position ASC`,
-  );
-
-  const inputs: ChecklistInput[] = [];
-  let currentId: string | null = null;
-  let current: ChecklistInput | null = null;
-
-  for (const row of rows) {
-    if (row.id !== currentId) {
-      currentId = row.id;
-      current = { title: row.title, items: [] };
-      inputs.push(current);
-    }
-    if (row.item_text != null) {
-      current?.items.push({ text: row.item_text });
-    }
-  }
-  return inputs;
+  return (await listChecklists(db)).map(({ title, items }) => ({ title, items }));
 }
 
 export async function importChecklists(

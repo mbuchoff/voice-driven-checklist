@@ -8,7 +8,6 @@ export function androidBuildPlan(projectRoot) {
       'assembleRelease',
       '--no-daemon',
       '-PreactNativeArchitectures=arm64-v8a',
-      '-PVOICE_CHECKLIST_E2E=true',
     ],
     apk: resolve(
       projectRoot,

@@ -33,7 +33,7 @@ export function getRoutineGridMetrics(gridWidth: number, itemCount: number) {
   const playButtonInset = compact
     ? COMPACT_PLAY_BUTTON_INSET
     : FULL_PLAY_BUTTON_INSET;
-  const contentBottomPadding = playButtonSize + playButtonInset + 8;
+  const contentBottomPadding = 15;
   const contentWidth = columns * cardWidth + CARD_GAP * (columns - 1);
   const leftOffset = Math.max(0, (width - contentWidth) / 2);
   const rows = itemCount > 0 ? Math.ceil(itemCount / columns) : 0;

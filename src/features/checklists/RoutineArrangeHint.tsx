@@ -10,22 +10,21 @@ import Animated, {
   cancelAnimation,
   Easing,
   interpolate,
-  useAnimatedProps,
+  useDerivedValue,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
   withRepeat,
   withSequence,
   withTiming,
-  type SharedValue,
 } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { Icon } from '@/src/components/Icon';
 import type { Palette } from '@/src/theme/palette';
 
 import { getRoutineCardColors, RoutineCard } from './RoutineCard';
+import { RoutineHoldOutline } from './RoutineHoldOutline';
 import {
   getRoutinePosition,
   type RoutineGridMetrics,
@@ -37,7 +36,6 @@ export const ROUTINE_ARRANGE_LESSON_DURATION_MS = 2700;
 
 const HINT_SWIPE_SLOP = 8;
 const HINT_DISMISS_DURATION_MS = 160;
-const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 export function shouldShowRoutineArrangeHint(
   routineCount: number,
@@ -82,7 +80,7 @@ export function RoutineArrangeHint({
   }, [offsetX, opacity]);
 
   const persistDismissal = useCallback(
-    async (_direction: number) => {
+    async () => {
       if (!(await onDismiss())) resetHint();
     },
     [onDismiss, resetHint],
@@ -97,9 +95,9 @@ export function RoutineArrangeHint({
       offsetX.value = event.translationX;
       opacity.value = Math.max(0.35, 1 - Math.abs(event.translationX) / 260);
     })
-    .onEnd((event) => {
+    .onEnd((event, success) => {
       'worklet';
-      if (Math.abs(event.translationX) < ROUTINE_ARRANGE_SWIPE_DISTANCE) {
+      if (!success || Math.abs(event.translationX) < ROUTINE_ARRANGE_SWIPE_DISTANCE) {
         offsetX.value = withTiming(0, {
           duration: 180,
           easing: Easing.out(Easing.cubic),
@@ -116,7 +114,7 @@ export function RoutineArrangeHint({
         0,
         { duration: 130 },
         (finished) => {
-          if (finished) scheduleOnRN(persistDismissal, direction);
+          if (finished) scheduleOnRN(persistDismissal);
         },
       );
     });
@@ -150,7 +148,7 @@ export function RoutineArrangeHint({
       duration: HINT_DISMISS_DURATION_MS,
     });
     opacity.value = withTiming(0, { duration: 130 });
-    void persistDismissal(1);
+    void persistDismissal();
   };
 
   return (
@@ -355,18 +353,9 @@ export function RoutineArrangeLesson({
       },
     ],
   }));
-  const outlineProgress = useSharedValue(0);
-
-  useEffect(() => {
-    outlineProgress.value = withDelay(
-      ROUTINE_ARRANGE_LESSON_DURATION_MS * 0.18,
-      withTiming(1, {
-        duration: ROUTINE_ARRANGE_LESSON_DURATION_MS * 0.22,
-        easing: Easing.linear,
-      }),
-    );
-    return () => cancelAnimation(outlineProgress);
-  }, [outlineProgress]);
+  const outlineProgress = useDerivedValue(() =>
+    interpolate(progress.value, [0, 0.18, 0.4, 1], [0, 0, 1, 1]),
+  );
 
   return (
     <Modal
@@ -439,7 +428,7 @@ export function RoutineArrangeLesson({
             onEdit={() => undefined}
             onStart={() => undefined}
           />
-          <RoutineLessonProgress
+          <RoutineHoldOutline
             width={layout.cardWidth}
             height={layout.cardHeight}
             color={ink}
@@ -477,78 +466,5 @@ export function RoutineArrangeLesson({
         </Animated.View>
       </View>
     </Modal>
-  );
-}
-
-function RoutineLessonProgress({
-  width,
-  height,
-  color,
-  progress,
-}: {
-  width: number;
-  height: number;
-  color: string;
-  progress: SharedValue<number>;
-}) {
-  const inset = 4;
-  const radius = 18;
-  const right = width - inset;
-  const bottom = height - inset;
-  const pathWidth = right - inset;
-  const pathHeight = bottom - inset;
-  const perimeter =
-    2 * (pathWidth + pathHeight - 4 * radius) + 2 * Math.PI * radius;
-  const outline = [
-    `M ${width / 2} ${inset}`,
-    `H ${right - radius}`,
-    `A ${radius} ${radius} 0 0 1 ${right} ${inset + radius}`,
-    `V ${bottom - radius}`,
-    `A ${radius} ${radius} 0 0 1 ${right - radius} ${bottom}`,
-    `H ${inset + radius}`,
-    `A ${radius} ${radius} 0 0 1 ${inset} ${bottom - radius}`,
-    `V ${inset + radius}`,
-    `A ${radius} ${radius} 0 0 1 ${inset + radius} ${inset}`,
-    `H ${width / 2}`,
-    'Z',
-  ].join(' ');
-  const animatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: perimeter * (1 - progress.value),
-  }));
-
-  return (
-    <View
-      pointerEvents="none"
-      style={{ position: 'absolute', inset: 0, zIndex: 4 }}
-    >
-      <View
-        style={{
-          position: 'absolute',
-          inset: 2,
-          borderRadius: 20,
-          backgroundColor: color,
-          opacity: 0.12,
-        }}
-      />
-      <Svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`}>
-        <Path
-          d={outline}
-          fill="none"
-          stroke={color}
-          strokeOpacity={0.18}
-          strokeWidth={5}
-        />
-        <AnimatedPath
-          animatedProps={animatedProps}
-          d={outline}
-          fill="none"
-          stroke={color}
-          strokeOpacity={0.82}
-          strokeWidth={5}
-          strokeDasharray={`${perimeter} ${perimeter}`}
-          strokeLinecap="round"
-        />
-      </Svg>
-    </View>
   );
 }

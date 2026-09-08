@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type RefObject,
@@ -16,25 +17,24 @@ import { Gesture, type GestureType } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   cancelAnimation,
-  interpolate,
   measure,
   scrollTo,
-  useAnimatedProps,
   useAnimatedStyle,
   useFrameCallback,
   useSharedValue,
   withDelay,
   withTiming,
   type AnimatedRef,
+  type FrameInfo,
   type SharedValue,
 } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 
 import type { Palette } from '@/src/theme/palette';
 
 import { moveItem } from './reorder';
 import { getRoutineCardColors, RoutineCard } from './RoutineCard';
+import { RoutineHoldOutline } from './RoutineHoldOutline';
 import {
   getRoutinePosition,
   type RoutineGridMetrics,
@@ -45,28 +45,30 @@ import {
   getRoutineAutoScrollDelta,
   getRoutineRockingTilt,
   getRoutineTargetIndex,
-  ROUTINE_AUTOSCROLL_EDGE_SIZE,
-  ROUTINE_ROCKING_DURATION_MS,
+  getRoutineScrollThresholds,
+  routineHoldShouldYield,
+  ROUTINE_HOLD_DRIFT_ALLOWANCE,
+  ROUTINE_HOLD_FEEDBACK_DELAY_MS,
+  type RoutineScrollThresholds,
 } from './routineMotion';
 import type { ChecklistSummary } from './types';
 
 type SlotMap = Record<string, number>;
 
 export const ROUTINE_REORDER_TIMING = {
-  feedbackDelayMs: 160,
+  feedbackDelayMs: ROUTINE_HOLD_FEEDBACK_DELAY_MS,
   activationMs: 440,
-  movementTolerance: 7,
+  movementTolerance: ROUTINE_HOLD_DRIFT_ALLOWANCE,
 } as const;
 
 const CARD_MOVE_DURATION_MS = 190;
-const RELEASE_DURATION_MS = 120;
+const RELEASE_DURATION_MS = 220;
 const SWAY_RESPONSE_MS = 72;
 const MAX_TILT_DEGREES = 9;
 const SETTLE_DELAY_MS = 80;
 const PRESS_SUPPRESSION_MS = 400;
 const MOVE_EASING = Easing.bezier(0.22, 0.75, 0.2, 1);
 
-const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 function mapSlots(items: ChecklistSummary[]): SlotMap {
   return Object.fromEntries(items.map((item, index) => [item.id, index]));
@@ -164,10 +166,8 @@ function RoutinePosition({
   dragX,
   dragY,
   dragTilt,
-  dragStartScrollY,
-  scrollY,
-  settleInitialTilt,
-  settleProgress,
+  dragScrollDelta,
+  dragLift,
   onEdit,
   onStart,
   onMoveEarlier,
@@ -188,10 +188,8 @@ function RoutinePosition({
   dragX: SharedValue<number>;
   dragY: SharedValue<number>;
   dragTilt: SharedValue<number>;
-  dragStartScrollY: SharedValue<number>;
-  scrollY: SharedValue<number>;
-  settleInitialTilt: SharedValue<number>;
-  settleProgress: SharedValue<number>;
+  dragScrollDelta: SharedValue<number>;
+  dragLift: SharedValue<number>;
   onEdit: () => void;
   onStart: () => void;
   onMoveEarlier?: () => void;
@@ -202,23 +200,14 @@ function RoutinePosition({
     const destination = getRoutinePosition(slot, layout);
     const active = activeId.value === item.id;
     const settling = settlingId.value === item.id;
-    const rotation = active
-      ? dragTilt.value * MAX_TILT_DEGREES
-      : settling
-        ? getRoutineRockingTilt(
-            settleInitialTilt.value,
-            settleProgress.value * ROUTINE_ROCKING_DURATION_MS,
-          ) * MAX_TILT_DEGREES
-        : 0;
+    const rotation = active ? dragTilt.value * MAX_TILT_DEGREES : 0;
     const dimmed =
       holdingIndex.value >= 0 && holdingIndex.value !== fallbackIndex;
 
     return {
       zIndex: active || settling ? 20 : 1,
       elevation: active || settling ? 12 : 0,
-      opacity: dimmed
-        ? interpolate(holdProgress.value, [0, 1], [1, 0.58])
-        : 1,
+      opacity: dimmed && holdProgress.value > 0 ? 0.58 : 1,
       transform: [
         {
           translateX: active
@@ -232,21 +221,21 @@ function RoutinePosition({
           translateY: active
             ? startY.value +
               dragY.value +
-              (scrollY.value - dragStartScrollY.value)
+              dragScrollDelta.value
             : withTiming(destination.y, {
                 duration: CARD_MOVE_DURATION_MS,
                 easing: MOVE_EASING,
               }),
         },
-        { scale: active ? 1.045 : 1 },
+        { scale: active ? dragLift.value : 1 },
         { rotate: `${rotation}deg` },
       ],
     };
   }, [fallbackIndex, item.id, layout]);
 
   const accessibilityActions = [
-    ...(onMoveEarlier ? [{ name: 'decrement', label: 'Move earlier' }] : []),
-    ...(onMoveLater ? [{ name: 'increment', label: 'Move later' }] : []),
+    ...(onMoveEarlier ? [{ name: 'move-earlier', label: 'Move earlier' }] : []),
+    ...(onMoveLater ? [{ name: 'move-later', label: 'Move later' }] : []),
   ];
 
   return (
@@ -270,8 +259,8 @@ function RoutinePosition({
         gesture={gesture}
         accessibilityActions={accessibilityActions}
         onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === 'decrement') onMoveEarlier?.();
-          if (event.nativeEvent.actionName === 'increment') onMoveLater?.();
+          if (event.nativeEvent.actionName === 'move-earlier') onMoveEarlier?.();
+          if (event.nativeEvent.actionName === 'move-later') onMoveLater?.();
         }}
         onEdit={onEdit}
         onStart={onStart}
@@ -331,11 +320,7 @@ function RoutineDropSlot({
 }
 
 function RoutineHoldFeedback({
-  index,
-  layout,
-  color,
-  holdingIndex,
-  progress,
+  index, layout, color, holdingIndex, progress,
 }: {
   index: number;
   layout: RoutineGridMetrics;
@@ -343,36 +328,9 @@ function RoutineHoldFeedback({
   holdingIndex: SharedValue<number>;
   progress: SharedValue<number>;
 }) {
-  const inset = 4;
-  const radius = 18;
-  const left = inset;
-  const top = inset;
-  const right = layout.cardWidth - inset;
-  const bottom = layout.cardHeight - inset;
-  const width = right - left;
-  const height = bottom - top;
-  const perimeter = 2 * (width + height - 4 * radius) + 2 * Math.PI * radius;
-  const outline = [
-    `M ${layout.cardWidth / 2} ${top}`,
-    `H ${right - radius}`,
-    `A ${radius} ${radius} 0 0 1 ${right} ${top + radius}`,
-    `V ${bottom - radius}`,
-    `A ${radius} ${radius} 0 0 1 ${right - radius} ${bottom}`,
-    `H ${left + radius}`,
-    `A ${radius} ${radius} 0 0 1 ${left} ${bottom - radius}`,
-    `V ${top + radius}`,
-    `A ${radius} ${radius} 0 0 1 ${left + radius} ${top}`,
-    `H ${layout.cardWidth / 2}`,
-    'Z',
-  ].join(' ');
   const containerStyle = useAnimatedStyle(() => ({
-    opacity:
-      holdingIndex.value === index && progress.value > 0
-        ? Math.min(1, progress.value * 10)
-        : 0,
-  }));
-  const animatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: perimeter * (1 - progress.value),
+    opacity: holdingIndex.value === index && progress.value > 0
+      ? Math.min(1, progress.value * 10) : 0,
   }));
 
   return (
@@ -381,53 +339,18 @@ function RoutineHoldFeedback({
       pointerEvents="none"
       style={[
         {
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          width: layout.cardWidth,
-          height: layout.cardHeight,
-          zIndex: 30,
+          position: 'absolute', left: 0, top: 0,
+          width: layout.cardWidth, height: layout.cardHeight, zIndex: 30,
         },
         containerStyle,
       ]}
     >
-      <View
-        style={{
-          position: 'absolute',
-          left: 2,
-          top: 2,
-          right: 2,
-          bottom: 2,
-          borderRadius: 20,
-          backgroundColor: color,
-          opacity: 0.12,
-        }}
+      <RoutineHoldOutline
+        width={layout.cardWidth}
+        height={layout.cardHeight}
+        color={color}
+        progress={progress}
       />
-      <Svg
-        testID="routine-hold-progress-outline"
-        width="100%"
-        height="100%"
-        viewBox={`0 0 ${layout.cardWidth} ${layout.cardHeight}`}
-      >
-        <Path
-          d={outline}
-          fill="none"
-          stroke={color}
-          strokeOpacity={0.18}
-          strokeWidth={5}
-        />
-        <AnimatedPath
-          testID="routine-hold-progress-stroke"
-          animatedProps={animatedProps}
-          d={outline}
-          fill="none"
-          stroke={color}
-          strokeOpacity={0.82}
-          strokeWidth={5}
-          strokeDasharray={`${perimeter} ${perimeter}`}
-          strokeLinecap="round"
-        />
-      </Svg>
     </Animated.View>
   );
 }
@@ -479,15 +402,21 @@ export function RoutineReorderGrid({
   const dragTilt = useSharedValue(0);
   const dragging = useSharedValue(0);
   const settleInitialTilt = useSharedValue(0);
-  const settleProgress = useSharedValue(1);
   const dragStartScrollY = useSharedValue(0);
   const pointerAbsoluteY = useSharedValue(0);
   const viewportTop = useSharedValue(0);
+  const dragScrollDelta = useSharedValue(0);
+  const dragLift = useSharedValue(1);
+  const dragGeneration = useSharedValue(0);
+  const holdActivation = useSharedValue(0);
+  const holdStartX = useSharedValue(0);
+  const holdStartY = useSharedValue(0);
+  const edgeThresholds = useSharedValue<RoutineScrollThresholds>({ top: 0, bottom: 0 });
+  const idleMotionMs = useSharedValue(0);
   const [activeRoutine, setActiveRoutine] = useState<string>();
   const activeRoutineRef = useRef<string | undefined>(undefined);
   const itemsRef = useRef(items);
-  const suppressedPresses = useRef(new Set<string>());
-  const suppressionTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const suppressedPresses = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   itemsRef.current = items;
 
   useEffect(() => {
@@ -498,11 +427,11 @@ export function RoutineReorderGrid({
   }, [initialSlots, itemIds, items, slots]);
 
   const suppressPress = useCallback((id: string) => {
-    suppressedPresses.current.add(id);
+    clearTimeout(suppressedPresses.current.get(id));
     const timer = setTimeout(() => {
       suppressedPresses.current.delete(id);
     }, PRESS_SUPPRESSION_MS);
-    suppressionTimers.current.push(timer);
+    suppressedPresses.current.set(id, timer);
   }, []);
 
   const beginDragOnRN = useCallback((id: string) => {
@@ -563,7 +492,7 @@ export function RoutineReorderGrid({
   ]);
 
   useEffect(() => {
-    const timers = suppressionTimers.current;
+    const timers = suppressedPresses.current;
     const back = BackHandler.addEventListener(
       'hardwareBackPress',
       cancelActiveDrag,
@@ -575,26 +504,38 @@ export function RoutineReorderGrid({
       back.remove();
       appState.remove();
       timers.forEach(clearTimeout);
+      timers.clear();
+      cancelAnimation(holdActivation);
+      cancelAnimation(holdProgress);
       cancelActiveDrag();
     };
-  }, [cancelActiveDrag]);
+  }, [cancelActiveDrag, holdActivation, holdProgress]);
 
-  useFrameCallback((frame) => {
+  const updateDragFrame = useCallback((frame: FrameInfo) => {
+    'worklet';
     if (!dragging.value || viewportHeight.value <= 0) return;
-    const viewportY = pointerAbsoluteY.value - viewportTop.value;
-    const distanceFromBottom = viewportHeight.value - viewportY;
+    const elapsedMs = Math.min(32, frame.timeSincePreviousFrame ?? 0);
+    // Ordinary scrolling never changes a shared value consumed by every card.
+    dragScrollDelta.value = scrollY.value - dragStartScrollY.value;
+    const previousIdle = idleMotionMs.value;
+    idleMotionMs.value += elapsedMs;
+    if (idleMotionMs.value >= SETTLE_DELAY_MS) {
+      if (previousIdle < SETTLE_DELAY_MS) {
+        cancelAnimation(dragTilt);
+        settleInitialTilt.value = dragTilt.value;
+      }
+      dragTilt.value = getRoutineRockingTilt(settleInitialTilt.value, idleMotionMs.value - SETTLE_DELAY_MS);
+    }
+    const topDepth = edgeThresholds.value.top - pointerAbsoluteY.value;
+    const bottomDepth = pointerAbsoluteY.value - edgeThresholds.value.bottom;
     const direction =
-      viewportY < ROUTINE_AUTOSCROLL_EDGE_SIZE
+      topDepth > 0
         ? -1
-        : distanceFromBottom < ROUTINE_AUTOSCROLL_EDGE_SIZE
+        : bottomDepth > 0
           ? 1
           : 0;
     if (!direction) return;
-    const distanceIntoEdge =
-      direction < 0
-        ? ROUTINE_AUTOSCROLL_EDGE_SIZE - Math.max(0, viewportY)
-        : ROUTINE_AUTOSCROLL_EDGE_SIZE - Math.max(0, distanceFromBottom);
-    const elapsedMs = Math.min(32, frame.timeSincePreviousFrame ?? 0);
+    const distanceIntoEdge = direction < 0 ? topDepth : bottomDepth;
     const delta = getRoutineAutoScrollDelta(distanceIntoEdge, elapsedMs);
     const maxScrollY = Math.max(0, contentHeight.value - viewportHeight.value);
     const nextScrollY = Math.max(
@@ -603,6 +544,7 @@ export function RoutineReorderGrid({
     );
     if (nextScrollY === scrollY.value) return;
     scrollY.value = nextScrollY;
+    dragScrollDelta.value = nextScrollY - dragStartScrollY.value;
     scrollTo(scrollRef, 0, nextScrollY, false);
     updateDragTarget(
       dragX,
@@ -618,24 +560,54 @@ export function RoutineReorderGrid({
       layout,
       items.length,
     );
-  });
+  }, [contentHeight, dragScrollDelta, dragStartScrollY, dragTilt, dragX, dragY,
+    dragging, edgeThresholds, fromIndex, idleMotionMs, initialSlots, items.length,
+    layout, pointerAbsoluteY, scrollRef, scrollY, settleInitialTilt, slots,
+    startX, startY, targetIndex, viewportHeight]);
+  const frameSubscription = useFrameCallback(updateDragFrame, false);
+  useEffect(() => {
+    frameSubscription.setActive(activeRoutine !== undefined);
+    return () => frameSubscription.setActive(false);
+  }, [activeRoutine, frameSubscription]);
 
-  const gestureFor = (item: ChecklistSummary, fallbackIndex: number) =>
+  const gestures = useMemo(() => items.map((item, fallbackIndex) =>
     Gesture.Pan()
       .withTestId(`routine-hold-gesture-${item.id}`)
       .enabled(enabled)
       .maxPointers(1)
       .shouldCancelWhenOutside(false)
-      .activateAfterLongPress(ROUTINE_REORDER_TIMING.activationMs)
-      .failOffsetX([
-        -ROUTINE_REORDER_TIMING.movementTolerance,
-        ROUTINE_REORDER_TIMING.movementTolerance,
-      ])
-      .failOffsetY([
-        -ROUTINE_REORDER_TIMING.movementTolerance,
-        ROUTINE_REORDER_TIMING.movementTolerance,
-      ])
+      // The built-in long-press pan fails at Android's smaller touch slop.
+      // Manual UI-thread activation gives the approved radial allowance.
+      .manualActivation(true)
       .blocksExternalGesture(scrollRef as never)
+      .onTouchesDown((event, manager) => {
+        'worklet';
+        if (event.numberOfTouches !== 1) { manager.fail(); return; }
+        const touch = event.allTouches[0];
+        holdStartX.value = touch.absoluteX;
+        holdStartY.value = touch.absoluteY;
+        const viewport = measure(scrollRef);
+        if (viewport) {
+          viewportTop.value = viewport.pageY;
+          viewportHeight.value = viewport.height;
+        }
+        edgeThresholds.value = getRoutineScrollThresholds(touch.absoluteY, viewportTop.value, viewportTop.value + viewportHeight.value);
+        holdActivation.value = 0;
+        holdActivation.value = withDelay(ROUTINE_REORDER_TIMING.activationMs,
+          withTiming(1, { duration: 0 }, (finished) => {
+            if (finished) manager.activate();
+          }));
+      })
+      .onTouchesMove((event, manager) => {
+        'worklet';
+        const touch = event.allTouches[0];
+        if (!touch) return;
+        edgeThresholds.value = getRoutineScrollThresholds(touch.absoluteY, viewportTop.value, viewportTop.value + viewportHeight.value, edgeThresholds.value);
+        if (!dragging.value && routineHoldShouldYield(touch.absoluteX - holdStartX.value, touch.absoluteY - holdStartY.value)) {
+          cancelAnimation(holdActivation);
+          manager.fail();
+        }
+      })
       .onBegin(() => {
         'worklet';
         holdingIndex.value = fallbackIndex;
@@ -652,6 +624,12 @@ export function RoutineReorderGrid({
       })
       .onStart((event) => {
         'worklet';
+        dragGeneration.value += 1;
+        cancelAnimation(dragX);
+        cancelAnimation(dragY);
+        cancelAnimation(dragTilt);
+        cancelAnimation(dragLift);
+        cancelAnimation(holdActivation);
         cancelAnimation(holdProgress);
         holdProgress.value = 0;
         holdingIndex.value = -1;
@@ -668,6 +646,9 @@ export function RoutineReorderGrid({
         dragX.value = 0;
         dragY.value = 0;
         dragTilt.value = 0;
+        dragLift.value = 1.045;
+        dragScrollDelta.value = 0;
+        idleMotionMs.value = 0;
         dragStartScrollY.value = scrollY.value;
         pointerAbsoluteY.value = event.absoluteY;
         const viewport = measure(scrollRef);
@@ -683,6 +664,7 @@ export function RoutineReorderGrid({
         dragX.value = event.translationX;
         dragY.value = event.translationY;
         pointerAbsoluteY.value = event.absoluteY;
+        idleMotionMs.value = 0;
         dragTilt.value = withTiming(
           getDirectionalDragTilt(event.velocityX, event.velocityY),
           { duration: SWAY_RESPONSE_MS, easing: Easing.out(Easing.quad) },
@@ -702,42 +684,31 @@ export function RoutineReorderGrid({
           items.length,
         );
       })
-      .onEnd(() => {
+      .onEnd((_event, success) => {
         'worklet';
-        if (activeId.value !== item.id) return;
+        if (!success || activeId.value !== item.id) return;
         dragging.value = 0;
         const from = fromIndex.value;
         const to = targetIndex.value;
         const destination = getRoutinePosition(to, layout);
         settlingId.value = item.id;
-        settleInitialTilt.value = dragTilt.value;
-        settleProgress.value = 0;
-        settleProgress.value = withDelay(
-          SETTLE_DELAY_MS,
-          withTiming(
-            1,
-            {
-              duration: ROUTINE_ROCKING_DURATION_MS,
-              easing: Easing.linear,
-            },
-            (finished) => {
-              if (finished && settlingId.value === item.id) {
-                settlingId.value = '';
-              }
-            },
-          ),
-        );
+        const generation = dragGeneration.value;
+        const releaseMotion = { duration: RELEASE_DURATION_MS, easing: Easing.out(Easing.cubic) };
+        dragTilt.value = withTiming(0, releaseMotion);
+        dragLift.value = withTiming(1, releaseMotion);
         dragX.value = withTiming(destination.x - startX.value, {
-          duration: RELEASE_DURATION_MS,
-          easing: MOVE_EASING,
+          ...releaseMotion,
         });
         dragY.value = withTiming(
           destination.y -
             startY.value -
             (scrollY.value - dragStartScrollY.value),
-          { duration: RELEASE_DURATION_MS, easing: MOVE_EASING },
+          releaseMotion,
           (finished) => {
-            if (finished && activeId.value === item.id) activeId.value = '';
+            if (finished && generation === dragGeneration.value && activeId.value === item.id) {
+              activeId.value = '';
+              settlingId.value = '';
+            }
           },
         );
         scheduleOnRN(finishDragOnRN, item.id, from, to);
@@ -745,6 +716,7 @@ export function RoutineReorderGrid({
       .onFinalize((_event, success) => {
         'worklet';
         cancelAnimation(holdProgress);
+        cancelAnimation(holdActivation);
         holdProgress.value = 0;
         holdingIndex.value = -1;
         if (!success && activeId.value === item.id) {
@@ -762,7 +734,13 @@ export function RoutineReorderGrid({
           );
           scheduleOnRN(finishCancelOnRN);
         }
-      });
+      }),
+  ), [activeId, beginDragOnRN, dragGeneration, dragLift, dragScrollDelta,
+    dragStartScrollY, dragTilt, dragX, dragY, dragging, edgeThresholds, enabled,
+    finishCancelOnRN, finishDragOnRN, fromIndex, holdActivation, holdProgress,
+    holdStartX, holdStartY, holdingIndex, idleMotionMs, initialSlots, items,
+    layout, pointerAbsoluteY, scrollRef, scrollY, settlingId, slots, startX,
+    startY, targetIndex, viewportHeight, viewportTop]);
 
   return (
     <View
@@ -788,7 +766,7 @@ export function RoutineReorderGrid({
           fallbackIndex={index}
           layout={layout}
           theme={theme}
-          gesture={gestureFor(item, index)}
+          gesture={gestures[index]}
           activeId={activeId}
           settlingId={settlingId}
           holdingIndex={holdingIndex}
@@ -799,10 +777,8 @@ export function RoutineReorderGrid({
           dragX={dragX}
           dragY={dragY}
           dragTilt={dragTilt}
-          dragStartScrollY={dragStartScrollY}
-          scrollY={scrollY}
-          settleInitialTilt={settleInitialTilt}
-          settleProgress={settleProgress}
+          dragScrollDelta={dragScrollDelta}
+          dragLift={dragLift}
           onEdit={() => {
             if (!suppressedPresses.current.has(item.id)) onEdit(item.id);
           }}

@@ -85,6 +85,8 @@ export function RoutineCard({
       accessibilityActions={accessibilityActions}
       onAccessibilityAction={onAccessibilityAction}
       onPress={cardSelection.run}
+      onPressIn={cardSelection.pressIn}
+      onPressOut={cardSelection.pressOut}
       style={{
         flex: 1,
         padding: 15,
@@ -105,8 +107,8 @@ export function RoutineCard({
         <Text
           style={{
             color: theme.text,
-            fontSize: layout.compact ? 14 : 18,
-            lineHeight: layout.compact ? 18 : 22,
+            fontSize: layout.compact ? 18 : 22,
+            lineHeight: layout.compact ? 22 : 26,
             fontWeight: '800',
             letterSpacing: layout.compact ? -0.35 : -0.6,
           }}
@@ -116,7 +118,7 @@ export function RoutineCard({
         <Text
           style={{
             color: ink,
-            fontSize: layout.compact ? 11 : 12,
+            fontSize: layout.compact ? 14 : 15,
             fontWeight: '700',
             marginTop: layout.compact ? 4 : 5,
           }}
@@ -128,8 +130,8 @@ export function RoutineCard({
             testID={`routine-step-list-${item.id}`}
             style={{
               color: theme.textMuted,
-              fontSize: layout.compact ? 10 : 11,
-              lineHeight: layout.compact ? 13 : 15,
+              fontSize: layout.compact ? 14 : 15,
+              lineHeight: layout.compact ? 17 : 19,
               marginTop: layout.compact ? 6 : 8,
               paddingTop: layout.compact ? 6 : 8,
               borderTopWidth: 1,
@@ -188,6 +190,8 @@ export function RoutineCard({
           accessibilityState={{ disabled: empty }}
           disabled={empty}
           onPress={playSelection.run}
+          onPressIn={playSelection.pressIn}
+          onPressOut={playSelection.pressOut}
           style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
         >
           <Icon

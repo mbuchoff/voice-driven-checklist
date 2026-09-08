@@ -2,8 +2,8 @@ import BetterSqlite3 from 'better-sqlite3';
 
 import type { Database, RunResult } from '@/src/db/database';
 
-export function createTestDatabase(): Database {
-  const sqlite = new BetterSqlite3(':memory:');
+export function createTestDatabase(filename = ':memory:'): Database {
+  const sqlite = new BetterSqlite3(filename);
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
 

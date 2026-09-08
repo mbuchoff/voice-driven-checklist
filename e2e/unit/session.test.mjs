@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { androidSessionCapabilities } from '../support/session.mjs';
 
-test('reinstalls the supplied isolated APK even when its version is unchanged', () => {
+test('session capabilities request forced APK installation', () => {
   assert.equal(
     androidSessionCapabilities('/workspace/voice-checklist.apk')[
       'appium:enforceAppInstall'

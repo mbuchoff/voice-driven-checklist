@@ -38,7 +38,7 @@ export default function EditChecklistRoute() {
     <ChecklistEditor
       initialChecklist={state.checklist}
       onSaved={() => router.back()}
-      onDeleted={() => router.replace('/')}
+      onDeleted={() => router.dismissTo('/')}
       onCancel={() => router.back()}
     />
   );

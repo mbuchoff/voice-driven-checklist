@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   screen,
   waitFor,
@@ -79,7 +80,7 @@ describe('LibraryScreen', () => {
     );
   });
 
-  it('runs card, Play, New, and Settings actions after inward feedback', async () => {
+  it('runs card, Play, New, and Settings actions immediately on successful release', async () => {
     const database = await setupDb();
     const routine = await createChecklist(database, {
       title: 'Errands',
@@ -100,25 +101,37 @@ describe('LibraryScreen', () => {
     );
     await screen.findByTestId(`routine-card-${routine.id}`);
 
+    // Scrolling can cancel press feedback; neither contact nor its cancellation
+    // may navigate, even once the animation would have finished.
+    jest.useFakeTimers();
+    try {
+      for (const name of [`Edit ${routine.title}`, `Start ${routine.title}`, 'New checklist', 'Settings']) {
+        const button = screen.getByRole('button', { name });
+        fireEvent(button, 'pressIn');
+        act(() => jest.advanceTimersByTime(120));
+        fireEvent(button, 'pressOut');
+        act(() => jest.advanceTimersByTime(500));
+      }
+      for (const callback of [onEdit, onStart, onCreate, onSettings]) {
+        expect(callback).not.toHaveBeenCalled();
+      }
+    } finally { jest.useRealTimers(); }
+
     fireEvent.press(
       screen.getByRole('button', { name: `Edit ${routine.title}` }),
     );
-    expect(onEdit).not.toHaveBeenCalled();
-    await waitFor(() => expect(onEdit).toHaveBeenCalledWith(routine.id));
+    expect(onEdit).toHaveBeenCalledWith(routine.id);
 
     fireEvent.press(
       screen.getByRole('button', { name: `Start ${routine.title}` }),
     );
-    expect(onStart).not.toHaveBeenCalled();
-    await waitFor(() => expect(onStart).toHaveBeenCalledWith(routine.id));
+    expect(onStart).toHaveBeenCalledWith(routine.id);
 
     fireEvent.press(screen.getByRole('button', { name: /new checklist/i }));
-    expect(onCreate).not.toHaveBeenCalled();
-    await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1));
+    expect(onCreate).toHaveBeenCalledTimes(1);
 
     fireEvent.press(screen.getByRole('button', { name: /settings/i }));
-    expect(onSettings).not.toHaveBeenCalled();
-    await waitFor(() => expect(onSettings).toHaveBeenCalledTimes(1));
+    expect(onSettings).toHaveBeenCalledTimes(1);
   });
 
   it('keeps Play in place but disables it for an empty routine', async () => {

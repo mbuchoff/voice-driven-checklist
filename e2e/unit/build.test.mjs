@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { androidBuildPlan } from '../support/build.mjs';
 
-test('builds a standalone isolated release APK with the Android debug key', () => {
+test('the Gradle plan targets arm64 release with the daemon disabled', () => {
   const projectRoot = '/workspace/voice-checklist';
 
   assert.deepEqual(androidBuildPlan(projectRoot), {
@@ -13,7 +13,6 @@ test('builds a standalone isolated release APK with the Android debug key', () =
       'assembleRelease',
       '--no-daemon',
       '-PreactNativeArchitectures=arm64-v8a',
-      '-PVOICE_CHECKLIST_E2E=true',
     ],
     apk: '/workspace/voice-checklist/android/app/build/outputs/apk/release/app-release.apk',
   });

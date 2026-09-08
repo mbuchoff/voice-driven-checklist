@@ -14,6 +14,7 @@ import Reanimated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView as GestureScrollView } from 'react-native-gesture-handler';
 
 import { Icon } from '@/src/components/Icon';
 import { notify } from '@/src/components/confirm';
@@ -32,6 +33,10 @@ import { getRoutineGridMetrics } from './routineGrid';
 import { RoutineReorderGrid } from './RoutineReorderGrid';
 import type { ChecklistSummary } from './types';
 import { useRoutineSelectionFeedback } from './useRoutineSelectionFeedback';
+
+// The scroll ref must expose a gesture-handler tag for a pending card hold to
+// block scrolling until the approved drift allowance is exceeded.
+const RoutineScrollView = Reanimated.createAnimatedComponent(GestureScrollView);
 
 export type LibraryScreenProps = {
   onCreate: () => void;
@@ -77,6 +82,8 @@ function HeaderControl({
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         onPress={selection.run}
+        onPressIn={selection.pressIn}
+        onPressOut={selection.pressOut}
         style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
       >
         <Icon
@@ -114,9 +121,7 @@ export function LibraryScreen({
   const persistedItems = useRef(items);
   const savingOrderRef = useRef(false);
   const gridRef = useRef<View>(null);
-  const lessonMeasureFallback = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const lessonMeasurement = useRef(0);
   const [lessonOrigin, setLessonOrigin] = useState<{
     x: number;
     y: number;
@@ -210,32 +215,25 @@ export function LibraryScreen({
   );
 
   const openArrangeLesson = useCallback(() => {
+    const request = ++lessonMeasurement.current;
     const grid = gridRef.current;
-    if (!grid?.measureInWindow) {
-      setLessonOrigin({ x: 0, y: 0 });
-      return;
-    }
-    let measured = false;
-    grid.measureInWindow((x, y) => {
-      measured = true;
-      if (lessonMeasureFallback.current) {
-        clearTimeout(lessonMeasureFallback.current);
-      }
+    if (!grid?.measure) return;
+    // Both this root and the translucent lesson modal draw edge-to-edge.
+    // measureInWindow subtracts Android's visible-window/status-bar inset.
+    grid.measure((_x, _y, width, height, x, y) => {
+      if (request !== lessonMeasurement.current || width <= 0 || height <= 0
+        || !Number.isFinite(x) || !Number.isFinite(y)) return;
       setLessonOrigin({ x, y });
     });
-    lessonMeasureFallback.current = setTimeout(() => {
-      if (!measured) setLessonOrigin({ x: 0, y: 0 });
-    }, 32);
   }, []);
 
   const closeArrangeLesson = useCallback(() => {
+    lessonMeasurement.current += 1;
     setLessonOrigin(undefined);
   }, []);
 
   useEffect(() => () => {
-    if (lessonMeasureFallback.current) {
-      clearTimeout(lessonMeasureFallback.current);
-    }
+    lessonMeasurement.current += 1;
   }, []);
 
   const dismissArrangeHint = useCallback(async () => {
@@ -289,17 +287,17 @@ export function LibraryScreen({
           accessibilityLabel="New checklist"
           filled
           icon="plus"
-          onPress={onCreate}
+          onPress={() => { closeArrangeLesson(); onCreate(); }}
           testID="new-checklist"
         />
         <HeaderControl
           accessibilityLabel="Settings"
           icon="settings"
-          onPress={() => onSettings?.()}
+          onPress={() => { closeArrangeLesson(); onSettings?.(); }}
           testID="open-settings"
         />
       </View>
-      <Reanimated.ScrollView
+      <RoutineScrollView
         ref={scrollRef}
         testID="library-scroll"
         style={{ flex: 1, backgroundColor: theme.background }}
@@ -376,8 +374,8 @@ export function LibraryScreen({
               enabled={!savingOrder && lessonOrigin === undefined}
               containerRef={gridRef}
               onWidthChange={handleGridWidth}
-              onEdit={onEdit}
-              onStart={onStart}
+              onEdit={(id) => { closeArrangeLesson(); onEdit(id); }}
+              onStart={(id) => { closeArrangeLesson(); onStart(id); }}
               onReorder={(orderedIds) => {
                 void persistOrder(orderedIds);
               }}
@@ -396,7 +394,7 @@ export function LibraryScreen({
             ) : null}
           </>
         )}
-      </Reanimated.ScrollView>
+      </RoutineScrollView>
     </SafeAreaView>
   );
 }

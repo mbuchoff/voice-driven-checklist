@@ -237,6 +237,33 @@ describe('checklist repository', () => {
   });
 
   describe('reorderChecklists', () => {
+    it('restores every position when SQLite rejects a later write in a reorder', async () => {
+      const db = await setup();
+      const alpha = await createChecklist(db, { title: 'Alpha', items: [{ text: 'Keep alpha' }] });
+      const bravo = await createChecklist(db, { title: 'Bravo', items: [{ text: 'Keep bravo' }] });
+      const before = await db.getAllAsync('SELECT * FROM checklists ORDER BY id');
+      await db.execAsync(`CREATE TRIGGER fail_second_position
+        BEFORE UPDATE OF library_position ON checklists
+        WHEN NEW.library_position = 1
+        BEGIN SELECT RAISE(ABORT, 'simulated disk write failure'); END;`);
+
+      await expect(reorderChecklists(db, [alpha.id, bravo.id]))
+        .rejects.toMatchObject({ message: 'simulated disk write failure' });
+
+      expect(await db.getAllAsync('SELECT * FROM checklists ORDER BY id')).toEqual(before);
+      expect((await exportAllChecklists(db)).map(({ title }) => title)).toEqual(['Bravo', 'Alpha']);
+    });
+
+    it('reorders a sparse library without colliding with existing unique positions', async () => {
+      const db = await setup();
+      const alpha = await createChecklist(db, { title: 'Alpha', items: [] });
+      const bravo = await createChecklist(db, { title: 'Bravo', items: [] });
+      await db.runAsync('UPDATE checklists SET library_position = 500 WHERE id = ?', alpha.id);
+      await reorderChecklists(db, [alpha.id, bravo.id]);
+      expect(await db.getAllAsync('SELECT id, library_position FROM checklists ORDER BY library_position'))
+        .toEqual([{ id: alpha.id, library_position: 0 }, { id: bravo.id, library_position: 1 }]);
+    });
+
     it('persists the complete requested order', async () => {
       const db = await setup();
       const alpha = await createChecklist(db, { title: 'Alpha', items: [] });
@@ -347,6 +374,23 @@ describe('checklist repository', () => {
   });
 
   describe('importChecklists', () => {
+    it('rolls back earlier routines and steps when SQLite rejects a later imported step', async () => {
+      const db = await setup();
+      await createChecklist(db, { title: 'Existing', items: [{ text: 'Keep this' }] });
+      const before = await exportAllChecklists(db);
+      await db.execAsync(`CREATE TRIGGER fail_import_step
+        BEFORE INSERT ON checklist_items WHEN NEW.text = 'Reject this step'
+        BEGIN SELECT RAISE(ABORT, 'simulated disk write failure'); END;`);
+
+      await expect(importChecklists(db, [
+        { title: 'First import', items: [{ text: 'Earlier write' }] },
+        { title: 'Second import', items: [{ text: 'Reject this step' }] },
+      ])).rejects.toMatchObject({ message: 'simulated disk write failure' });
+
+      expect(await exportAllChecklists(db)).toEqual(before);
+      expect(await db.getAllAsync('SELECT text FROM checklist_items')).toEqual([{ text: 'Keep this' }]);
+    });
+
     it('inserts every checklist and returns the count', async () => {
       const db = await setup();
 

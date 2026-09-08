@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Animated } from 'react-native';
 
+import { ROUTINE_HOLD_FEEDBACK_DELAY_MS } from './routineMotion';
+
 type RoutineSelectionFeedback = 'card' | 'control';
 
 const selectionMotion = {
@@ -16,6 +18,7 @@ const selectionMotion = {
 
 const PRESS_DURATION_MS = 72;
 const RELEASE_DURATION_MS = 120;
+const PRESS_DELAY_MS = 96;
 
 export function useRoutineSelectionFeedback(
   feedback: RoutineSelectionFeedback,
@@ -24,52 +27,67 @@ export function useRoutineSelectionFeedback(
   const scale = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const animation = useRef<Animated.CompositeAnimation | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const releaseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const callback = useRef(onComplete);
   callback.current = onComplete;
 
+  const clearPendingFeedback = useCallback(() => {
+    clearTimeout(timer.current);
+    clearTimeout(releaseTimer.current);
+  }, []);
+
   useEffect(
     () => () => {
+      clearPendingFeedback();
       animation.current?.stop();
     },
-    [],
+    [clearPendingFeedback],
   );
 
-  const run = useCallback(() => {
+  const moveTo = useCallback((pressed: boolean) => {
     animation.current?.stop();
-    scale.setValue(1);
-    translateY.setValue(0);
     const motion = selectionMotion[feedback];
-    const moveTo = (
-      nextScale: number,
-      nextTranslateY: number,
-      duration: number,
-    ) =>
-      Animated.parallel([
+    const duration = pressed ? PRESS_DURATION_MS : RELEASE_DURATION_MS;
+    const next = Animated.parallel([
         Animated.timing(scale, {
-          toValue: nextScale,
+          toValue: pressed ? motion.pressedScale : 1,
           duration,
           useNativeDriver: true,
         }),
         Animated.timing(translateY, {
-          toValue: nextTranslateY,
+          toValue: pressed ? motion.pressedTranslateY : 0,
           duration,
           useNativeDriver: true,
         }),
-      ]);
-    const next = Animated.sequence([
-      moveTo(
-        motion.pressedScale,
-        motion.pressedTranslateY,
-        PRESS_DURATION_MS,
-      ),
-      moveTo(1, 0, RELEASE_DURATION_MS),
     ]);
     animation.current = next;
-    next.start(({ finished }) => {
+    next.start(() => {
       if (animation.current === next) animation.current = null;
-      if (finished) callback.current();
     });
   }, [feedback, scale, translateY]);
 
-  return { run, scale, translateY };
+  const pressIn = useCallback(() => {
+    clearPendingFeedback();
+    timer.current = setTimeout(() => moveTo(true), PRESS_DELAY_MS);
+    if (feedback === 'card') {
+      // Match the hold outline without adding onLongPress, which would consume
+      // release taps between hold feedback and actual drag activation.
+      releaseTimer.current = setTimeout(() => moveTo(false), ROUTINE_HOLD_FEEDBACK_DELAY_MS);
+    }
+  }, [clearPendingFeedback, feedback, moveTo]);
+  const pressOut = useCallback(() => {
+    clearPendingFeedback();
+    moveTo(false);
+  }, [clearPendingFeedback, moveTo]);
+  const run = useCallback(() => {
+    clearPendingFeedback();
+    // A quick tap can finish before the delayed contact feedback starts.
+    // Animate the confirmed selection while navigation starts, never after it.
+    moveTo(true);
+    releaseTimer.current = setTimeout(() => moveTo(false), PRESS_DURATION_MS);
+    callback.current();
+  }, [clearPendingFeedback, moveTo]);
+
+  return { run, pressIn, pressOut, scale, translateY };
 }

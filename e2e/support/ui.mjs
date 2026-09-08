@@ -1,6 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
+import { adb } from './android.mjs';
+
 function quoted(value) {
   return JSON.stringify(value);
 }
@@ -43,10 +45,9 @@ export async function tapText(driver, text) {
 
 export async function tapElementAt(driver, element, { xRatio = 0.5, yRatio = 0.5 } = {}) {
   const rect = await elementRect(driver, element);
-  await driver.execute('mobile: clickGesture', {
-    x: Math.round(rect.x + rect.width * xRatio),
-    y: Math.round(rect.y + rect.height * yRatio),
-  });
+  adb(['shell', 'input', 'tap',
+    String(Math.round(rect.x + rect.width * xRatio)),
+    String(Math.round(rect.y + rect.height * yRatio))], { capture: true });
 }
 
 export async function scrollToLabel(driver, label) {
@@ -105,7 +106,8 @@ export async function visibleRoutineCards(driver) {
 
 export async function dragCardToEdge(driver, card, direction) {
   const cardRect = await elementRect(driver, card);
-  const window = await driver.getWindowRect();
+  const viewport = await elementRect(driver, byId(driver, 'library-scroll'));
+  const density = await driver.getDisplayDensity() / 160;
   const start = {
     x: Math.round(cardRect.x + cardRect.width / 2),
     y: Math.round(cardRect.y + cardRect.height / 2),
@@ -113,8 +115,8 @@ export async function dragCardToEdge(driver, card, direction) {
   const destination = {
     x: start.x,
     y: direction === 'down'
-      ? Math.round(window.height * 0.88)
-      : Math.round(window.height * 0.15),
+      ? Math.round(viewport.y + viewport.height - 28 * density)
+      : Math.round(viewport.y + 28 * density),
   };
   await driver.performActions([
     {
@@ -156,7 +158,7 @@ export async function beginCardDrag(driver, card, destination) {
   ]);
 }
 
-export async function scrollBeforeHoldActivation(driver, card) {
+export async function scrollBeforeHoldActivation(driver, card, { holdMs = 80 } = {}) {
   const rect = await elementRect(driver, card);
   const start = {
     x: Math.round(rect.x + rect.width / 2),
@@ -170,7 +172,7 @@ export async function scrollBeforeHoldActivation(driver, card) {
       actions: [
         { type: 'pointerMove', duration: 0, ...start },
         { type: 'pointerDown', button: 0 },
-        { type: 'pause', duration: 80 },
+        { type: 'pause', duration: holdMs },
         {
           type: 'pointerMove',
           duration: 260,
