@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { adb } from './android.mjs';
 import { byId, elementRect, visibleRoutineCards, waitForDisplayed } from './ui.mjs';
 
-const pointerId = 'routine-tuning';
+const pointerId = 'routine-gesture';
 
 async function pointer(driver, actions) {
   await driver.performActions([{ type: 'pointer', id: pointerId,

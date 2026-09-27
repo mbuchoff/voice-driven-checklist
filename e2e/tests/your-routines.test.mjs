@@ -21,7 +21,7 @@ import {
   setDevicePresentation,
 } from '../support/android.mjs';
 import { parseGfxInfo } from '../support/performance.mjs';
-import { verifyAdaptiveEdgeHold, verifySmallHoldDrift } from '../support/routineTuning.mjs';
+import { verifyAdaptiveEdgeHold, verifySmallHoldDrift } from '../support/routineGestures.mjs';
 import { openAndroidSession } from '../support/session.mjs';
 import {
   beginCardDrag,
@@ -192,6 +192,27 @@ async function returnFromRunWithBackConfirmation() {
   );
   await stopButton.click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));
+}
+
+async function editLastStep() {
+  await expectTopTitle(firstTitle);
+  await openEditor(firstTitle);
+  const lastStep = await scrollToLabel(driver, 'Hold row 11 to reorder');
+  await lastStep.click();
+  const lastStepInput = await waitForDisplayed(byId(driver, 'item-text-10'));
+  await lastStepInput.setValue('Make coffee and place the mug beside breakfast');
+  assert.equal(await driver.isKeyboardShown(), true);
+  const [inputRect, windowRect] = await Promise.all([
+    elementRect(driver, lastStepInput),
+    driver.getWindowRect(),
+  ]);
+  assert.ok(
+    inputRect.y + inputRect.height <= windowRect.height,
+    'focused editor row should remain above the resized keyboard viewport',
+  );
+  await byId(driver, 'save').click();
+  await waitForDisplayed(byId(driver, 'library-safe-area'));
+  await expectTopTitle(firstTitle);
 }
 
 before(async () => {
@@ -373,243 +394,219 @@ scenario(
 );
 
 scenario('lesson: closes with Back and persists hint dismissal', { timeout: 4 * 60_000 }, async () => {
-    await importFreshLibrary();
+  await importFreshLibrary();
 
-    await scrollToTop(driver);
-    const arrangeHint = await waitForDisplayed(
-      byLabel(driver, 'Learn how to move routines'),
-    );
-    await tapElementAt(driver, arrangeHint, { yRatio: 0.2 });
-    await waitForDisplayed(
-      byLabel(driver, 'Demonstrating how to move a routine'),
-    );
-    await capture(driver, '03-full-screen-arrange-lesson');
-    await byLabel(driver, 'Demonstrating how to move a routine')
-      .waitForDisplayed({ reverse: true, timeout: 10_000 });
-    await waitForDisplayed(byLabel(driver, 'Learn how to move routines'));
+  await scrollToTop(driver);
+  const arrangeHint = await waitForDisplayed(
+    byLabel(driver, 'Learn how to move routines'),
+  );
+  await tapElementAt(driver, arrangeHint, { yRatio: 0.2 });
+  await waitForDisplayed(
+    byLabel(driver, 'Demonstrating how to move a routine'),
+  );
+  await capture(driver, '03-full-screen-arrange-lesson');
+  await byLabel(driver, 'Demonstrating how to move a routine')
+    .waitForDisplayed({ reverse: true, timeout: 10_000 });
+  await waitForDisplayed(byLabel(driver, 'Learn how to move routines'));
 
-    // Capture can outlast the short lesson. Check Back on a fresh showing.
-    await tapElementAt(driver, arrangeHint, { yRatio: 0.2 });
-    await waitForDisplayed(byLabel(driver, 'Demonstrating how to move a routine'));
-    await driver.back();
-    await waitForDisplayed(byLabel(driver, 'Learn how to move routines'));
+  // Capture can outlast the short lesson. Check Back on a fresh showing.
+  await tapElementAt(driver, arrangeHint, { yRatio: 0.2 });
+  await waitForDisplayed(byLabel(driver, 'Demonstrating how to move a routine'));
+  await driver.back();
+  await waitForDisplayed(byLabel(driver, 'Learn how to move routines'));
 
-    await swipeHintAway(driver);
-    await driver.terminateApp(APP_PACKAGE);
-    await activateLibrary();
-    assert.equal(
-      await isDisplayed(byLabel(driver, 'Learn how to move routines')),
-      false,
-      'dismissed teaching hint should remain dismissed after relaunch',
-    );
-
+  await swipeHintAway(driver);
+  await driver.terminateApp(APP_PACKAGE);
+  await activateLibrary();
+  assert.equal(
+    await isDisplayed(byLabel(driver, 'Learn how to move routines')),
+    false,
+    'dismissed teaching hint should remain dismissed after relaunch',
+  );
 });
 
 scenario('reorder: persists offscreen drops and cancels interruption', { timeout: 6 * 60_000 }, async () => {
-    await importFreshLibrary();
-    await swipeHintAway(driver);
-    resetFrameMetrics();
-    await expectTopTitle(firstTitle);
-    await dragCardToEdge(driver, byLabel(driver, `Edit ${firstTitle}`), 'down');
-    await expectTopTitle(secondTitle);
-    assert.deepEqual(await collectRoutineTitles(driver), [...expectedTitles.slice(1), firstTitle]);
-    await capture(driver, '04-first-routine-moved-last');
+  await importFreshLibrary();
+  await swipeHintAway(driver);
+  resetFrameMetrics();
+  await expectTopTitle(firstTitle);
+  await dragCardToEdge(driver, byLabel(driver, `Edit ${firstTitle}`), 'down');
+  await expectTopTitle(secondTitle);
+  assert.deepEqual(await collectRoutineTitles(driver), [...expectedTitles.slice(1), firstTitle]);
+  await capture(driver, '04-first-routine-moved-last');
 
-    await driver.terminateApp(APP_PACKAGE);
-    await activateLibrary();
-    await expectTopTitle(secondTitle);
-    assert.deepEqual(await collectRoutineTitles(driver), [...expectedTitles.slice(1), firstTitle]);
+  await driver.terminateApp(APP_PACKAGE);
+  await activateLibrary();
+  await expectTopTitle(secondTitle);
+  assert.deepEqual(await collectRoutineTitles(driver), [...expectedTitles.slice(1), firstTitle]);
 
-    const movedFirstCard = await scrollToLabel(driver, `Edit ${firstTitle}`);
-    await dragCardToEdge(driver, movedFirstCard, 'up');
-    await expectTopTitle(firstTitle);
-    assert.deepEqual(await collectRoutineTitles(driver), expectedTitles);
-    await capture(driver, '05-last-routine-restored-first');
-    console.info('Offscreen reorder and relaunch persistence passed');
+  const movedFirstCard = await scrollToLabel(driver, `Edit ${firstTitle}`);
+  await dragCardToEdge(driver, movedFirstCard, 'up');
+  await expectTopTitle(firstTitle);
+  assert.deepEqual(await collectRoutineTitles(driver), expectedTitles);
+  await capture(driver, '05-last-routine-restored-first');
+  console.info('Offscreen reorder and relaunch persistence passed');
 
-    const frameOutput = readFrameMetrics();
-    const frameMetrics = parseGfxInfo(frameOutput);
-    assert.ok(frameMetrics.totalFrames > 0);
-    await writeFile(
-      resolve(process.env.E2E_ARTIFACT_DIR, 'reorder-gfxinfo.txt'),
-      frameOutput,
-    );
-    await writeFile(
-      resolve(process.env.E2E_ARTIFACT_DIR, 'reorder-frame-summary.json'),
-      `${JSON.stringify(frameMetrics, null, 2)}\n`,
-    );
+  const frameOutput = readFrameMetrics();
+  const frameMetrics = parseGfxInfo(frameOutput);
+  assert.ok(frameMetrics.totalFrames > 0);
+  await writeFile(
+    resolve(process.env.E2E_ARTIFACT_DIR, 'reorder-gfxinfo.txt'),
+    frameOutput,
+  );
+  await writeFile(
+    resolve(process.env.E2E_ARTIFACT_DIR, 'reorder-frame-summary.json'),
+    `${JSON.stringify(frameMetrics, null, 2)}\n`,
+  );
 
-    await expectTopTitle(firstTitle);
-    const stableOrder = await collectRoutineTitles(driver);
-    await expectTopTitle(firstTitle);
-    const interruptCard = byLabel(driver, `Edit ${secondTitle}`);
-    const interruptRect = await elementRect(driver, interruptCard);
-    await beginCardDrag(driver, interruptCard, {
-      x: Math.round(interruptRect.x + interruptRect.width / 2),
-      y: Math.round(interruptRect.y + interruptRect.height * 1.7),
-    });
-    await driver.background(2);
-    try {
-      await driver.releaseActions();
-    } catch {
-      // App backgrounding may already dispose the active pointer source.
-    }
-    await waitForDisplayed(byId(driver, 'library-safe-area'));
-    assert.deepEqual(await collectRoutineTitles(driver), stableOrder);
+  await expectTopTitle(firstTitle);
+  const stableOrder = await collectRoutineTitles(driver);
+  await expectTopTitle(firstTitle);
+  const interruptCard = byLabel(driver, `Edit ${secondTitle}`);
+  const interruptRect = await elementRect(driver, interruptCard);
+  await beginCardDrag(driver, interruptCard, {
+    x: Math.round(interruptRect.x + interruptRect.width / 2),
+    y: Math.round(interruptRect.y + interruptRect.height * 1.7),
+  });
+  await driver.background(2);
+  try {
+    await driver.releaseActions();
+  } catch {
+    // App backgrounding may already dispose the active pointer source.
+  }
+  await waitForDisplayed(byId(driver, 'library-safe-area'));
+  assert.deepEqual(await collectRoutineTitles(driver), stableOrder);
 });
 
-async function editLastStep() {
-    await expectTopTitle(firstTitle);
-    await openEditor(firstTitle);
-    const lastStep = await scrollToLabel(driver, 'Hold row 11 to reorder');
-    await lastStep.click();
-    const lastStepInput = await waitForDisplayed(byId(driver, 'item-text-10'));
-    await lastStepInput.setValue('Make coffee and place the mug beside breakfast');
-    assert.equal(await driver.isKeyboardShown(), true);
-    const [inputRect, windowRect] = await Promise.all([
-      elementRect(driver, lastStepInput),
-      driver.getWindowRect(),
-    ]);
-    assert.ok(
-      inputRect.y + inputRect.height <= windowRect.height,
-      'focused editor row should remain above the resized keyboard viewport',
-    );
-    await byId(driver, 'save').click();
-    await waitForDisplayed(byId(driver, 'library-safe-area'));
-    await expectTopTitle(firstTitle);
-}
-
 scenario('run: stops with confirmation and completes all steps', { timeout: 5 * 60_000 }, async () => {
-    await importFreshLibrary();
-    grantRunPermissions();
-    await tapLabel(driver, `Start ${firstTitle}`);
-    await waitForDisplayed(byId(driver, 'run-header'), 45_000);
+  await importFreshLibrary();
+  grantRunPermissions();
+  await tapLabel(driver, `Start ${firstTitle}`);
+  await waitForDisplayed(byId(driver, 'run-header'), 45_000);
+  await byId(driver, 'manual-next').click();
+  await returnFromRunWithBackConfirmation();
+  await expectTopTitle(firstTitle);
+
+  await tapLabel(driver, `Start ${firstTitle}`);
+  await waitForDisplayed(byId(driver, 'run-header'), 45_000);
+  for (let index = 0; index < fixture.checklists[0].items.length; index += 1) {
     await byId(driver, 'manual-next').click();
-    await returnFromRunWithBackConfirmation();
-    await expectTopTitle(firstTitle);
-
-    await tapLabel(driver, `Start ${firstTitle}`);
-    await waitForDisplayed(byId(driver, 'run-header'), 45_000);
-    for (let index = 0; index < fixture.checklists[0].items.length; index += 1) {
-      await byId(driver, 'manual-next').click();
-      await driver.pause(180);
-    }
-    await waitForDisplayed(byId(driver, 'completion-screen'), 30_000);
-    await capture(driver, '06-run-completion');
-    await byId(driver, 'completion-return').click();
-    await waitForDisplayed(byId(driver, 'library-safe-area'));
-    await expectTopTitle(firstTitle);
-
+    await driver.pause(180);
+  }
+  await waitForDisplayed(byId(driver, 'completion-screen'), 30_000);
+  await capture(driver, '06-run-completion');
+  await byId(driver, 'completion-return').click();
+  await waitForDisplayed(byId(driver, 'library-safe-area'));
+  await expectTopTitle(firstTitle);
 });
 
 scenario('create-delete: prepends a routine and deletes it from its editor', { timeout: 4 * 60_000 }, async () => {
-    await importFreshLibrary();
-    await tapLabel(driver, 'New checklist');
-    await waitForDisplayed(byId(driver, 'editor-safe-area'));
-    await byId(driver, 'title-input').setValue(temporaryTitle);
-    await byLabel(driver, 'Hold row 1 to reorder').click();
-    await byId(driver, 'item-text-0').setValue('Temporary step');
-    await byId(driver, 'save').click();
-    await waitForDisplayed(byId(driver, 'library-safe-area'));
-    await expectTopTitle(temporaryTitle);
+  await importFreshLibrary();
+  await tapLabel(driver, 'New checklist');
+  await waitForDisplayed(byId(driver, 'editor-safe-area'));
+  await byId(driver, 'title-input').setValue(temporaryTitle);
+  await byLabel(driver, 'Hold row 1 to reorder').click();
+  await byId(driver, 'item-text-0').setValue('Temporary step');
+  await byId(driver, 'save').click();
+  await waitForDisplayed(byId(driver, 'library-safe-area'));
+  await expectTopTitle(temporaryTitle);
 
-    await openEditor(temporaryTitle);
-    const deleteRoutine = await scrollToLabel(
-      driver,
-      `Delete ${temporaryTitle}`,
-    );
-    await deleteRoutine.click();
-    await waitForDisplayed(byText(driver, 'Delete checklist?'));
-    const confirmDelete = await waitForDisplayed(
-      driver.$('id=android:id/button1'),
-    );
-    await confirmDelete.click();
-    await waitForDisplayed(byId(driver, 'library-safe-area'));
-    await expectTopTitle(firstTitle);
-    assert.equal(await isDisplayed(byLabel(driver, `Edit ${temporaryTitle}`)), false);
+  await openEditor(temporaryTitle);
+  const deleteRoutine = await scrollToLabel(
+    driver,
+    `Delete ${temporaryTitle}`,
+  );
+  await deleteRoutine.click();
+  await waitForDisplayed(byText(driver, 'Delete checklist?'));
+  const confirmDelete = await waitForDisplayed(
+    driver.$('id=android:id/button1'),
+  );
+  await confirmDelete.click();
+  await waitForDisplayed(byId(driver, 'library-safe-area'));
+  await expectTopTitle(firstTitle);
+  assert.equal(await isDisplayed(byLabel(driver, `Edit ${temporaryTitle}`)), false);
 });
 
 scenario('editor-settings-backup: preserves a keyboard edit through settings and export', { timeout: 6 * 60_000 }, async () => {
-    await importFreshLibrary();
-    await editLastStep();
-    await openSettings();
-    await selectLabeledOption('Dark. Deep forest');
-    await returnFromSettings();
-    await expectTopTitle(firstTitle);
-    await capture(driver, '07-dark-theme-library');
+  await importFreshLibrary();
+  await editLastStep();
+  await openSettings();
+  await selectLabeledOption('Dark. Deep forest');
+  await returnFromSettings();
+  await expectTopTitle(firstTitle);
+  await capture(driver, '07-dark-theme-library');
 
-    await openSettings();
-    await selectLabeledOption('Light. Warm and bright');
-    await returnFromSettings();
-    await expectTopTitle(firstTitle);
-    await capture(driver, '08-light-theme-library');
+  await openSettings();
+  await selectLabeledOption('Light. Warm and bright');
+  await returnFromSettings();
+  await expectTopTitle(firstTitle);
+  await capture(driver, '08-light-theme-library');
 
-    await openSettings();
-    await selectLabeledOption('System. Match this device');
-    for (const sound of [
-      'Wooden Tap. Soft and tactile',
-      'Bright Ping. Clear and upbeat',
-      'Quiet. No sounds',
-      'Soft Chime. Warm and gentle',
-    ]) {
-      await selectLabeledOption(sound);
-    }
+  await openSettings();
+  await selectLabeledOption('System. Match this device');
+  for (const sound of [
+    'Wooden Tap. Soft and tactile',
+    'Bright Ping. Clear and upbeat',
+    'Quiet. No sounds',
+    'Soft Chime. Warm and gentle',
+  ]) {
+    await selectLabeledOption(sound);
+  }
 
-    const localAccount = await scrollToLabel(
-      driver,
-      'This device. Local checklist library. Selected',
-    );
-    assert.equal(await localAccount.isDisplayed(), true);
+  const localAccount = await scrollToLabel(
+    driver,
+    'This device. Local checklist library. Selected',
+  );
+  assert.equal(await localAccount.isDisplayed(), true);
 
-    const exportName = `voice-checklist-e2e-export-${runId}.json`;
-    const exportPath = `/sdcard/Download/${exportName}`;
-    createdDocuments.add(exportPath);
-    const exportButton = await scrollToLabel(driver, 'Export backup');
-    await exportButton.click();
-    await finishAndroidSaveDialog(exportName);
-    await waitForDisplayed(byId(driver, 'settings-safe-area'), 30_000);
-    const exportedFiles = adb(
-      [
-        'shell',
-        'find',
-        '/sdcard/Download',
-        '-maxdepth',
-        '1',
-        '-name',
-        exportName,
-      ],
-      { capture: true },
-    ).trim();
-    assert.notEqual(exportedFiles, '', 'Android export should write a backup file');
-    const exportedText = adb(['shell', 'cat', exportPath], { capture: true });
-    await writeFile(resolve(process.env.E2E_ARTIFACT_DIR, 'exported-backup.json'), exportedText);
-    const exported = JSON.parse(exportedText);
-    assert.deepEqual(Object.keys(exported).sort(), ['checklists', 'exportedAt', 'format', 'version']);
-    assert.equal(exported.format, 'voice-driven-checklist-backup');
-    assert.equal(exported.version, 1);
-    assert.equal(Number.isNaN(Date.parse(exported.exportedAt)), false);
-    const expectedBackup = structuredClone(fixture.checklists);
-    expectedBackup[0].items[10].text = 'Make coffee and place the mug beside breakfast';
-    assert.deepEqual(exported.checklists, expectedBackup,
-      'backup must retain routine/step order and edits, with checklist-only data');
-    await returnFromSettings();
-
+  const exportName = `voice-checklist-e2e-export-${runId}.json`;
+  const exportPath = `/sdcard/Download/${exportName}`;
+  createdDocuments.add(exportPath);
+  const exportButton = await scrollToLabel(driver, 'Export backup');
+  await exportButton.click();
+  await finishAndroidSaveDialog(exportName);
+  await waitForDisplayed(byId(driver, 'settings-safe-area'), 30_000);
+  const exportedFiles = adb(
+    [
+      'shell',
+      'find',
+      '/sdcard/Download',
+      '-maxdepth',
+      '1',
+      '-name',
+      exportName,
+    ],
+    { capture: true },
+  ).trim();
+  assert.notEqual(exportedFiles, '', 'Android export should write a backup file');
+  const exportedText = adb(['shell', 'cat', exportPath], { capture: true });
+  await writeFile(resolve(process.env.E2E_ARTIFACT_DIR, 'exported-backup.json'), exportedText);
+  const exported = JSON.parse(exportedText);
+  assert.deepEqual(Object.keys(exported).sort(), ['checklists', 'exportedAt', 'format', 'version']);
+  assert.equal(exported.format, 'voice-driven-checklist-backup');
+  assert.equal(exported.version, 1);
+  assert.equal(Number.isNaN(Date.parse(exported.exportedAt)), false);
+  const expectedBackup = structuredClone(fixture.checklists);
+  expectedBackup[0].items[10].text = 'Make coffee and place the mug beside breakfast';
+  assert.deepEqual(exported.checklists, expectedBackup,
+    'backup must retain routine/step order and edits, with checklist-only data');
+  await returnFromSettings();
 });
 
 scenario('responsive: restores temporary font scale and viewport', { timeout: 4 * 60_000 }, async () => {
-    await importFreshLibrary();
-    presentationChanged = true;
-    setDevicePresentation({ fontScale: 1.3, size: '720x1600' });
-    await driver.terminateApp(APP_PACKAGE);
-    await activateLibrary();
-    await expectTopTitle(firstTitle);
-    assert.equal(await byLabel(driver, 'New checklist').isDisplayed(), true);
-    assert.equal(await byLabel(driver, 'Settings').isDisplayed(), true);
-    await capture(driver, '09-large-font-narrow-viewport');
+  await importFreshLibrary();
+  presentationChanged = true;
+  setDevicePresentation({ fontScale: 1.3, size: '720x1600' });
+  await driver.terminateApp(APP_PACKAGE);
+  await activateLibrary();
+  await expectTopTitle(firstTitle);
+  assert.equal(await byLabel(driver, 'New checklist').isDisplayed(), true);
+  assert.equal(await byLabel(driver, 'Settings').isDisplayed(), true);
+  await capture(driver, '09-large-font-narrow-viewport');
 
-    restoreDevicePresentation(presentation);
-    presentationChanged = false;
-    await driver.terminateApp(APP_PACKAGE);
-    await activateLibrary();
-    await expectTopTitle(firstTitle);
+  restoreDevicePresentation(presentation);
+  presentationChanged = false;
+  await driver.terminateApp(APP_PACKAGE);
+  await activateLibrary();
+  await expectTopTitle(firstTitle);
 });

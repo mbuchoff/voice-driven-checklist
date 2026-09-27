@@ -4,8 +4,23 @@ import { remote } from 'webdriverio';
 
 import { APP_PACKAGE } from './android.mjs';
 
-export function androidSessionCapabilities(apk) {
+export function androidAdbCapabilities(socket = process.env.ADB_SERVER_SOCKET) {
+  if (!socket) return {};
+  // Appium supplies -P, which makes adb ignore ADB_SERVER_SOCKET. Mirror the
+  // local endpoint explicitly; remote-server forwarding is not supported here.
+  const match = /^tcp:(?:(127\.0\.0\.1|localhost):)?([1-9]\d{0,4})$/.exec(socket);
+  if (!match || Number(match[2]) > 65535) {
+    throw new Error('E2E requires a local TCP ADB server. Pair directly to this container and unset ADB_SERVER_SOCKET, or use tcp:127.0.0.1:<port>. Remote and Unix-socket forwarding are not supported.');
+  }
+  return {
+    'appium:remoteAdbHost': match[1] ?? 'localhost',
+    'appium:adbPort': Number(match[2]),
+  };
+}
+
+export function androidSessionCapabilities(apk, adbSocket = process.env.ADB_SERVER_SOCKET) {
   const capabilities = {
+    ...androidAdbCapabilities(adbSocket),
     platformName: 'Android',
     'appium:automationName': 'UiAutomator2',
     'appium:app': resolve(apk),

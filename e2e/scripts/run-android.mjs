@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { waitForExit } from '../support/process.mjs';
 import { androidBuildPlan } from '../support/build.mjs';
 import { assertIsolatedApk } from '../support/android.mjs';
+import { androidAdbCapabilities } from '../support/session.mjs';
 
 const e2eRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const projectRoot = resolve(e2eRoot, '..');
@@ -23,6 +24,7 @@ const artifactDirectory = resolve(
 
 await access(apk);
 assertIsolatedApk(apk);
+androidAdbCapabilities(); // Refuse unsupported routes before starting Appium.
 await mkdir(artifactDirectory, { recursive: true });
 
 const serverEnvironment = { ...process.env };

@@ -49,9 +49,15 @@ groups from establishing their preconditions. Repeated real-picker setup makes
 the complete suite longer, but late scenarios no longer require a successful
 gesture/performance prelude.
 
-Set `ANDROID_SERIAL` when more than one device is available. A remote ADB
-server can be selected with `ADB_SERVER_SOCKET`; those variables are inherited
-by both the harness and Appium.
+Set `ANDROID_SERIAL` when more than one device is available. This suite requires
+a local TCP ADB server: use direct devcontainer pairing with `ADB_SERVER_SOCKET`
+unset, or select a dedicated local server such as
+`ADB_SERVER_SOCKET=tcp:127.0.0.1:5038`. The harness maps this socket into Appium's
+explicit host/port capabilities so both use the same server. `localhost` and
+port-only TCP sockets are also supported. Remote-host relays and Unix sockets
+are rejected before Appium starts; unlike ordinary ADB commands, this suite does
+not support the Mac-relay shortcut in `AGENTS.md` because its UiAutomator2 port
+forward must also be reachable locally.
 
 The build command regenerates the ignored Android project and creates a
 standalone arm64 release APK with its JavaScript bundle embedded. It signs only
