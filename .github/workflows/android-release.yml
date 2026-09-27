@@ -29,11 +29,17 @@ jobs:
       - uses: actions/setup-java@v5
         with: { distribution: temurin, java-version: 17, cache: gradle }
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          packages: platform-tools
       - run: yes | sdkmanager "ndk;27.1.12297006" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0"
       - run: npm ci
+      # This workflow can also run directly; keep harness safety checks as a
+      # release gate even when no pull-request CI preceded this invocation.
+      - run: npm ci --prefix e2e
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - run: npm run e2e:unit
       - name: Decode upload keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

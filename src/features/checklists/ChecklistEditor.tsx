@@ -26,10 +26,15 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Icon } from '@/src/components/Icon';
 import { ScreenBackground } from '@/src/components/ScreenBackground';
+import { confirmAction, notify } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
 import { useTheme } from '@/src/theme/useTheme';
 
-import { createChecklist, updateChecklist } from './repository';
+import {
+  createChecklist,
+  deleteChecklist,
+  updateChecklist,
+} from './repository';
 import type { Checklist } from './types';
 import {
   CHECKLIST_REORDER_HOLD_MS,
@@ -48,6 +53,7 @@ const EDITOR_KEYBOARD_OFFSET = 24;
 export type ChecklistEditorProps = {
   initialChecklist?: Checklist;
   onSaved: (saved: Checklist) => void;
+  onDeleted?: () => void;
   onCancel: () => void;
 };
 
@@ -72,6 +78,7 @@ function initialItems(checklist?: Checklist): EditorItem[] {
 export function ChecklistEditor({
   initialChecklist,
   onSaved,
+  onDeleted,
   onCancel,
 }: ChecklistEditorProps) {
   const database = useDatabase();
@@ -205,6 +212,27 @@ export function ChecklistEditor({
       ? await updateChecklist(database, initialChecklist.id, input)
       : await createChecklist(database, input);
     onSaved(saved);
+  };
+
+  const handleDelete = async () => {
+    if (!initialChecklist || !onDeleted) return;
+    const confirmed = await confirmAction({
+      title: 'Delete checklist?',
+      message: `Delete “${initialChecklist.title}”? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    try {
+      await deleteChecklist(database, initialChecklist.id);
+      onDeleted();
+    } catch {
+      await notify(
+        'Delete failed',
+        'Your routine was not deleted. Try again.',
+      );
+    }
   };
 
   return (
@@ -549,6 +577,41 @@ export function ChecklistEditor({
               <Text style={{ color: theme.primary, fontWeight: '700', fontSize: 14 }}>Add another step</Text>
             </Pressable>
           </View>
+          {initialChecklist && onDeleted ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Delete ${initialChecklist.title}`}
+              testID="routine-delete"
+              onPress={() => void handleDelete()}
+              style={{
+                minHeight: 56,
+                borderWidth: 1,
+                borderColor: theme.danger,
+                borderRadius: 17,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
+                backgroundColor: theme.accentSoft,
+              }}
+            >
+              <Icon
+                name="trash"
+                color={theme.danger}
+                size={18}
+                testID="delete-routine-icon"
+              />
+              <Text
+                style={{
+                  color: theme.danger,
+                  fontWeight: '700',
+                  fontSize: 14,
+                }}
+              >
+                Delete routine
+              </Text>
+            </Pressable>
+          ) : null}
       </ScrollView>
     </SafeAreaView>
   );

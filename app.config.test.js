@@ -11,6 +11,7 @@ describe('app config', () => {
     delete process.env.EXPO_PUBLIC_COGNITO_DOMAIN;
     delete process.env.EXPO_PUBLIC_COGNITO_ANDROID_CLIENT_ID;
     delete process.env.EXPO_PUBLIC_COGNITO_WEB_CLIENT_ID;
+    delete process.env.VOICE_CHECKLIST_E2E;
   });
 
   it('uses the Android version code from the environment', () => {
@@ -74,6 +75,24 @@ describe('app config', () => {
         androidClientId: 'android-client',
         webClientId: 'web-client',
       },
+    });
+  });
+
+  it('gives the E2E build an isolated Android identity', () => {
+    process.env.VOICE_CHECKLIST_E2E = '1';
+
+    const config = resolveConfig({
+      config: {
+        name: 'Voice Checklist',
+        scheme: 'voicechecklist',
+        android: { package: 'com.mbuchoff.voicechecklist' },
+      },
+    });
+
+    expect(config).toMatchObject({
+      name: 'Voice Checklist E2E',
+      scheme: 'voicechecklist-e2e',
+      android: { package: 'com.mbuchoff.voicechecklist.e2e' },
     });
   });
 });

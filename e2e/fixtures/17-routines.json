@@ -1,0 +1,178 @@
+{
+  "format": "voice-driven-checklist-backup",
+  "version": 1,
+  "exportedAt": "2026-09-03T00:00:00.000Z",
+  "checklists": [
+    {
+      "title": "01 Morning Routine",
+      "items": [
+        { "text": "Open blinds" },
+        { "text": "Drink a full glass of water before making breakfast" },
+        { "text": "Make bed" },
+        { "text": "Brush teeth" },
+        { "text": "Wash face" },
+        { "text": "Take medication" },
+        { "text": "Stretch" },
+        { "text": "Get dressed" },
+        { "text": "Make breakfast" },
+        { "text": "Eat breakfast" },
+        { "text": "Make coffee" }
+      ]
+    },
+    {
+      "title": "02 Before Leaving the House",
+      "items": [
+        { "text": "Find keys, wallet, and phone" },
+        { "text": "Lock windows" },
+        { "text": "Turn off lights" },
+        { "text": "Check stove" },
+        { "text": "Put on shoes" },
+        { "text": "Lock the front door" }
+      ]
+    },
+    {
+      "title": "03 Evening Reset",
+      "items": [
+        { "text": "Clear sink" },
+        { "text": "Load dishwasher" },
+        { "text": "Wipe counters" },
+        { "text": "Put away clutter" },
+        { "text": "Set out clothes for tomorrow" },
+        { "text": "Charge phone" }
+      ]
+    },
+    {
+      "title": "04 Weekly Groceries",
+      "items": [
+        { "text": "Check fridge" },
+        { "text": "Check pantry" },
+        { "text": "Make list" },
+        { "text": "Bring reusable bags" },
+        { "text": "Buy produce, dairy, bread, and protein" }
+      ]
+    },
+    {
+      "title": "05 Pack for a Trip",
+      "items": [
+        { "text": "Passport and tickets" },
+        { "text": "Identification and wallet" },
+        { "text": "Phone and chargers" },
+        { "text": "Medication and toiletries" },
+        { "text": "Underwear, socks, shirts, and pants" }
+      ]
+    },
+    {
+      "title": "06 Gym Bag",
+      "items": [
+        { "text": "Shoes" },
+        { "text": "Workout clothes" },
+        { "text": "Towel" },
+        { "text": "Water bottle" },
+        { "text": "Headphones" },
+        { "text": "Lock" }
+      ]
+    },
+    {
+      "title": "07 Workshop Opening",
+      "items": [
+        { "text": "Unlock entrance" },
+        { "text": "Turn on lights" },
+        { "text": "Start ventilation" },
+        { "text": "Inspect work surfaces" }
+      ]
+    },
+    {
+      "title": "08 Pet Care",
+      "items": [
+        { "text": "Refresh water" },
+        { "text": "Prepare food" },
+        { "text": "Give medication" },
+        { "text": "Clean bowls" },
+        { "text": "Morning walk" }
+      ]
+    },
+    {
+      "title": "09 Close the Office",
+      "items": [
+        { "text": "Save open work" },
+        { "text": "Clear shared table" },
+        { "text": "Turn off equipment" },
+        { "text": "Check windows" },
+        { "text": "Lock doors" }
+      ]
+    },
+    {
+      "title": "10 Medication Check",
+      "items": [
+        { "text": "Confirm the label and prescribed dose" },
+        { "text": "Take with water" },
+        { "text": "Record completion" }
+      ]
+    },
+    {
+      "title": "11 Laundry Day",
+      "items": [
+        { "text": "Sort colors" },
+        { "text": "Check pockets" },
+        { "text": "Start wash" },
+        { "text": "Move clothes to dryer" },
+        { "text": "Fold and put away" }
+      ]
+    },
+    {
+      "title": "12 Car Departure",
+      "items": [
+        { "text": "Walk around the car" },
+        { "text": "Check mirrors" },
+        { "text": "Fasten seat belt" },
+        { "text": "Set destination" }
+      ]
+    },
+    {
+      "title": "13 Garden Watering",
+      "items": [
+        { "text": "Check soil moisture" },
+        { "text": "Water seedlings gently" },
+        { "text": "Water containers" },
+        { "text": "Coil hose" }
+      ]
+    },
+    {
+      "title": "14 Guest Room",
+      "items": [
+        { "text": "Fresh sheets" },
+        { "text": "Clean towels" },
+        { "text": "Empty wastebasket" },
+        { "text": "Set out water" }
+      ]
+    },
+    {
+      "title": "15 Weekly Review",
+      "items": [
+        { "text": "Review calendar" },
+        { "text": "Review open tasks" },
+        { "text": "Choose next priorities" },
+        { "text": "Plan meals" }
+      ]
+    },
+    {
+      "title": "16 Emergency Kit",
+      "items": [
+        { "text": "Check flashlight batteries" },
+        { "text": "Replace expired food" },
+        { "text": "Refresh water" },
+        { "text": "Verify first aid supplies" }
+      ]
+    },
+    {
+      "title": "17 End of Day Lockup for the Entire Building",
+      "items": [
+        { "text": "Walk every room" },
+        { "text": "Close and lock every window" },
+        { "text": "Turn off appliances" },
+        { "text": "Set alarm" },
+        { "text": "Lock final door" }
+      ]
+    }
+  ]
+}

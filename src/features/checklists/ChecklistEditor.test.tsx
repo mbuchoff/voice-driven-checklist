@@ -35,6 +35,7 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('title-input').props.value).toBe('');
       expect(screen.getByTestId('item-text-0').props.value).toBe('');
       expect(screen.queryByTestId('item-text-1')).toBeNull();
+      expect(screen.queryByTestId('routine-delete')).toBeNull();
     });
 
     it('adds a new blank item row when Add item is pressed', async () => {

@@ -10,7 +10,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "e2e:android:build": "node e2e/scripts/build-android.mjs",
+    "e2e:android": "npm --prefix e2e test",
+    "e2e:unit": "npm --prefix e2e run test:unit"
   },
   "dependencies": {
     "@notifee/react-native": "^9.1.8",
@@ -57,6 +60,11 @@
     "jest-expo": "^55.0.16",
     "react-test-renderer": "^19.2.0",
     "typescript": "~5.9.2"
+  },
+  "reanimated": {
+    "staticFeatureFlags": {
+      "USE_COMMIT_HOOK_ONLY_FOR_REACT_COMMITS": true
+    }
   },
   "private": true,
   "license": "MIT"

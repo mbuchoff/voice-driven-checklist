@@ -10,11 +10,10 @@ export type Checklist = {
   items: ChecklistItem[];
 };
 
-export type ChecklistSummary = {
+export type LibraryChecklist = {
   id: string;
   title: string;
-  itemCount: number;
-  updatedAt: number;
+  items: ChecklistItemInput[];
 };
 
 export type ChecklistInput = {

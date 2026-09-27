@@ -4,6 +4,8 @@ import type { ReactElement } from 'react';
 import type { Database } from '@/src/db/database';
 import { DatabaseProvider } from '@/src/db/DatabaseProvider';
 import { runMigrations } from '@/src/db/migrations';
+import { DevicePreferencesProvider } from '@/src/features/settings/DevicePreferencesProvider';
+import { MemoryDevicePreferenceStore } from '@/src/features/settings/preferences';
 
 import { createTestDatabase } from './createTestDatabase';
 
@@ -20,9 +22,14 @@ export async function renderWithDatabase(
     await runMigrations(database);
   }
 
+  const preferences = new MemoryDevicePreferenceStore();
   const result = render(ui, {
     ...options,
-    wrapper: ({ children }) => <DatabaseProvider database={database}>{children}</DatabaseProvider>,
+    wrapper: ({ children }) => (
+      <DatabaseProvider database={database}>
+        <DevicePreferencesProvider store={preferences}>{children}</DevicePreferencesProvider>
+      </DatabaseProvider>
+    ),
   });
 
   // Flush async useEffect chains (e.g. initial data loads).

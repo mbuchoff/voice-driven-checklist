@@ -1,4 +1,4 @@
-import type { Database } from './database';
+import type { Database, DatabaseQueries } from './database';
 
 const CHECKLIST_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS checklists (
@@ -52,7 +52,7 @@ type MigrationContext = {
   checklistSchemaExisted: boolean;
 };
 
-type Migration = (db: Database, context: MigrationContext) => Promise<void>;
+type Migration = (db: DatabaseQueries, context: MigrationContext) => Promise<void>;
 
 const migrations: Migration[] = [
   async (db, context) => {
@@ -71,6 +71,32 @@ const migrations: Migration[] = [
       `INSERT INTO device_preferences (id, theme, sound)
        VALUES (1, 'system', 'chime')`,
     );
+  },
+  async (db) => {
+    await db.execAsync(
+      'ALTER TABLE checklists ADD COLUMN library_position INTEGER;',
+    );
+    const checklists = await db.getAllAsync<{ id: string }>(
+      `SELECT id
+       FROM checklists
+       ORDER BY updated_at DESC, title ASC, id ASC`,
+    );
+    for (const [position, checklist] of checklists.entries()) {
+      await db.runAsync(
+        'UPDATE checklists SET library_position = ? WHERE id = ?',
+        position,
+        checklist.id,
+      );
+    }
+    await db.execAsync(`
+      CREATE UNIQUE INDEX checklists_unique_library_position
+        ON checklists (library_position);
+    `);
+    await db.execAsync(`
+      ALTER TABLE device_preferences
+        ADD COLUMN routine_reorder_hint_dismissed INTEGER NOT NULL DEFAULT 0
+        CHECK (routine_reorder_hint_dismissed IN (0, 1));
+    `);
   },
 ];
 
@@ -97,10 +123,10 @@ export async function runMigrations(db: Database): Promise<void> {
     checklistSchemaExisted: checklistTable != null,
   };
 
-  await db.withTransactionAsync(async () => {
+  await db.withTransactionAsync(async (transaction) => {
     for (let index = currentVersion; index < migrations.length; index += 1) {
-      await migrations[index](db, context);
-      await db.execAsync(`PRAGMA user_version = ${index + 1};`);
+      await migrations[index](transaction, context);
+      await transaction.execAsync(`PRAGMA user_version = ${index + 1};`);
     }
   });
 }

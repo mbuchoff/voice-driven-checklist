@@ -1,6 +1,12 @@
 import { Profiler } from 'react';
-import { act, fireEvent, screen } from '@testing-library/react-native';
-import { Keyboard, ScrollView, StyleSheet, Vibration } from 'react-native';
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react-native';
+import { Alert, Keyboard, ScrollView, StyleSheet, Vibration } from 'react-native';
 import * as Reanimated from 'react-native-reanimated';
 
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
@@ -20,6 +26,7 @@ import {
   tapToEdit,
 } from './ChecklistEditor.testSupport';
 import { createChecklist, getChecklist } from './repository';
+import type { Database } from '@/src/db/database';
 
 describe('ChecklistEditor', () => {
   afterEach(() => {
@@ -27,6 +34,85 @@ describe('ChecklistEditor', () => {
     jest.restoreAllMocks();
   });
   describe('edit mode', () => {
+    it('deletes the persisted routine from the editor after confirmation', async () => {
+      const alert = jest.spyOn(Alert, 'alert');
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'Original title',
+        items: [{ text: 'Keep until confirmed' }],
+      });
+      const onDeleted = jest.fn();
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onDeleted={onDeleted}
+          onCancel={jest.fn()}
+        />,
+        { database },
+      );
+      fireEvent.changeText(screen.getByTestId('title-input'), 'Unsaved title');
+
+      fireEvent.press(screen.getByTestId('routine-delete'));
+
+      expect(alert).toHaveBeenCalledTimes(1);
+      expect(alert.mock.calls[0][1]).toContain('Original title');
+      expect(alert.mock.calls[0][1]).not.toContain('Unsaved title');
+      const buttons = alert.mock.calls[0][2] ?? [];
+      buttons.find((button) => button.style === 'destructive')?.onPress?.();
+
+      await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1));
+      await expect(getChecklist(database, existing.id)).resolves.toBeNull();
+      expect(
+        within(screen.getByTestId('checklist-editor-scroll')).getByTestId(
+          'routine-delete',
+        ),
+      ).toBeOnTheScreen();
+    });
+
+    it('keeps the unsaved editor state available when routine deletion fails', async () => {
+      const alert = jest.spyOn(Alert, 'alert');
+      const database = await setupDb();
+      const existing = await createChecklist(database, {
+        title: 'Stored title',
+        items: [{ text: 'Stored step' }],
+      });
+      const failingDatabase: Database = {
+        ...database,
+        async runAsync(sql, ...params) {
+          if (sql.includes('DELETE FROM checklists')) {
+            throw new Error('simulated delete failure');
+          }
+          return database.runAsync(sql, ...params);
+        },
+      };
+      const onDeleted = jest.fn();
+      await renderWithDatabase(
+        <ChecklistEditor
+          initialChecklist={existing}
+          onSaved={jest.fn()}
+          onDeleted={onDeleted}
+          onCancel={jest.fn()}
+        />,
+        { database: failingDatabase },
+      );
+      fireEvent.changeText(screen.getByTestId('title-input'), 'Unsaved title');
+
+      fireEvent.press(screen.getByTestId('routine-delete'));
+      const confirmButtons = alert.mock.calls[0][2] ?? [];
+      confirmButtons
+        .find((button) => button.style === 'destructive')
+        ?.onPress?.();
+
+      await waitFor(() => expect(alert).toHaveBeenCalledTimes(2));
+      expect(alert.mock.calls[1][0]).toMatch(/delete failed/i);
+      expect(screen.getByTestId('title-input').props.value).toBe('Unsaved title');
+      expect(onDeleted).not.toHaveBeenCalled();
+      await expect(getChecklist(database, existing.id)).resolves.toMatchObject({
+        id: existing.id,
+      });
+    });
+
     it('reveals a tapped existing step instead of scrolling to the checklist end', async () => {
       jest
         .spyOn(global, 'requestAnimationFrame')
