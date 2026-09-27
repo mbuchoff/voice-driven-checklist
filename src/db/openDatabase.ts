@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 
 import type { Database } from './database';
 import { runMigrations } from './migrations';
+import { serializeDatabase } from './serializedDatabase';
 
 const DB_NAME = 'voice-checklist.db';
 
@@ -17,7 +18,7 @@ export function openDatabase(): Promise<Database> {
 
 async function initDatabase(): Promise<Database> {
   const sqlite = await SQLite.openDatabaseAsync(DB_NAME);
-  const db = sqlite as unknown as Database;
+  const db = serializeDatabase(sqlite);
   try {
     await runMigrations(db);
     return db;

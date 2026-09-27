@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -218,6 +219,11 @@ export async function swipeHintAway(driver) {
   ]);
   await driver.releaseActions();
   await hint.waitForDisplayed({ reverse: true, timeout: 10_000 });
+  assert.equal(
+    await byLabel(driver, 'Demonstrating how to move a routine').isDisplayed(),
+    false,
+    'Swiping away the hint must not open its demonstration.',
+  );
 }
 
 export async function capture(driver, name) {
@@ -238,29 +244,24 @@ export async function visibleRoutineTitles(driver) {
 
 export async function collectRoutineTitles(driver) {
   await scrollToTop(driver);
-  const titles = [];
   const seen = new Set();
   let unchangedPasses = 0;
 
   for (let attempt = 0; attempt < 30 && unchangedPasses < 2; attempt += 1) {
     const before = seen.size;
     for (const title of await visibleRoutineTitles(driver)) {
-      if (seen.has(title)) continue;
       seen.add(title);
-      titles.push(title);
     }
     unchangedPasses = seen.size === before ? unchangedPasses + 1 : 0;
     const canContinue = await scrollViewport(driver, 'down', 0.72);
     await driver.pause(300);
     if (!canContinue) {
       for (const title of await visibleRoutineTitles(driver)) {
-        if (seen.has(title)) continue;
         seen.add(title);
-        titles.push(title);
       }
       break;
     }
   }
 
-  return titles;
+  return [...seen];
 }

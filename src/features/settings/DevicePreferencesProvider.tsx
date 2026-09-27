@@ -44,12 +44,10 @@ export function useDeviceThemePreference(): ThemePreference {
 }
 
 export function useRoutineReorderHintPreference() {
-  const context = useContext(DevicePreferencesContext);
+  const context = useDevicePreferences();
   return {
-    dismissed:
-      context?.preferences.routineReorderHintDismissed
-      ?? DEFAULT_DEVICE_PREFERENCES.routineReorderHintDismissed,
-    dismiss: context?.dismissRoutineReorderHint,
+    dismissed: context.preferences.routineReorderHintDismissed,
+    dismiss: context.dismissRoutineReorderHint,
   };
 }
 

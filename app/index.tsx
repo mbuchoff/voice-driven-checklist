@@ -1,11 +1,13 @@
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 
 import { AccountGate } from '@/src/features/account/AccountGate';
 import { LibraryScreen } from '@/src/features/checklists/LibraryScreen';
 
 export default function LibraryRoute() {
   const router = useRouter();
+  const active = useIsFocused();
   const [refreshKey, setRefreshKey] = useState(0);
 
   useFocusEffect(
@@ -19,6 +21,7 @@ export default function LibraryRoute() {
       <Stack.Screen options={{ headerShown: false }} />
       <AccountGate>
         <LibraryScreen
+          active={active}
           refreshKey={refreshKey}
           onCreate={() => router.push('/checklists/new')}
           onSettings={() => router.push('/settings')}

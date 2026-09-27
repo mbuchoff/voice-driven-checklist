@@ -20,10 +20,10 @@ import { createTestDatabase } from '@/src/test/createTestDatabase';
 import { LibraryScreen } from './LibraryScreen';
 import { createChecklist } from './repository';
 import {
-  ROUTINE_ARRANGE_LESSON_DURATION_MS,
   ROUTINE_ARRANGE_SWIPE_DISTANCE,
   shouldShowRoutineArrangeHint,
 } from './RoutineArrangeHint';
+import { ROUTINE_ARRANGE_LESSON_DURATION_MS } from './RoutineArrangeLesson';
 
 const { getByGestureTestId } = jest.requireActual(
   'react-native-gesture-handler/lib/commonjs/jestUtils',

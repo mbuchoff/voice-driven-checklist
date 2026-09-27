@@ -47,12 +47,8 @@ export function clearIsolatedApp() {
   adb(['shell', 'am', 'force-stop', APP_PACKAGE]);
 }
 
-export function collapseSystemPanelsArguments() {
-  return ['shell', 'cmd', 'statusbar', 'collapse'];
-}
-
 export function collapseSystemPanels() {
-  adb(collapseSystemPanelsArguments());
+  adb(['shell', 'cmd', 'statusbar', 'collapse']);
 }
 
 export function createVersionTwoDatabase(filePath) {

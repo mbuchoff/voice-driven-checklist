@@ -26,6 +26,7 @@ import {
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 
 import { moveItem } from './reorder';
+import { getEdgeAutoscrollDelta as calculateEdgeAutoscrollDelta } from './edgeAutoscroll';
 
 export const CHECKLIST_REORDER_HOLD_MS = 350;
 export const CHECKLIST_REORDER_RELEASE_MS = 120;
@@ -39,11 +40,7 @@ export function getEdgeAutoscrollDelta(
   distanceIntoEdge: number,
   elapsedMs: number,
 ): number {
-  const intensity = Math.min(
-    1,
-    Math.max(0, distanceIntoEdge) / EDGE_AUTOSCROLL_THRESHOLD,
-  );
-  return EDGE_AUTOSCROLL_MAX_SPEED * intensity * Math.max(0, elapsedMs) / 1000;
+  return calculateEdgeAutoscrollDelta(distanceIntoEdge, elapsedMs, EDGE_AUTOSCROLL_THRESHOLD, EDGE_AUTOSCROLL_MAX_SPEED);
 }
 
 export type ReorderItem = { localId: string; text: string };

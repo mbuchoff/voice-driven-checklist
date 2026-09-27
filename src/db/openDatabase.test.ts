@@ -2,8 +2,8 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { createTestDatabase } from '@/src/test/createTestDatabase';
-import type { Database } from './database';
+import { createTestDatabase, createTestDatabaseConnection } from '@/src/test/createTestDatabase';
+import type { DatabaseConnection } from './database';
 
 const mockOpen = jest.fn();
 jest.mock('expo-sqlite', () => ({ openDatabaseAsync: mockOpen }));
@@ -19,16 +19,17 @@ function freshOpener(): typeof import('./openDatabase').openDatabase {
 beforeEach(() => mockOpen.mockReset());
 
 it('shares an in-flight open and retains the successfully initialized connection', async () => {
-  const database = createTestDatabase();
-  let complete!: (database: Database) => void;
-  mockOpen.mockReturnValue(new Promise<Database>(resolveOpen => { complete = resolveOpen; }));
+  const database = createTestDatabaseConnection();
+  let complete!: (database: DatabaseConnection) => void;
+  mockOpen.mockReturnValue(new Promise<DatabaseConnection>(resolveOpen => { complete = resolveOpen; }));
   const open = freshOpener();
   try {
     const first = open();
     expect(open()).toBe(first);
     expect(mockOpen).toHaveBeenCalledTimes(1);
     complete(database);
-    await expect(first).resolves.toBe(database);
+    const opened = await first;
+    expect(await open()).toBe(opened);
     expect(open()).toBe(first);
     expect(mockOpen).toHaveBeenCalledTimes(1);
     await expect(database.getFirstAsync('PRAGMA user_version')).resolves.toEqual({ user_version: 3 });
@@ -50,9 +51,9 @@ it('closes a failed migration connection and safely retries the same persisted l
     CREATE INDEX checklists_unique_library_position ON checklists(title);
   `);
   await seed.closeAsync();
-  const connections: { database: Database; close: jest.SpyInstance }[] = [];
+  const connections: { database: DatabaseConnection; close: jest.SpyInstance }[] = [];
   mockOpen.mockImplementation(async () => {
-    const database = createTestDatabase(filename);
+    const database = createTestDatabaseConnection(filename);
     connections.push({ database, close: jest.spyOn(database, 'closeAsync') });
     return database;
   });

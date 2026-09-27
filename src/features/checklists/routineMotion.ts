@@ -1,11 +1,15 @@
 import type { RoutineGridMetrics } from './routineGrid';
+import { getEdgeAutoscrollDelta } from './edgeAutoscroll';
 
-const AUTOSCROLL_EDGE_SIZE = 64;
-const AUTOSCROLL_MAX_SPEED = 540;
+const AUTOSCROLL_EDGE_SIZE = 96;
+// Widen activation independently of how quickly speed ramps after crossing it.
+const AUTOSCROLL_RAMP_DISTANCE = 64;
+const AUTOSCROLL_MAX_SPEED = 1080;
 const FULL_TILT_SPEED = 420;
 const VERTICAL_SWAY_WEIGHT = 0.9;
 export const ROUTINE_HOLD_DRIFT_ALLOWANCE = 20;
 export const ROUTINE_HOLD_FEEDBACK_DELAY_MS = 192;
+export const ROUTINE_HOLD_ACTIVATION_MS = 440;
 
 const ROCKING = {
   startFrequencyHz: 2.4,
@@ -62,11 +66,7 @@ export function getRoutineAutoScrollDelta(
   elapsedMs: number,
 ) {
   'worklet';
-  const intensity = Math.min(
-    1,
-    Math.max(0, distanceIntoEdge) / AUTOSCROLL_EDGE_SIZE,
-  );
-  return AUTOSCROLL_MAX_SPEED * intensity * Math.max(0, elapsedMs) / 1000;
+  return getEdgeAutoscrollDelta(distanceIntoEdge, elapsedMs, AUTOSCROLL_RAMP_DISTANCE, AUTOSCROLL_MAX_SPEED);
 }
 
 export type RoutineScrollThresholds = { top: number; bottom: number };
@@ -133,6 +133,3 @@ export function getRoutineRockingTilt(
     Math.cos(2 * Math.PI * phaseCycles)
   );
 }
-
-export const ROUTINE_AUTOSCROLL_EDGE_SIZE = AUTOSCROLL_EDGE_SIZE;
-export const ROUTINE_ROCKING_DURATION_MS = ROCKING.durationMs;

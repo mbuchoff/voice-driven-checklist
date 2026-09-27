@@ -1,4 +1,4 @@
-import type { Database } from './database';
+import type { Database, DatabaseQueries } from './database';
 
 const CHECKLIST_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS checklists (
@@ -52,7 +52,7 @@ type MigrationContext = {
   checklistSchemaExisted: boolean;
 };
 
-type Migration = (db: Database, context: MigrationContext) => Promise<void>;
+type Migration = (db: DatabaseQueries, context: MigrationContext) => Promise<void>;
 
 const migrations: Migration[] = [
   async (db, context) => {
@@ -123,10 +123,10 @@ export async function runMigrations(db: Database): Promise<void> {
     checklistSchemaExisted: checklistTable != null,
   };
 
-  await db.withTransactionAsync(async () => {
+  await db.withTransactionAsync(async (transaction) => {
     for (let index = currentVersion; index < migrations.length; index += 1) {
-      await migrations[index](db, context);
-      await db.execAsync(`PRAGMA user_version = ${index + 1};`);
+      await migrations[index](transaction, context);
+      await transaction.execAsync(`PRAGMA user_version = ${index + 1};`);
     }
   });
 }

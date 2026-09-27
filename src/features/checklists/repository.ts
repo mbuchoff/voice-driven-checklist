@@ -1,12 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
 
-import type { Database } from '@/src/db/database';
+import type { Database, DatabaseQueries } from '@/src/db/database';
 
 import type {
   Checklist,
   ChecklistInput,
   ChecklistItem,
-  ChecklistSummary,
+  LibraryChecklist,
 } from './types';
 import { validateChecklistItemText, validateChecklistTitle } from './validation';
 
@@ -24,7 +24,7 @@ function buildItems(inputs: ChecklistInput['items']): ChecklistItem[] {
   });
 }
 
-async function insertItems(db: Database, checklistId: string, items: ChecklistItem[]): Promise<void> {
+async function insertItems(db: DatabaseQueries, checklistId: string, items: ChecklistItem[]): Promise<void> {
   for (const item of items) {
     await db.runAsync(
       'INSERT INTO checklist_items (id, checklist_id, position, text) VALUES (?, ?, ?, ?)',
@@ -45,7 +45,7 @@ function prepareChecklist(input: ChecklistInput): Checklist {
 }
 
 async function writeChecklist(
-  db: Database,
+  db: DatabaseQueries,
   checklist: Checklist,
   libraryPosition: number,
 ): Promise<void> {
@@ -64,7 +64,7 @@ async function writeChecklist(
   await insertItems(db, checklist.id, checklist.items);
 }
 
-async function getLastLibraryPosition(db: Database): Promise<number> {
+async function getLastLibraryPosition(db: DatabaseQueries): Promise<number> {
   const row = await db.getFirstAsync<{ position: number }>(
     `SELECT COALESCE(MAX(library_position), -1) AS position
      FROM checklists`,
@@ -72,7 +72,9 @@ async function getLastLibraryPosition(db: Database): Promise<number> {
   return row?.position ?? -1;
 }
 
-async function makeRoomForFirstChecklist(db: Database): Promise<void> {
+async function makeRoomForFirstChecklist(db: DatabaseQueries): Promise<void> {
+  // SQLite checks UNIQUE per row, so a direct +1 update can collide. Stage
+  // above the occupied range, then shift back to leave exactly slot zero free.
   const lastPosition = await getLastLibraryPosition(db);
   if (lastPosition < 0) return;
 
@@ -90,9 +92,9 @@ async function makeRoomForFirstChecklist(db: Database): Promise<void> {
 export async function createChecklist(db: Database, input: ChecklistInput): Promise<Checklist> {
   const checklist = prepareChecklist(input);
 
-  await db.withTransactionAsync(async () => {
-    await makeRoomForFirstChecklist(db);
-    await writeChecklist(db, checklist, 0);
+  await db.withTransactionAsync(async (transaction) => {
+    await makeRoomForFirstChecklist(transaction);
+    await writeChecklist(transaction, checklist, 0);
   });
 
   return checklist;
@@ -107,8 +109,8 @@ export async function updateChecklist(
   const items = buildItems(input.items);
   const now = Date.now();
 
-  await db.withTransactionAsync(async () => {
-    const result = await db.runAsync(
+  await db.withTransactionAsync(async (transaction) => {
+    const result = await transaction.runAsync(
       'UPDATE checklists SET title = ?, updated_at = ? WHERE id = ?',
       title,
       now,
@@ -117,8 +119,8 @@ export async function updateChecklist(
     if (result.changes === 0) {
       throw new Error(`Checklist not found: ${id}`);
     }
-    await db.runAsync('DELETE FROM checklist_items WHERE checklist_id = ?', id);
-    await insertItems(db, id, items);
+    await transaction.runAsync('DELETE FROM checklist_items WHERE checklist_id = ?', id);
+    await insertItems(transaction, id, items);
   });
 
   return { id, title, items };
@@ -138,10 +140,10 @@ export async function importChecklists(
 ): Promise<number> {
   const prepared = inputs.map(prepareChecklist);
 
-  await db.withTransactionAsync(async () => {
-    const firstPosition = (await getLastLibraryPosition(db)) + 1;
+  await db.withTransactionAsync(async (transaction) => {
+    const firstPosition = (await getLastLibraryPosition(transaction)) + 1;
     for (const [index, checklist] of prepared.entries()) {
-      await writeChecklist(db, checklist, firstPosition + index);
+      await writeChecklist(transaction, checklist, firstPosition + index);
     }
   });
 
@@ -167,41 +169,36 @@ export async function getChecklist(db: Database, id: string): Promise<Checklist 
   };
 }
 
-export async function listChecklists(db: Database): Promise<ChecklistSummary[]> {
+export async function listChecklists(db: Database): Promise<LibraryChecklist[]> {
   const rows = await db.getAllAsync<{
     id: string;
     title: string;
-    updated_at: number;
     item_text: string | null;
   }>(
     `SELECT
        c.id AS id,
        c.title AS title,
-       c.updated_at AS updated_at,
        ci.text AS item_text
      FROM checklists c
      LEFT JOIN checklist_items ci ON ci.checklist_id = c.id
      ORDER BY c.library_position ASC, ci.position ASC`,
   );
 
-  const summaries: ChecklistSummary[] = [];
+  const summaries: LibraryChecklist[] = [];
   let currentId: string | null = null;
-  let current: ChecklistSummary | null = null;
+  let current: LibraryChecklist | null = null;
   for (const row of rows) {
     if (row.id !== currentId) {
       currentId = row.id;
       current = {
         id: row.id,
         title: row.title,
-        updatedAt: row.updated_at,
-        itemCount: 0,
         items: [],
       };
       summaries.push(current);
     }
     if (row.item_text != null && current) {
       current.items.push({ text: row.item_text });
-      current.itemCount += 1;
     }
   }
   return summaries;
@@ -211,8 +208,8 @@ export async function reorderChecklists(
   db: Database,
   orderedIds: string[],
 ): Promise<void> {
-  await db.withTransactionAsync(async () => {
-    const rows = await db.getAllAsync<{ id: string }>(
+  await db.withTransactionAsync(async (transaction) => {
+    const rows = await transaction.getAllAsync<{ id: string }>(
       'SELECT id FROM checklists ORDER BY library_position ASC',
     );
     const existingIds = new Set(rows.map((row) => row.id));
@@ -225,14 +222,15 @@ export async function reorderChecklists(
       throw new Error('A complete library order is required.');
     }
 
-    const lastPosition = await getLastLibraryPosition(db);
+    const lastPosition = await getLastLibraryPosition(transaction);
+    // Keep staging disjoint from both current positions and final 0..n-1 slots.
     const offset = Math.max(1, lastPosition + orderedIds.length + 1);
-    await db.runAsync(
+    await transaction.runAsync(
       'UPDATE checklists SET library_position = library_position + ?',
       offset,
     );
     for (const [position, id] of orderedIds.entries()) {
-      await db.runAsync(
+      await transaction.runAsync(
         'UPDATE checklists SET library_position = ? WHERE id = ?',
         position,
         id,

@@ -189,7 +189,7 @@ describe('checklist repository', () => {
       const c = await createChecklist(db, { title: 'C', items: [] });
 
       const list = await listChecklists(db);
-      const byId = new Map(list.map((row) => [row.id, row.itemCount]));
+      const byId = new Map(list.map((row) => [row.id, row.items.length]));
       expect(byId.get(a.id)).toBe(1);
       expect(byId.get(b.id)).toBe(3);
       expect(byId.get(c.id)).toBe(0);

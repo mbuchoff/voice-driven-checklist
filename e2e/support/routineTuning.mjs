@@ -21,20 +21,41 @@ export async function verifySmallHoldDrift(driver, card) {
   const density = await driver.getDisplayDensity() / 160;
   const x = Math.round(rect.x + rect.width * 0.3);
   const y = Math.round(rect.y + rect.height * 0.3);
-  try {
-    await pointer(driver, [
-      { type: 'pointerMove', duration: 0, x, y },
-      { type: 'pointerDown', button: 0 },
-      { type: 'pause', duration: 80 },
-      { type: 'pointerMove', duration: 110, x: Math.round(x + 16 * density), y },
-      { type: 'pause', duration: 400 },
-    ]);
-    await waitForDisplayed(byId(driver, 'routine-drop-slot'));
-    await driver.back();
+  // Exercise native activation, not only the JS distance guard. Vertical drift
+  // can cross Android's scroll slop while remaining inside our hold allowance.
+  const samples = [
+    { name: 'stationary', dx: 0, dy: 0, holdMs: 80 },
+    { name: 'right', dx: 16, dy: 0, holdMs: 80 },
+    { name: 'left', dx: -16, dy: 0, holdMs: 80 },
+    { name: 'down', dx: 0, dy: 16, holdMs: 80 },
+    { name: 'up', dx: 0, dy: -16, holdMs: 80 },
+    { name: 'diagonal during feedback', dx: 12, dy: -12, holdMs: 260 },
+  ];
+  for (const { name, dx, dy, holdMs } of samples) {
+    const destination = {
+      x: Math.round(x + dx * density),
+      y: Math.round(y + dy * density),
+    };
+    try {
+      await pointer(driver, [
+        { type: 'pointerMove', duration: 0, x, y },
+        { type: 'pointerDown', button: 0 },
+        { type: 'pause', duration: holdMs },
+        { type: 'pointerMove', duration: 110, ...destination },
+        { type: 'pause', duration: 400 },
+      ]);
+      await byId(driver, 'routine-drop-slot').waitForDisplayed({
+        timeout: 4_000,
+        timeoutMsg: `${name} drift within the allowance must activate dragging`,
+      });
+    } finally {
+      // Cancel without moving to a different slot or persisting a new order.
+      touch('CANCEL', destination.x, destination.y);
+      await driver.releaseActions();
+    }
     await byId(driver, 'routine-drop-slot').waitForDisplayed({ reverse: true });
-  } finally {
-    touch('CANCEL', x, y);
-    await driver.releaseActions();
+    await waitForDisplayed(byId(driver, 'library-safe-area'));
+    await driver.pause(500);
   }
 }
 

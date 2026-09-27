@@ -1,14 +1,22 @@
 const CARD_GAP = 12;
-const FULL_CARD_HEIGHT = 240;
-const COMPACT_CARD_HEIGHT = 192;
 const MIN_CARD_WIDTH = 280;
 const MAX_CARD_WIDTH = 360;
 const COMPACT_GRID_MAX_WIDTH = 599;
 const COMPACT_TWO_COLUMN_MIN_WIDTH = 330;
-const FULL_PLAY_BUTTON_SIZE = 56;
-const FULL_PLAY_BUTTON_INSET = 14;
-const COMPACT_PLAY_BUTTON_SIZE = 46;
-const COMPACT_PLAY_BUTTON_INSET = 10;
+const COMPACT_TYPOGRAPHY = {
+  title: { fontSize: 18, lineHeight: 22, letterSpacing: -0.35 },
+  count: { fontSize: 14, marginTop: 4 },
+  steps: { fontSize: 14, lineHeight: 17, marginTop: 6, paddingTop: 6 },
+  playIconSize: 19,
+};
+const FULL_TYPOGRAPHY = {
+  title: { fontSize: 22, lineHeight: 26, letterSpacing: -0.6 },
+  count: { fontSize: 15, marginTop: 5 },
+  steps: { fontSize: 15, lineHeight: 19, marginTop: 8, paddingTop: 8 },
+  playIconSize: 22,
+};
+const COMPACT = { cardHeight: 192, playButtonSize: 46, playButtonInset: 10, typography: COMPACT_TYPOGRAPHY };
+const FULL = { cardHeight: 240, playButtonSize: 56, playButtonInset: 14, typography: FULL_TYPOGRAPHY };
 
 export function getRoutineGridMetrics(gridWidth: number, itemCount: number) {
   const width = Math.max(1, gridWidth);
@@ -26,28 +34,17 @@ export function getRoutineGridMetrics(gridWidth: number, itemCount: number) {
   const cardWidth = compact
     ? availableCardWidth
     : Math.min(MAX_CARD_WIDTH, availableCardWidth);
-  const cardHeight = compact ? COMPACT_CARD_HEIGHT : FULL_CARD_HEIGHT;
-  const playButtonSize = compact
-    ? COMPACT_PLAY_BUTTON_SIZE
-    : FULL_PLAY_BUTTON_SIZE;
-  const playButtonInset = compact
-    ? COMPACT_PLAY_BUTTON_INSET
-    : FULL_PLAY_BUTTON_INSET;
-  const contentBottomPadding = 15;
+  const preset = compact ? COMPACT : FULL;
   const contentWidth = columns * cardWidth + CARD_GAP * (columns - 1);
   const leftOffset = Math.max(0, (width - contentWidth) / 2);
   const rows = itemCount > 0 ? Math.ceil(itemCount / columns) : 0;
   const gridHeight =
-    rows > 0 ? rows * (cardHeight + CARD_GAP) - CARD_GAP : 0;
+    rows > 0 ? rows * (preset.cardHeight + CARD_GAP) - CARD_GAP : 0;
 
   return {
     columns,
     cardWidth,
-    cardHeight,
-    compact,
-    playButtonSize,
-    playButtonInset,
-    contentBottomPadding,
+    ...preset,
     contentWidth,
     leftOffset,
     gridHeight,

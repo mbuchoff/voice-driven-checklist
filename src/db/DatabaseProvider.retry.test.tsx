@@ -3,15 +3,17 @@ import { Text } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 
 import { createChecklist, getChecklist } from '@/src/features/checklists/repository';
-import { createTestDatabase } from '@/src/test/createTestDatabase';
+import { createTestDatabaseConnection } from '@/src/test/createTestDatabase';
 
 import { AppDatabaseProvider } from './DatabaseProvider';
 import { runMigrations } from './migrations';
+import { serializeDatabase } from './serializedDatabase';
 
 jest.mock('expo-sqlite', () => ({ openDatabaseAsync: jest.fn() }));
 
 it('retries the production opener and preserves the existing library and preferences', async () => {
-  const database = createTestDatabase();
+  const connection = createTestDatabaseConnection();
+  const database = serializeDatabase(connection);
   await runMigrations(database);
   const routine = await createChecklist(database, {
     title: 'Kept routine',
@@ -24,7 +26,7 @@ it('retries the production opener and preserves the existing library and prefere
   `);
   jest.mocked(SQLite.openDatabaseAsync)
     .mockRejectedValueOnce(new Error('Temporary SQLite open failure'))
-    .mockResolvedValue(database as unknown as SQLite.SQLiteDatabase);
+    .mockResolvedValue(connection as unknown as SQLite.SQLiteDatabase);
 
   try {
     render(
@@ -33,6 +35,7 @@ it('retries the production opener and preserves the existing library and prefere
       </AppDatabaseProvider>,
     );
     expect(await screen.findByTestId('database-open-error')).toBeOnTheScreen();
+    expect(screen.queryByTestId('opened-library')).toBeNull();
     fireEvent.press(screen.getByTestId('database-open-retry'));
 
     await waitFor(() => {

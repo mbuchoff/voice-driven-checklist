@@ -22,6 +22,23 @@ async function setupDb(): Promise<Database> {
 }
 
 describe('LibraryScreen', () => {
+  it('shows a recoverable read error instead of claiming the saved library is empty', async () => {
+    const database = await setupDb();
+    const routine = await createChecklist(database, {
+      title: 'Saved routine', items: [{ text: 'Kept step' }],
+    });
+    jest.spyOn(database, 'getAllAsync').mockRejectedValueOnce(new Error('temporary read failure'));
+    await renderWithDatabase(
+      <LibraryScreen onCreate={jest.fn()} onEdit={jest.fn()} onStart={jest.fn()} />,
+      { database },
+    );
+    expect(await screen.findByTestId('library-load-error')).toBeOnTheScreen();
+    expect(screen.queryByTestId('library-empty-state')).toBeNull();
+    fireEvent.press(screen.getByTestId('library-load-retry'));
+    expect(await screen.findByTestId(`routine-card-${routine.id}`)).toBeOnTheScreen();
+    expect(screen.queryByTestId('library-load-error')).toBeNull();
+  });
+
   it('shows an empty state without rendering routine cards', async () => {
     const database = await setupDb();
     await renderWithDatabase(
@@ -80,7 +97,7 @@ describe('LibraryScreen', () => {
     );
   });
 
-  it('runs card, Play, New, and Settings actions immediately on successful release', async () => {
+  it('navigates immediately on successful releases but not cancelled card, Play, New, or Settings contacts', async () => {
     const database = await setupDb();
     const routine = await createChecklist(database, {
       title: 'Errands',

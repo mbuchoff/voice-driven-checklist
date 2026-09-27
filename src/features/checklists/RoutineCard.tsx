@@ -14,8 +14,9 @@ import { Icon } from '@/src/components/Icon';
 import type { Palette } from '@/src/theme/palette';
 
 import type { RoutineGridMetrics } from './routineGrid';
-import type { ChecklistSummary } from './types';
+import type { LibraryChecklist } from './types';
 import { useRoutineSelectionFeedback } from './useRoutineSelectionFeedback';
+import type { RoutinePressGuard } from './useRoutinePressGuard';
 
 const cardPalette = {
   light: {
@@ -57,22 +58,26 @@ export function RoutineCard({
   layout,
   theme,
   onEdit,
+  pressGuard,
+  playPressGuard,
   onStart,
   gesture,
   accessibilityActions,
   onAccessibilityAction,
 }: {
-  item: ChecklistSummary;
+  item: LibraryChecklist;
   layout: RoutineGridMetrics;
   theme: Palette;
   onEdit: () => void;
+  pressGuard?: RoutinePressGuard;
+  playPressGuard?: RoutinePressGuard;
   onStart: () => void;
   gesture?: GestureType;
   accessibilityActions?: ComponentProps<typeof Pressable>['accessibilityActions'];
   onAccessibilityAction?: ComponentProps<typeof Pressable>['onAccessibilityAction'];
 }) {
   const { ink, fill } = getRoutineCardColors(item.id, theme.mode);
-  const empty = item.itemCount === 0;
+  const empty = item.items.length === 0;
   const cardSelection = useRoutineSelectionFeedback('card', onEdit);
   const playSelection = useRoutineSelectionFeedback('control', onStart);
 
@@ -84,13 +89,17 @@ export function RoutineCard({
       accessibilityHint="Opens this routine for editing."
       accessibilityActions={accessibilityActions}
       onAccessibilityAction={onAccessibilityAction}
-      onPress={cardSelection.run}
+      onTouchStart={pressGuard?.onTouchStart}
+      onTouchMove={pressGuard?.onTouchMove}
+      onTouchCancel={pressGuard?.onTouchCancel}
+      onPress={(event) => {
+        if (pressGuard?.allowsPress(event) !== false) cardSelection.run();
+      }}
       onPressIn={cardSelection.pressIn}
       onPressOut={cardSelection.pressOut}
       style={{
         flex: 1,
         padding: 15,
-        paddingBottom: layout.contentBottomPadding,
         borderRadius: 22,
         overflow: 'hidden',
         backgroundColor: fill,
@@ -107,10 +116,8 @@ export function RoutineCard({
         <Text
           style={{
             color: theme.text,
-            fontSize: layout.compact ? 18 : 22,
-            lineHeight: layout.compact ? 22 : 26,
+            ...layout.typography.title,
             fontWeight: '800',
-            letterSpacing: layout.compact ? -0.35 : -0.6,
           }}
         >
           {item.title}
@@ -118,22 +125,18 @@ export function RoutineCard({
         <Text
           style={{
             color: ink,
-            fontSize: layout.compact ? 14 : 15,
+            ...layout.typography.count,
             fontWeight: '700',
-            marginTop: layout.compact ? 4 : 5,
           }}
         >
-          {stepCountLabel(item.itemCount)}
+          {stepCountLabel(item.items.length)}
         </Text>
         {item.items.length > 0 ? (
           <Text
             testID={`routine-step-list-${item.id}`}
             style={{
               color: theme.textMuted,
-              fontSize: layout.compact ? 14 : 15,
-              lineHeight: layout.compact ? 17 : 19,
-              marginTop: layout.compact ? 6 : 8,
-              paddingTop: layout.compact ? 6 : 8,
+              ...layout.typography.steps,
               borderTopWidth: 1,
               borderTopColor: 'rgba(128, 128, 128, 0.22)',
             }}
@@ -189,7 +192,12 @@ export function RoutineCard({
           accessibilityLabel={`Start ${item.title}`}
           accessibilityState={{ disabled: empty }}
           disabled={empty}
-          onPress={playSelection.run}
+          onTouchStart={playPressGuard?.onTouchStart}
+          onTouchMove={playPressGuard?.onTouchMove}
+          onTouchCancel={playPressGuard?.onTouchCancel}
+          onPress={(event) => {
+            if (playPressGuard?.allowsPress(event) !== false) playSelection.run();
+          }}
           onPressIn={playSelection.pressIn}
           onPressOut={playSelection.pressOut}
           style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
@@ -197,7 +205,7 @@ export function RoutineCard({
           <Icon
             name="play"
             color={empty ? theme.disabled : ink}
-            size={layout.compact ? 19 : 22}
+            size={layout.typography.playIconSize}
           />
         </Pressable>
       </Animated.View>

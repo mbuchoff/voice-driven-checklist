@@ -232,20 +232,12 @@ describe('database migrations', () => {
       INSERT INTO device_preferences (id, theme, sound)
       VALUES (1, 'system', 'chime');
       PRAGMA user_version = 2;
+      CREATE INDEX checklists_unique_library_position ON checklists(title);
     `);
-    const failingDatabase: Database = {
-      ...database,
-      async execAsync(source) {
-        if (source.includes('CREATE UNIQUE INDEX checklists_unique_library_position')) {
-          throw new Error('simulated ordering migration failure');
-        }
-        await database.execAsync(source);
-      },
-    };
 
-    await expect(runMigrations(failingDatabase)).rejects.toThrow(
-      'simulated ordering migration failure',
-    );
+    await expect(runMigrations(database)).rejects.toMatchObject({
+      message: expect.stringMatching(/index.*already exists/i),
+    });
 
     await expect(
       database.getFirstAsync<{ user_version: number }>('PRAGMA user_version'),
@@ -273,19 +265,11 @@ describe('database migrations', () => {
 
   it('rolls back schema and version changes when a migration fails', async () => {
     const database = createTestDatabase();
-    const failingDatabase: Database = {
-      ...database,
-      async execAsync(source) {
-        if (source.includes('CREATE TABLE account_preferences')) {
-          throw new Error('simulated migration failure');
-        }
-        await database.execAsync(source);
-      },
-    };
+    await database.execAsync('CREATE TABLE account_preferences (id INTEGER PRIMARY KEY)');
 
-    await expect(runMigrations(failingDatabase)).rejects.toThrow(
-      'simulated migration failure',
-    );
+    await expect(runMigrations(database)).rejects.toMatchObject({
+      message: expect.stringMatching(/account_preferences.*already exists/i),
+    });
 
     await expect(
       database.getFirstAsync<{ user_version: number }>('PRAGMA user_version'),

@@ -24,7 +24,7 @@ describe('getRoutineGridMetrics', () => {
 
     expect(tablet.columns).toBe(2);
     expect(tablet.cardWidth).toBe(360);
-    expect(tablet.leftOffset).toBe(34);
+    expect(tablet.leftOffset * 2 + tablet.contentWidth).toBe(800);
     expect(desktop.columns).toBe(4);
     expect(desktop.cardWidth).toBeLessThanOrEqual(360);
     expect(desktop.contentWidth).toBeLessThanOrEqual(1248);

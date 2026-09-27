@@ -1,8 +1,13 @@
 import BetterSqlite3 from 'better-sqlite3';
 
-import type { Database, RunResult } from '@/src/db/database';
+import type { Database, DatabaseConnection, RunResult } from '@/src/db/database';
+import { serializeDatabase } from '@/src/db/serializedDatabase';
 
 export function createTestDatabase(filename = ':memory:'): Database {
+  return serializeDatabase(createTestDatabaseConnection(filename));
+}
+
+export function createTestDatabaseConnection(filename = ':memory:'): DatabaseConnection {
   const sqlite = new BetterSqlite3(filename);
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
@@ -36,19 +41,12 @@ export function createTestDatabase(filename = ':memory:'): Database {
       return (row ?? null) as T | null;
     },
 
-    async withTransactionAsync(callback: () => Promise<void>): Promise<void> {
-      sqlite.exec('BEGIN');
-      try {
-        await callback();
-        sqlite.exec('COMMIT');
-      } catch (error) {
-        sqlite.exec('ROLLBACK');
-        throw error;
-      }
-    },
-
     async closeAsync() {
       sqlite.close();
+    },
+
+    async isInTransactionAsync() {
+      return sqlite.inTransaction;
     },
   };
 }

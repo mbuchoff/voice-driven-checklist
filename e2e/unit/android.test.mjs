@@ -4,7 +4,6 @@ import { syncBuiltinESMExports } from 'node:module';
 import { test } from 'node:test';
 
 import {
-  collapseSystemPanelsArguments,
   mediaScanArguments,
   restoreDevicePresentation,
 } from '../support/android.mjs';
@@ -27,15 +26,6 @@ test('restores an absent font-scale setting by deleting it, not writing the stri
     ['shell', 'wm', 'size', 'reset'],
     ['shell', 'settings', 'put', 'system', 'font_scale', '1.15'],
     ['shell', 'wm', 'size', '720x1600'],
-  ]);
-});
-
-test('the system-panel command requests collapse', () => {
-  assert.deepEqual(collapseSystemPanelsArguments(), [
-    'shell',
-    'cmd',
-    'statusbar',
-    'collapse',
   ]);
 });
 
