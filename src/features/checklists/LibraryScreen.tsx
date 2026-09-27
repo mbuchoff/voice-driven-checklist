@@ -19,7 +19,7 @@ import { ScrollView as GestureScrollView } from 'react-native-gesture-handler';
 import { Icon } from '@/src/components/Icon';
 import { notify } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
-import { useRoutineReorderHintPreference } from '@/src/features/settings/DevicePreferencesProvider';
+import { useDevicePreferences } from '@/src/features/settings/DevicePreferencesProvider';
 import { useTheme } from '@/src/theme/useTheme';
 
 import { moveItem } from './reorder';
@@ -111,9 +111,9 @@ export function LibraryScreen({
   const db = useDatabase();
   const theme = useTheme();
   const {
-    dismissed: reorderHintDismissed,
-    dismiss: dismissReorderHint,
-  } = useRoutineReorderHintPreference();
+    preferences: { routineReorderHintDismissed: reorderHintDismissed },
+    dismissRoutineReorderHint: dismissReorderHint,
+  } = useDevicePreferences();
   const [items, setItems] = useState<LibraryChecklist[]>([]);
   const [orderRevision, setOrderRevision] = useState(0);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -248,6 +248,7 @@ export function LibraryScreen({
   }, []);
 
   const closeArrangeLesson = useCallback(() => {
+    // Invalidate queued measurements synchronously, before navigation starts.
     lessonMeasurement.current += 1;
     setLessonOrigin(undefined);
   }, []);
@@ -389,7 +390,7 @@ export function LibraryScreen({
             </Text>
           </View>
         ) : null}
-        {items.length > 0 ? (
+        {!loadFailed && items.length > 0 ? (
           <>
             {shouldShowRoutineArrangeHint(
               items.length,

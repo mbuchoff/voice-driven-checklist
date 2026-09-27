@@ -230,7 +230,6 @@ function RoutinePosition({
         onStart={onStart}
       />
       <RoutineHoldFeedback
-        index={fallbackIndex}
         itemId={item.id}
         layout={layout}
         color={getRoutineCardColors(item.id, theme.mode).ink}
@@ -285,9 +284,8 @@ function RoutineDropSlot({
 }
 
 function RoutineHoldFeedback({
-  index, itemId, layout, color, holdOwner, progress,
+  itemId, layout, color, holdOwner, progress,
 }: {
-  index: number;
   itemId: string;
   layout: RoutineGridMetrics;
   color: string;
@@ -301,7 +299,7 @@ function RoutineHoldFeedback({
 
   return (
     <Animated.View
-      testID={`routine-hold-feedback-${index}`}
+      testID={`routine-hold-feedback-${itemId}`}
       pointerEvents="none"
       style={[
         {

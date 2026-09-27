@@ -12,6 +12,8 @@ export function mapRoutineSlots(items: LibraryChecklist[]): SlotMap {
 
 // A stable bundle of independently animated values: updating pointer coordinates
 // must not cancel tilt/release animations or invalidate unrelated subscribers.
+// Every useSharedValue call must still run on every render (Rules of Hooks);
+// Reanimated retains each value, while the outer ref retains the bundle identity.
 export function useRoutineDragState(items: LibraryChecklist[]) {
   return useRef({
     slots: useSharedValue<SlotMap>(mapRoutineSlots(items)),

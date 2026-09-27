@@ -199,34 +199,79 @@ before(async () => {
   presentation = captureDevicePresentation();
 });
 
-after(async () => {
-  for (const remotePath of createdDocuments) {
-    try {
-      adb(['shell', 'rm', '-f', remotePath]);
-    } catch (error) {
-      console.error(`Could not remove this run's document ${remotePath}: ${error.message}`);
-    }
-  }
+async function cleanupScenario() {
+  const errors = [];
+  const attempt = async (action) => {
+    try { await action(); } catch (error) { errors.push(error); }
+  };
+  // Cancel both native input events and Appium pointer sources. Attempt every
+  // cleanup even if one fails, so a failed gesture cannot strand later groups.
+  await attempt(() => adb(['shell', 'input', 'touchscreen', 'motionevent', 'CANCEL', '0', '0'], { capture: true }));
+  await attempt(() => driver.releaseActions());
+  await attempt(() => adb(['shell', 'am', 'force-stop', APP_PACKAGE]));
   if (presentationChanged && presentation) {
-    restoreDevicePresentation(presentation);
+    await attempt(() => {
+      restoreDevicePresentation(presentation);
+      presentationChanged = false;
+    });
   }
+  for (const remotePath of createdDocuments) {
+    await attempt(() => {
+      adb(['shell', 'rm', '-f', remotePath]);
+      createdDocuments.delete(remotePath);
+    });
+  }
+  if (errors.length) throw new AggregateError(errors, 'Scenario cleanup failed');
+}
+
+after(async () => {
   if (driver) {
     try {
-      await capture(driver, '99-final-state');
-    } catch {
-      // Preserve the original test failure if the device disconnected.
+      await cleanupScenario();
+    } finally {
+      await driver.deleteSession();
     }
-    try {
-      await driver.releaseActions();
-    } catch {
-      // There may be no active input source to release after a failed scenario.
-    }
-    await driver.deleteSession();
   }
 });
 
-test(
-  'migrates a real version-two library without visibly reordering it',
+function scenario(name, options, run) {
+  test(name, { concurrency: false, ...options }, async (context) => {
+    context.after(async () => {
+      try {
+        await capture(driver, `${name.split(':')[0]}-final-state`);
+      } catch {
+        // A disconnected device must not prevent cleanup attempts.
+      }
+      await cleanupScenario();
+    });
+    // Retry any unfinished cleanup before resetting this group's isolated app.
+    await cleanupScenario();
+    await run();
+  });
+}
+
+async function importFreshLibrary() {
+  clearIsolatedApp();
+  const backupName = `voice-checklist-e2e-import-${runId}-${randomUUID()}.json`;
+  createdDocuments.add(`/sdcard/Download/${backupName}`);
+  pushFixture(fixturePath, backupName);
+  collapseSystemPanels();
+  await driver.activateApp(APP_PACKAGE);
+  await tapText(driver, 'Use on this device');
+  await waitForDisplayed(byId(driver, 'library-empty-state'));
+  await openSettings();
+  const importButton = await scrollToLabel(driver, 'Import backup');
+  await importButton.click();
+  await selectDocument(backupName);
+  await waitForDisplayed(byText(driver, 'Import complete'), 30_000);
+  await tapText(driver, 'OK');
+  await returnFromSettings();
+  assert.deepEqual(await collectRoutineTitles(driver), expectedTitles);
+  await expectTopTitle(firstTitle);
+}
+
+scenario(
+  'migration: preserves the real version-two library order',
   { timeout: 120_000 },
   async () => {
     const databasePath = resolve(
@@ -247,31 +292,11 @@ test(
   },
 );
 
-test(
-  'exercises the complete Your Routines journey through real Android UI and SQLite',
-  { timeout: 16 * 60_000 },
+scenario(
+  'layout-scroll: imports routines and verifies layout, hold arbitration, and ordinary scrolling',
+  { timeout: 8 * 60_000 },
   async () => {
-    clearIsolatedApp();
-    const backupName = `voice-checklist-e2e-import-${runId}.json`;
-    createdDocuments.add(`/sdcard/Download/${backupName}`);
-    pushFixture(fixturePath, backupName);
-
-    collapseSystemPanels();
-    await driver.activateApp(APP_PACKAGE);
-    await tapText(driver, 'Use on this device');
-    await waitForDisplayed(byId(driver, 'library-empty-state'));
-
-    await openSettings();
-    const importButton = await scrollToLabel(driver, 'Import backup');
-    await importButton.click();
-    await selectDocument(backupName);
-    await waitForDisplayed(byText(driver, 'Import complete'), 30_000);
-    await tapText(driver, 'OK');
-    await returnFromSettings();
-
-    console.info('Checking imported order, layout, and gesture arbitration');
-    assert.deepEqual(await collectRoutineTitles(driver), expectedTitles);
-    await expectTopTitle(firstTitle);
+    await importFreshLibrary();
 
     const firstCard = byLabel(driver, `Edit ${firstTitle}`);
     const secondCard = byLabel(driver, `Edit ${secondTitle}`);
@@ -344,7 +369,11 @@ test(
     assert.equal(await byLabel(driver, 'New checklist').isDisplayed(), true);
     assert.equal(await byLabel(driver, 'Settings').isDisplayed(), true);
     await capture(driver, '02-library-seventeen-routines');
-    console.info('Ordinary scrolling measured; checking lesson and reordering');
+  },
+);
+
+scenario('lesson: closes with Back and persists hint dismissal', { timeout: 4 * 60_000 }, async () => {
+    await importFreshLibrary();
 
     await scrollToTop(driver);
     const arrangeHint = await waitForDisplayed(
@@ -374,6 +403,11 @@ test(
       'dismissed teaching hint should remain dismissed after relaunch',
     );
 
+});
+
+scenario('reorder: persists offscreen drops and cancels interruption', { timeout: 6 * 60_000 }, async () => {
+    await importFreshLibrary();
+    await swipeHintAway(driver);
     resetFrameMetrics();
     await expectTopTitle(firstTitle);
     await dragCardToEdge(driver, byLabel(driver, `Edit ${firstTitle}`), 'down');
@@ -422,10 +456,11 @@ test(
     }
     await waitForDisplayed(byId(driver, 'library-safe-area'));
     assert.deepEqual(await collectRoutineTitles(driver), stableOrder);
+});
 
+async function editLastStep() {
     await expectTopTitle(firstTitle);
     await openEditor(firstTitle);
-    console.info('Checking editor keyboard, runs, create/delete, and Settings');
     const lastStep = await scrollToLabel(driver, 'Hold row 11 to reorder');
     await lastStep.click();
     const lastStepInput = await waitForDisplayed(byId(driver, 'item-text-10'));
@@ -442,7 +477,10 @@ test(
     await byId(driver, 'save').click();
     await waitForDisplayed(byId(driver, 'library-safe-area'));
     await expectTopTitle(firstTitle);
+}
 
+scenario('run: stops with confirmation and completes all steps', { timeout: 5 * 60_000 }, async () => {
+    await importFreshLibrary();
     grantRunPermissions();
     await tapLabel(driver, `Start ${firstTitle}`);
     await waitForDisplayed(byId(driver, 'run-header'), 45_000);
@@ -462,6 +500,10 @@ test(
     await waitForDisplayed(byId(driver, 'library-safe-area'));
     await expectTopTitle(firstTitle);
 
+});
+
+scenario('create-delete: prepends a routine and deletes it from its editor', { timeout: 4 * 60_000 }, async () => {
+    await importFreshLibrary();
     await tapLabel(driver, 'New checklist');
     await waitForDisplayed(byId(driver, 'editor-safe-area'));
     await byId(driver, 'title-input').setValue(temporaryTitle);
@@ -485,7 +527,11 @@ test(
     await waitForDisplayed(byId(driver, 'library-safe-area'));
     await expectTopTitle(firstTitle);
     assert.equal(await isDisplayed(byLabel(driver, `Edit ${temporaryTitle}`)), false);
+});
 
+scenario('editor-settings-backup: preserves a keyboard edit through settings and export', { timeout: 6 * 60_000 }, async () => {
+    await importFreshLibrary();
+    await editLastStep();
     await openSettings();
     await selectLabeledOption('Dark. Deep forest');
     await returnFromSettings();
@@ -548,6 +594,10 @@ test(
       'backup must retain routine/step order and edits, with checklist-only data');
     await returnFromSettings();
 
+});
+
+scenario('responsive: restores temporary font scale and viewport', { timeout: 4 * 60_000 }, async () => {
+    await importFreshLibrary();
     presentationChanged = true;
     setDevicePresentation({ fontScale: 1.3, size: '720x1600' });
     await driver.terminateApp(APP_PACKAGE);
@@ -562,5 +612,4 @@ test(
     await driver.terminateApp(APP_PACKAGE);
     await activateLibrary();
     await expectTopTitle(firstTitle);
-  },
-);
+});

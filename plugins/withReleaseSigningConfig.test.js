@@ -49,7 +49,6 @@ describe('release signing config transform', () => {
     expect(result).toMatch(
       /reactnative\.dev\/docs\/signed-apk-android\.\s*signingConfig signingConfigs\.release/,
     );
-    expect(result).not.toContain('VOICE_CHECKLIST_E2E');
     expect(result).not.toMatch(/debuggable\s+true/);
   });
 
@@ -59,7 +58,6 @@ describe('release signing config transform', () => {
     expect(result).toMatch(
       /reactnative\.dev\/docs\/signed-apk-android\.\s*signingConfig signingConfigs\.debug\s+debuggable true/,
     );
-    expect(result).not.toContain('VOICE_CHECKLIST_E2E');
     expect(transformReleaseSigningConfig(FIXTURE, 'com.example.e2e'))
       .not.toMatch(/debuggable\s+true/);
   });

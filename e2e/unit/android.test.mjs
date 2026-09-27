@@ -43,3 +43,29 @@ test('asks Android to index a pushed document for the system picker', () => {
     ],
   );
 });
+
+test('still restores the viewport and reports failure when restoring the font setting fails', (t) => {
+  const previousHome = process.env.ANDROID_HOME;
+  process.env.ANDROID_HOME = '/test-sdk';
+  t.after(() => {
+    if (previousHome === undefined) delete process.env.ANDROID_HOME;
+    else process.env.ANDROID_HOME = previousHome;
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  });
+  const failure = new Error('font restore rejected');
+  const commands = [];
+  t.mock.method(childProcess, 'execFileSync', (_file, args) => {
+    commands.push(args.slice(args.indexOf('shell')));
+    if (args.includes('font_scale')) throw failure;
+    return '';
+  });
+  syncBuiltinESMExports();
+
+  assert.throws(() => restoreDevicePresentation({ fontScale: '1', override: '1080x2400' }),
+    error => error instanceof AggregateError && error.errors.includes(failure));
+  assert.deepEqual(commands, [
+    ['shell', 'settings', 'put', 'system', 'font_scale', '1'],
+    ['shell', 'wm', 'size', '1080x2400'],
+  ]);
+});

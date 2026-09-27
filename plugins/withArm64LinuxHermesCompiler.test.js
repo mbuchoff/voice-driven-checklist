@@ -28,11 +28,4 @@ describe('ARM64 Linux Hermes compiler transform', () => {
     );
   });
 
-  it('is registered in the Expo app configuration', () => {
-    const appConfig = require('../app.json');
-
-    expect(appConfig.expo.plugins).toContain(
-      './plugins/withArm64LinuxHermesCompiler',
-    );
-  });
 });

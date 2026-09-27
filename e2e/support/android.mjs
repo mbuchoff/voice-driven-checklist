@@ -113,10 +113,17 @@ export function setDevicePresentation({ fontScale, size }) {
 }
 
 export function restoreDevicePresentation({ fontScale, override }) {
-  adb(fontScale === 'null'
-    ? ['shell', 'settings', 'delete', 'system', 'font_scale']
-    : ['shell', 'settings', 'put', 'system', 'font_scale', fontScale]);
-  adb(['shell', 'wm', 'size', override ?? 'reset']);
+  const commands = [
+    fontScale === 'null'
+      ? ['shell', 'settings', 'delete', 'system', 'font_scale']
+      : ['shell', 'settings', 'put', 'system', 'font_scale', fontScale],
+    ['shell', 'wm', 'size', override ?? 'reset'],
+  ];
+  const errors = [];
+  for (const command of commands) {
+    try { adb(command); } catch (error) { errors.push(error); }
+  }
+  if (errors.length) throw new AggregateError(errors, 'Device presentation restoration failed');
 }
 
 export function mediaScanArguments(remotePath) {

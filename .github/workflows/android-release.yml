@@ -33,6 +33,8 @@ jobs:
           packages: platform-tools
       - run: yes | sdkmanager "ndk;27.1.12297006" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0"
       - run: npm ci
+      # This workflow can also run directly; keep harness safety checks as a
+      # release gate even when no pull-request CI preceded this invocation.
       - run: npm ci --prefix e2e
       - run: npm run lint
       - run: npm run typecheck

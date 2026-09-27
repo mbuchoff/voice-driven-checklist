@@ -106,14 +106,13 @@ export async function verifyAdaptiveEdgeHold(driver, edge) {
     await waitForDisplayed(byId(driver, 'routine-drop-slot'));
     await expectStationary();
     await expectScroll(y + direction * 12 * density, y);
-    await move(y - direction * 12 * density);
+    move(y - direction * 12 * density);
     await expectStationary();
     await expectScroll(y - direction * 4 * density, y - direction * 12 * density);
-    // Cancel, rather than persisting a changed order, before the deep reorder suite.
-    touch('CANCEL', x, pointerY);
-    await byId(driver, 'routine-drop-slot').waitForDisplayed({ reverse: true });
   } finally {
+    // Cancel rather than persisting a changed order, including on assertion failure.
     touch('CANCEL', x, pointerY);
     await driver.releaseActions();
   }
+  await byId(driver, 'routine-drop-slot').waitForDisplayed({ reverse: true });
 }

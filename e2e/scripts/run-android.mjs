@@ -70,6 +70,9 @@ try {
     [
       '--test',
       '--test-concurrency=1',
+      ...(process.env.E2E_TEST_NAME_PATTERN
+        ? [`--test-name-pattern=${process.env.E2E_TEST_NAME_PATTERN}`]
+        : []),
       'tests/your-routines.test.mjs',
     ],
     {

@@ -39,6 +39,35 @@ describe('LibraryScreen', () => {
     expect(screen.queryByTestId('library-load-error')).toBeNull();
   });
 
+  it('hides stale routines after a failed refresh and restores the current library on retry', async () => {
+    const database = await setupDb();
+    const routine = await createChecklist(database, {
+      title: 'Saved routine', items: [{ text: 'Kept step' }],
+    });
+    await createChecklist(database, { title: 'Another routine', items: [] });
+    const callbacks = { onCreate: jest.fn(), onEdit: jest.fn(), onStart: jest.fn() };
+    const view = await renderWithDatabase(
+      <LibraryScreen {...callbacks} refreshKey={0} />,
+      { database },
+    );
+    await screen.findByTestId(`routine-card-${routine.id}`);
+    expect(screen.getByLabelText('Learn how to move routines')).toBeOnTheScreen();
+
+    jest.spyOn(database, 'getAllAsync').mockRejectedValueOnce(new Error('temporary read failure'));
+    view.rerender(<LibraryScreen {...callbacks} refreshKey={1} />);
+    await screen.findByTestId('library-load-error');
+    expect(screen.queryAllByTestId(/^routine-card-/)).toHaveLength(0);
+    expect(screen.queryByLabelText('Learn how to move routines')).toBeNull();
+    expect(screen.queryByTestId('library-empty-state')).toBeNull();
+
+    const added = await createChecklist(database, { title: 'Added while away', items: [] });
+    fireEvent.press(screen.getByTestId('library-load-retry'));
+    await screen.findByTestId(`routine-card-${added.id}`);
+    expect(screen.getByTestId(`routine-card-${routine.id}`)).toBeOnTheScreen();
+    expect(screen.getByLabelText('Learn how to move routines')).toBeOnTheScreen();
+    expect(screen.queryByTestId('library-load-error')).toBeNull();
+  });
+
   it('shows an empty state without rendering routine cards', async () => {
     const database = await setupDb();
     await renderWithDatabase(

@@ -26,6 +26,29 @@ npm run e2e:android:build
 npm run e2e:android
 ```
 
+Scenarios are independent top-level tests sharing one serial Appium session.
+Each group resets only the isolated package, selects the local account, and
+imports the fixture through the real picker (migration instead installs its v2
+fixture). Thus routine order, hint state, theme, and sound do not depend on an
+earlier group. The keyboard edit and its exported-content assertion stay in the
+same group. Each group captures its final state and attempts pointer cancellation,
+app force-stop, temporary presentation restoration, and document cleanup even
+after an assertion fails; unrelated groups remain eligible to run.
+
+Run a group independently using a Node test-name regular expression:
+
+```bash
+E2E_TEST_NAME_PATTERN='^editor-settings-backup:' npm run e2e:android
+```
+
+Group prefixes are `migration`, `layout-scroll`, `lesson`, `reorder`, `run`,
+`create-delete`, `editor-settings-backup`, and `responsive`. Leave the pattern
+unset to run all groups. Shared setup still requires a working device/Appium
+session; a connection loss or unsuccessful safety cleanup may prevent subsequent
+groups from establishing their preconditions. Repeated real-picker setup makes
+the complete suite longer, but late scenarios no longer require a successful
+gesture/performance prelude.
+
 Set `ANDROID_SERIAL` when more than one device is available. A remote ADB
 server can be selected with `ADB_SERVER_SOCKET`; those variables are inherited
 by both the harness and Appium.
