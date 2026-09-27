@@ -149,7 +149,17 @@ async function finishAndroidSaveDialog(fileName) {
       timeoutMsg: 'Android save dialog did not expose its Save action.',
     },
   );
-  await saveButton.click();
+  // The underlying Settings tree can be visible before the document activity's
+  // closing transition is ready to accept touches. Use platform idle detection
+  // here, as for the import picker, without slowing the gesture scenarios.
+  await driver.updateSettings({ waitForIdleTimeout: 500 });
+  try {
+    await saveButton.click();
+    await filenameInput.waitForDisplayed({ reverse: true, timeout: 20_000 });
+    await waitForDisplayed(byId(driver, 'settings-safe-area'));
+  } finally {
+    await driver.updateSettings({ waitForIdleTimeout: 0 });
+  }
 }
 
 async function openEditor(title) {
