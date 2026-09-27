@@ -58,6 +58,8 @@ port-only TCP sockets are also supported. Remote-host relays and Unix sockets
 are rejected before Appium starts; unlike ordinary ADB commands, this suite does
 not support the Mac-relay shortcut in `AGENTS.md` because its UiAutomator2 port
 forward must also be reachable locally.
+Unset `ANDROID_ADB_SERVER_ADDRESS` and `ANDROID_ADB_SERVER_PORT` before running;
+these alternate selectors are rejected so they cannot split the two clients.
 
 The build command regenerates the ignored Android project and creates a
 standalone arm64 release APK with its JavaScript bundle embedded. It signs only

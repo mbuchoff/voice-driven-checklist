@@ -4,7 +4,11 @@ import { remote } from 'webdriverio';
 
 import { APP_PACKAGE } from './android.mjs';
 
-export function androidAdbCapabilities(socket = process.env.ADB_SERVER_SOCKET) {
+export function androidAdbCapabilities(environment = process.env) {
+  if (environment.ANDROID_ADB_SERVER_ADDRESS !== undefined || environment.ANDROID_ADB_SERVER_PORT !== undefined) {
+    throw new Error('Unset ANDROID_ADB_SERVER_ADDRESS and ANDROID_ADB_SERVER_PORT; select the local server using ADB_SERVER_SOCKET instead.');
+  }
+  const socket = environment.ADB_SERVER_SOCKET;
   if (!socket) return {};
   // Appium supplies -P, which makes adb ignore ADB_SERVER_SOCKET. Mirror the
   // local endpoint explicitly; remote-server forwarding is not supported here.
@@ -18,9 +22,9 @@ export function androidAdbCapabilities(socket = process.env.ADB_SERVER_SOCKET) {
   };
 }
 
-export function androidSessionCapabilities(apk, adbSocket = process.env.ADB_SERVER_SOCKET) {
+export function androidSessionCapabilities(apk, environment = process.env) {
   const capabilities = {
-    ...androidAdbCapabilities(adbSocket),
+    ...androidAdbCapabilities(environment),
     platformName: 'Android',
     'appium:automationName': 'UiAutomator2',
     'appium:app': resolve(apk),
@@ -33,8 +37,8 @@ export function androidSessionCapabilities(apk, adbSocket = process.env.ADB_SERV
     'appium:disableIdLocatorAutocompletion': true,
     'appium:appPackage': APP_PACKAGE,
   };
-  if (process.env.ANDROID_SERIAL) {
-    capabilities['appium:udid'] = process.env.ANDROID_SERIAL;
+  if (environment.ANDROID_SERIAL) {
+    capabilities['appium:udid'] = environment.ANDROID_SERIAL;
   }
 
   return capabilities;
