@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
 import { Icon, type IconName } from '@/src/components/Icon';
+import { formatCountdownClock, formatTimerWords } from '@/src/features/routines/timers';
 import { ScreenBackground } from '@/src/components/ScreenBackground';
 import type { Palette } from '@/src/theme/palette';
 
@@ -43,7 +44,10 @@ export function ActiveRunView({
   onReleaseStopHold,
   onRequestStop,
   onAction,
+  countdown = null,
 }: {
+  /** The current step's countdown, for a timed step. */
+  countdown?: { remainingSeconds: number; totalSeconds: number } | null;
   state: RoutineRunState;
   theme: Palette;
   androidApi: number;
@@ -135,6 +139,7 @@ export function ActiveRunView({
         centerBorderColor={progressPalette.centerBorder}
         labelOpacity={progressPalette.labelOpacity}
         shadow={progressPalette.shadow}
+        timeUsed={countdown ? 1 - countdown.remainingSeconds / countdown.totalSeconds : null}
       />
 
       <View testID="run-items-stage" style={{ flex: 1, overflow: 'visible' }}>
@@ -158,6 +163,9 @@ export function ActiveRunView({
               text={item.text}
               androidApi={androidApi}
               textColor={theme.runText}
+              countdownSeconds={
+                index === state.currentStepIndex && countdown ? countdown.remainingSeconds : null
+              }
             />
           ))}
         </Animated.View>
@@ -287,12 +295,15 @@ const RunItem = memo(function RunItem({
   text,
   androidApi,
   textColor,
+  countdownSeconds = null,
 }: {
   index: number;
   status: RunItemStatus;
   text: string;
   androidApi: number;
   textColor: string;
+  /** Time left on this step's countdown, shown under its text. */
+  countdownSeconds?: number | null;
 }) {
   const selected = status === 'current';
   const focusProgress = useSharedValue(selected ? 1 : 0);
@@ -361,6 +372,23 @@ const RunItem = memo(function RunItem({
       >
         {text}
       </Text>
+      {countdownSeconds != null ? (
+        <Text
+          testID="run-countdown"
+          accessibilityLabel={`${formatTimerWords(countdownSeconds)} left`}
+          style={{
+            marginTop: 8,
+            color: textColor,
+            opacity: 0.72,
+            fontSize: 24,
+            lineHeight: 28,
+            fontWeight: '700',
+            fontVariant: ['tabular-nums'],
+          }}
+        >
+          {formatCountdownClock(countdownSeconds)}
+        </Text>
+      ) : null}
     </Animated.View>
   );
 });
@@ -376,7 +404,10 @@ function ProgressOrbit({
   centerBorderColor,
   labelOpacity,
   shadow,
+  timeUsed = null,
 }: {
+  /** For a timed step, the share of its countdown used; fills the ring. */
+  timeUsed?: number | null;
   current: number;
   total: number;
   animatedCurrentIndex: SharedValue<number>;
@@ -392,10 +423,17 @@ function ProgressOrbit({
   const strokeWidth = 9;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
+  const countdownProgress = useSharedValue(timeUsed ?? 0);
+  const counting = timeUsed != null;
+  useEffect(() => {
+    if (timeUsed == null) return;
+    countdownProgress.value = withTiming(timeUsed, { duration: 250 });
+  }, [countdownProgress, timeUsed]);
   const animatedProgressProps = useAnimatedProps(() => ({
-    strokeDashoffset:
-      circumference *
-      (1 - (animatedCurrentIndex.value + 1) / Math.max(total, 1)),
+    strokeDashoffset: counting
+      ? circumference * (1 - countdownProgress.value)
+      : circumference *
+        (1 - (animatedCurrentIndex.value + 1) / Math.max(total, 1)),
   }));
   return (
     <View

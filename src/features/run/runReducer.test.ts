@@ -297,4 +297,25 @@ describe('runReducer DISCARD_RUN', () => {
     expect(next.currentStepIndex).toBe(0);
     expect(next.latestRecognizedPhrase).toBe('');
   });
+
+  describe('arrivals', () => {
+    it('counts arriving at a step by next, previous or restart, but not a repeat', () => {
+      let state = initialRunState(snapshot, { voiceControlAvailable: true, spokenPlaybackAvailable: true });
+      const first = state.arrival;
+
+      state = runReducer(state, { type: 'REPEAT' });
+      expect(state.arrival).toBe(first);
+
+      state = runReducer(state, { type: 'NEXT' });
+      expect(state.arrival).toBe(first + 1);
+      state = runReducer(state, { type: 'PREVIOUS' });
+      expect(state.arrival).toBe(first + 2);
+
+      state = runReducer(runReducer(runReducer(state, { type: 'NEXT' }), { type: 'NEXT' }), { type: 'NEXT' });
+      expect(state.status).toBe('completed');
+      const finished = state.arrival;
+      state = runReducer(state, { type: 'RESTART' });
+      expect(state.arrival).toBe(finished + 1);
+    });
+  });
 });

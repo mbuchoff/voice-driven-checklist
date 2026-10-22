@@ -19,12 +19,15 @@ import type {
 } from '@/src/services/speech/adapters';
 import { useTheme } from '@/src/theme/useTheme';
 
+import { formatTimerWords } from '@/src/features/routines/timers';
+
 import { parseCommand, parseInterimCommand } from './commandParser';
 import { initialRunState, runReducer } from './runReducer';
 import { CompletionView } from './CompletionView';
 import { ActiveRunView } from './RunScreenView';
 import { RUN_TRANSITION_CONFIG } from './runPresentation';
 import type { RoutineRunSnapshot } from './types';
+import { useStepCountdown } from './useStepCountdown';
 
 const LOCALE = 'en-US';
 
@@ -348,6 +351,35 @@ export function RunScreen({
   const statusRef = useRef(state.status);
   statusRef.current = state.status;
 
+  // A timed step counts down from the moment the run reaches it; at zero the
+  // reading is cut off and the run moves on as if you'd said "next".
+  const currentStep = state.snapshot?.steps[state.currentStepIndex];
+  const arrivalRef = useRef(state.arrival);
+  arrivalRef.current = state.arrival;
+  const runActionRef = useRef(runAction);
+  runActionRef.current = runAction;
+  const countdown = useStepCountdown({
+    timerSeconds: currentStep?.timerSeconds ?? null,
+    arrival: state.arrival,
+    active: state.status === 'speaking' || state.status === 'listening' || state.status === 'manual',
+    keepsRunningInBackground: voiceRunActive,
+    onExpire: (arrival) => {
+      const status = statusRef.current;
+      if (arrival !== arrivalRef.current) return;
+      if (status === 'speaking' || status === 'listening' || status === 'manual') {
+        runActionRef.current('next');
+      }
+    },
+  });
+
+  useEffect(() => {
+    const seconds = currentStep?.timerSeconds;
+    if (!seconds || !talkBackEnabled) return;
+    AccessibilityInfo.announceForAccessibility(`Timed step, ${formatTimerWords(seconds)}`);
+    // Announced once per arrival at a timed step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.arrival]);
+
   useEffect(() => {
     setVoiceServiceReady(!onVoiceRunStart);
     if (!voiceRunActive) return;
@@ -461,6 +493,11 @@ export function RunScreen({
       onReleaseStopHold={releaseStopHold}
       onRequestStop={onRequestStop}
       onAction={runAction}
+      countdown={
+        countdown.remainingSeconds != null && countdown.totalSeconds
+          ? { remainingSeconds: countdown.remainingSeconds, totalSeconds: countdown.totalSeconds }
+          : null
+      }
     />
   );
 }

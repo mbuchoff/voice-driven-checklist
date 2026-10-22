@@ -5,7 +5,10 @@ import type { SoundPreference } from '@/src/features/settings/preferences';
 import { CUE_ACTIONS, type CueAction } from './cues';
 export { CUE_ACTIONS, SOUND_OPTIONS, type CueAction } from './cues';
 
-const CUE_START_TIMEOUT_MS = 300;
+// How long a cue may take to start before speech goes ahead without it.
+// After the screen has been off, the audio output can take several hundred
+// milliseconds to wake, so this must outlast that or the first cue is lost.
+const CUE_START_TIMEOUT_MS = 1500;
 
 const SOURCES: Record<Exclude<SoundPreference, 'quiet'>, Record<CueAction, number>> = {
   chime: {
@@ -70,9 +73,11 @@ export class CueSoundPlayer {
         request !== this.playRequest ||
         this.players.get(action) !== player
       ) {
+        console.info(`[cue] ${action} skipped (${ready ? 'superseded' : 'did not start'})`);
         return false;
       }
       player.play();
+      console.info(`[cue] ${action} played`);
       return true;
     } catch {
       // A cue must never prevent navigation, speech, or completion.

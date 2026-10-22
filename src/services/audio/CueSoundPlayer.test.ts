@@ -120,10 +120,28 @@ describe('CueSoundPlayer', () => {
     cues.prepare('chime');
 
     const started = cues.play('next');
-    await jest.advanceTimersByTimeAsync(1000);
+    await jest.advanceTimersByTimeAsync(2000);
 
     await expect(started).resolves.toBe(false);
     expect(stalledPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it('still plays a cue whose audio output takes a while to wake, as after the screen was off', async () => {
+    jest.useFakeTimers();
+    const slowPlayer = audioPlayer();
+    slowPlayer.seekTo.mockImplementation(
+      () => new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 700)),
+    );
+    const players = [slowPlayer, audioPlayer(), audioPlayer(), audioPlayer()];
+    mockedCreateAudioPlayer.mockImplementation(() => players.shift() as never);
+    const cues = new CueSoundPlayer();
+    cues.prepare('chime');
+
+    const started = cues.play('next');
+    await jest.advanceTimersByTimeAsync(800);
+
+    await expect(started).resolves.toBe(true);
+    expect(slowPlayer.play).toHaveBeenCalledTimes(1);
   });
 
   it('does not start a stale cue after its player family is released', async () => {

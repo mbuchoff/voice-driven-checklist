@@ -29,6 +29,7 @@ export function initialRunState(
     spokenPlaybackAvailable: options.spokenPlaybackAvailable,
     latestRecognizedPhrase: '',
     playbackTick: 1,
+    arrival: 1,
   };
   return { ...base, status: statusForActiveItem(base) };
 }
@@ -46,6 +47,7 @@ export function runReducer(state: RoutineRunState, action: RunAction): RoutineRu
         currentStepIndex: state.currentStepIndex + 1,
         latestRecognizedPhrase: '',
         playbackTick: state.playbackTick + 1,
+        arrival: state.arrival + 1,
         status: statusForActiveItem(state),
       };
     }
@@ -67,6 +69,7 @@ export function runReducer(state: RoutineRunState, action: RunAction): RoutineRu
         currentStepIndex: Math.max(0, state.currentStepIndex - 1),
         latestRecognizedPhrase: '',
         playbackTick: state.playbackTick + 1,
+        arrival: state.arrival + 1,
         status: statusForActiveItem(state),
       };
     }
@@ -78,6 +81,7 @@ export function runReducer(state: RoutineRunState, action: RunAction): RoutineRu
         currentStepIndex: 0,
         latestRecognizedPhrase: '',
         playbackTick: state.playbackTick + 1,
+        arrival: state.arrival + 1,
         status: statusForActiveItem(state),
       };
     }
@@ -120,6 +124,7 @@ export function runReducer(state: RoutineRunState, action: RunAction): RoutineRu
         spokenPlaybackAvailable: state.spokenPlaybackAvailable,
         latestRecognizedPhrase: '',
         playbackTick: 0,
+        arrival: 0,
       };
     }
   }
