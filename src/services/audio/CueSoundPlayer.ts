@@ -77,7 +77,7 @@ export class CueSoundPlayer {
         return false;
       }
       player.play();
-      console.info(`[cue] ${action} played`);
+      console.info(`[cue] ${action} play requested`);
       return true;
     } catch {
       // A cue must never prevent navigation, speech, or completion.
