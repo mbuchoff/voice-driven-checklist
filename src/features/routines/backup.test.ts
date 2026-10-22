@@ -11,9 +11,13 @@ describe('routine backup', () => {
     const inputs: RoutineInput[] = [
       {
         title: 'Morning routine',
-        steps: [{ text: 'Wake up' }, { text: 'Brush teeth' }],
+        colorKey: 'teal-1',
+        steps: [
+          { text: 'Wake up', timerSeconds: null },
+          { text: 'Stretch', timerSeconds: 90 },
+        ],
       },
-      { title: 'Empty draft', steps: [] },
+      { title: 'Empty draft', colorKey: 'slate', steps: [] },
     ];
 
     expect(parseBackup(serializeBackup(inputs))).toEqual(inputs);
@@ -104,10 +108,67 @@ describe('routine backup', () => {
       checklists: [{ title: '  Trip  ', items: [{ text: '  Pack  ' }] }],
     });
 
-    expect(parseBackup(json)).toEqual([{ title: 'Trip', steps: [{ text: 'Pack' }] }]);
+    expect(parseBackup(json)).toEqual([
+      { title: 'Trip', steps: [{ text: 'Pack', timerSeconds: null }] },
+    ]);
   });
 
   it('round-trips an empty library', () => {
     expect(parseBackup(serializeBackup([]))).toEqual([]);
+  });
+
+  it('writes step timers and routine colors, leaving out timers a step does not have', () => {
+    const parsed = JSON.parse(serializeBackup([
+      {
+        title: 'Stretch',
+        colorKey: 'lime-1',
+        steps: [{ text: 'Plank', timerSeconds: 45 }, { text: 'Rest', timerSeconds: null }],
+      },
+    ]));
+
+    expect(parsed.version).toBe(1);
+    expect(parsed.checklists).toEqual([
+      {
+        title: 'Stretch',
+        color: 'lime-1',
+        items: [{ text: 'Plank', timer: 45 }, { text: 'Rest' }],
+      },
+    ]);
+  });
+
+  it('reads a backup made before timers and colors as untimed steps without a color', () => {
+    const json = JSON.stringify({
+      format: BACKUP_FORMAT,
+      version: BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      checklists: [{ title: 'Old', items: [{ text: 'Step' }] }],
+    });
+
+    expect(parseBackup(json)).toEqual([
+      { title: 'Old', steps: [{ text: 'Step', timerSeconds: null }] },
+    ]);
+  });
+
+  it('rejects a backup whose timers are not whole seconds from one second to an hour', () => {
+    for (const timer of [0, 3601, 2.5, '30']) {
+      const json = JSON.stringify({
+        format: BACKUP_FORMAT,
+        version: BACKUP_VERSION,
+        exportedAt: new Date().toISOString(),
+        checklists: [{ title: 'Bad', items: [{ text: 'Step', timer }] }],
+      });
+      expect(() => parseBackup(json)).toThrow(/timer/i);
+    }
+  });
+
+  it('leaves out a color it does not recognize, so the routine gets a new one', () => {
+    const json = JSON.stringify({
+      format: BACKUP_FORMAT,
+      version: BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      checklists: [{ title: 'Future', color: 'ultraviolet', items: [] }],
+    });
+
+    expect(parseBackup(json)).toEqual([{ title: 'Future', steps: [] }]);
   });
 });

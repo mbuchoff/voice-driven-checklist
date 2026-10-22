@@ -1,13 +1,16 @@
+import { isRoutineColorKey } from './routineColors';
 import type { RoutineInput } from './types';
-import { validateStepText, validateRoutineTitle } from './validation';
+import { validateRoutineTitle, validateStepText, validateStepTimer } from './validation';
 
 export const BACKUP_FORMAT = 'voice-driven-checklist-backup';
 export const BACKUP_VERSION = 1;
 
 // The file keeps its original field names (`checklists`, `items`) so backups
 // stay readable by every app version.
-type BackupStep = { text: string };
-type BackupRoutine = { title: string; items: BackupStep[] };
+// `timer` (seconds) and `color` are optional, so older app versions, which
+// ignore fields they don't know, still import these files.
+type BackupStep = { text: string; timer?: number };
+type BackupRoutine = { title: string; color?: string; items: BackupStep[] };
 
 type BackupEnvelope = {
   format: typeof BACKUP_FORMAT;
@@ -28,7 +31,7 @@ function readRoutineInput(value: unknown): RoutineInput {
   const title = validateRoutineTitle(value.title);
   if (!title.ok) throw new Error(title.error);
 
-  return {
+  const routine: RoutineInput = {
     title: title.value,
     steps: value.items.map((item) => {
       if (!isRecord(item) || typeof item.text !== 'string') {
@@ -36,9 +39,14 @@ function readRoutineInput(value: unknown): RoutineInput {
       }
       const text = validateStepText(item.text);
       if (!text.ok) throw new Error(text.error);
-      return { text: text.value };
+      const timer = validateStepTimer(item.timer);
+      if (!timer.ok) throw new Error(timer.error);
+      return { text: text.value, timerSeconds: timer.value };
     }),
   };
+  // A color this version doesn't know gets a new one when imported.
+  if (isRoutineColorKey(value.color)) routine.colorKey = value.color;
+  return routine;
 }
 
 export function serializeBackup(inputs: RoutineInput[]): string {
@@ -46,9 +54,12 @@ export function serializeBackup(inputs: RoutineInput[]): string {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
-    checklists: inputs.map(({ title, steps }) => ({
+    checklists: inputs.map(({ title, colorKey, steps }) => ({
       title,
-      items: steps.map(({ text }) => ({ text })),
+      ...(colorKey ? { color: colorKey } : {}),
+      items: steps.map(({ text, timerSeconds }) => (
+        timerSeconds ? { text, timer: timerSeconds } : { text }
+      )),
     })),
   };
   return JSON.stringify(envelope, null, 2);

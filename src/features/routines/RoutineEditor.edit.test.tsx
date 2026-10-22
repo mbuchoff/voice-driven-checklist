@@ -79,12 +79,17 @@ describe('RoutineEditor', () => {
       });
       const failingDatabase: Database = {
         ...database,
-        async runAsync(sql, ...params) {
-          if (sql.includes('DELETE FROM checklists')) {
-            throw new Error('simulated delete failure');
-          }
-          return database.runAsync(sql, ...params);
-        },
+        withTransactionAsync: (task) =>
+          database.withTransactionAsync((transaction) =>
+            task({
+              ...transaction,
+              async runAsync(sql, ...params) {
+                if (sql.includes('DELETE FROM routines')) {
+                  throw new Error('simulated delete failure');
+                }
+                return transaction.runAsync(sql, ...params);
+              },
+            })),
       };
       const onDeleted = jest.fn();
       await renderWithDatabase(

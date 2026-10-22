@@ -232,7 +232,7 @@ function RoutinePosition({
       <RoutineHoldFeedback
         itemId={item.id}
         layout={layout}
-        color={getRoutineCardColors(item.id, theme.mode).ink}
+        color={getRoutineCardColors(item.colorKey, theme.mode).ink}
         holdOwner={motion.holdOwner}
         progress={motion.holdProgress}
       />

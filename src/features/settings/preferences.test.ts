@@ -12,6 +12,7 @@ describe('device preferences', () => {
       theme: 'system',
       sound: 'chime',
       routineReorderHintDismissed: false,
+      recentTimerSeconds: [],
     });
   });
 
@@ -27,6 +28,7 @@ describe('device preferences', () => {
       theme: 'dark',
       sound: 'wood',
       routineReorderHintDismissed: false,
+      recentTimerSeconds: [],
     });
   });
 
@@ -43,6 +45,7 @@ describe('device preferences', () => {
       theme: 'dark',
       sound: 'ping',
       routineReorderHintDismissed: false,
+      recentTimerSeconds: [],
     });
   });
 
@@ -59,6 +62,30 @@ describe('device preferences', () => {
       theme: 'dark',
       sound: 'wood',
       routineReorderHintDismissed: true,
+      recentTimerSeconds: [],
+    });
+  });
+
+  it('remembers the timer lengths last used on this device across store instances', async () => {
+    const database = createTestDatabase();
+    await runMigrations(database);
+
+    await new SqliteDevicePreferenceStore(database).saveRecentTimerSeconds([90, 30, 300]);
+
+    await expect(new SqliteDevicePreferenceStore(database).load()).resolves.toMatchObject({
+      recentTimerSeconds: [90, 30, 300],
+    });
+  });
+
+  it('treats a damaged list of remembered timer lengths as empty', async () => {
+    const database = createTestDatabase();
+    await runMigrations(database);
+    await database.runAsync(
+      `UPDATE device_preferences SET recent_timer_seconds = 'not json' WHERE id = 1`,
+    );
+
+    await expect(new SqliteDevicePreferenceStore(database).load()).resolves.toMatchObject({
+      recentTimerSeconds: [],
     });
   });
 });

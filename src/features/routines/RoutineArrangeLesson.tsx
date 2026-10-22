@@ -31,7 +31,7 @@ export function RoutineArrangeLesson({
     x: destination.x - source.x,
     y: destination.y - source.y,
   };
-  const { ink } = getRoutineCardColors(item.id, theme.mode);
+  const { ink } = getRoutineCardColors(item.colorKey, theme.mode);
 
   useEffect(() => {
     progress.value = 0;

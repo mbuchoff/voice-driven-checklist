@@ -14,6 +14,7 @@ import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
 import { LibraryScreen } from './LibraryScreen';
 import { createRoutine } from './repository';
+import { routineColorShades } from './routineColors';
 
 async function setupDb(): Promise<Database> {
   const db = createTestDatabase();
@@ -22,6 +23,27 @@ async function setupDb(): Promise<Database> {
 }
 
 describe('LibraryScreen', () => {
+  it('paints each card in its routine’s stored color', async () => {
+    const database = await setupDb();
+    const slate = await createRoutine(database, {
+      title: 'Slate routine', colorKey: 'slate', steps: [{ text: 'Step' }],
+    });
+    const amber = await createRoutine(database, {
+      title: 'Amber routine', colorKey: 'amber-2', steps: [{ text: 'Step' }],
+    });
+    await renderWithDatabase(
+      <LibraryScreen onCreate={jest.fn()} onEdit={jest.fn()} onStart={jest.fn()} />,
+      { database },
+    );
+
+    for (const [routine, key] of [[slate, 'slate'], [amber, 'amber-2']] as const) {
+      const card = await screen.findByTestId(`routine-card-${routine.id}`);
+      expect(StyleSheet.flatten(card.props.style).backgroundColor).toBe(
+        routineColorShades(key, 'light').fill,
+      );
+    }
+  });
+
   it('shows a recoverable read error instead of claiming the saved library is empty', async () => {
     const database = await setupDb();
     const routine = await createRoutine(database, {

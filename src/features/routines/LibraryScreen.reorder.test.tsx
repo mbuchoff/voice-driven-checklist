@@ -547,7 +547,7 @@ describe('LibraryScreen routine reordering', () => {
     const database = await setupDb();
     const { first, middle, last } = await seedThree(database);
     await database.execAsync(`
-      CREATE TRIGGER reject_reorder BEFORE UPDATE OF library_position ON checklists
+      CREATE TRIGGER reject_reorder BEFORE UPDATE OF library_position ON routines
       BEGIN SELECT RAISE(ABORT, 'simulated reorder failure'); END;
     `);
     await renderLibrary(database);

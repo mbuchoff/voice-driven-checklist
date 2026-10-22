@@ -13,40 +13,18 @@ import {
 import { Icon } from '@/src/components/Icon';
 import type { Palette } from '@/src/theme/palette';
 
+import { routineColorShades } from './routineColors';
 import type { RoutineGridMetrics } from './routineGrid';
 import type { LibraryRoutine } from './types';
 import { useRoutineSelectionFeedback } from './useRoutineSelectionFeedback';
 import type { RoutinePressGuard } from './useRoutinePressGuard';
 
-const cardPalette = {
-  light: {
-    fills: ['#dcebe3', '#f7dfd5', '#dceaf0', '#e9e1f0', '#e8ebd7'],
-    inks: ['#2c5a47', '#a04a30', '#325f73', '#63508a', '#5c6636'],
-  },
-  dark: {
-    fills: ['#223c33', '#392b27', '#20343d', '#332d40', '#29372a'],
-    inks: ['#9dceb7', '#f1a48c', '#98c7d8', '#c3add8', '#c3ce99'],
-  },
-} as const;
-
-function paletteIndex(id: string, length: number) {
-  let hash = 0;
-  for (let index = 0; index < id.length; index += 1) {
-    hash = (hash * 31 + id.charCodeAt(index)) % 100000;
-  }
-  return hash % length;
-}
-
 export function getRoutineCardColors(
-  id: string,
+  colorKey: string,
   mode: Palette['mode'],
 ) {
-  const palette = cardPalette[mode];
-  const colorIndex = paletteIndex(id, palette.inks.length);
-  return {
-    fill: palette.fills[colorIndex],
-    ink: palette.inks[colorIndex],
-  };
+  const { fill, ink } = routineColorShades(colorKey, mode);
+  return { fill, ink };
 }
 
 function stepCountLabel(count: number) {
@@ -76,7 +54,7 @@ export function RoutineCard({
   accessibilityActions?: ComponentProps<typeof Pressable>['accessibilityActions'];
   onAccessibilityAction?: ComponentProps<typeof Pressable>['onAccessibilityAction'];
 }) {
-  const { ink, fill } = getRoutineCardColors(item.id, theme.mode);
+  const { ink, fill } = getRoutineCardColors(item.colorKey, theme.mode);
   const empty = item.steps.length === 0;
   const cardSelection = useRoutineSelectionFeedback('card', onEdit);
   const playSelection = useRoutineSelectionFeedback('control', onStart);

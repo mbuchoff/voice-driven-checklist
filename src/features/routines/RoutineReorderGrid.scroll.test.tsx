@@ -36,7 +36,7 @@ async function mountDrag(
   const props = {
     orderRevision: 0,
     items: Array.from({ length: 17 }, (_, index) => ({
-      id: `${index}`, title: `Routine ${index}`, steps: [{ text: 'Step' }],
+      id: `${index}`, title: `Routine ${index}`, colorKey: 'green-2', steps: [{ text: 'Step' }],
     })),
     layout: getRoutineGridMetrics(361, 17), theme: light,
     scrollRef: createRef<ScrollView>() as Reanimated.AnimatedRef<ScrollView>,

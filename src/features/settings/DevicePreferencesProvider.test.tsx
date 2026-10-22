@@ -19,6 +19,7 @@ function preferenceStore(
     saveTheme: async () => undefined,
     saveSound: async () => undefined,
     dismissRoutineReorderHint: async () => undefined,
+    saveRecentTimerSeconds: async () => undefined,
   };
 }
 
@@ -76,6 +77,7 @@ describe('DevicePreferencesProvider', () => {
       theme: 'dark',
       sound: 'wood',
       routineReorderHintDismissed: false,
+      recentTimerSeconds: [],
     });
     await waitFor(() =>
       expect(screen.getByText('dark:wood:false')).toBeOnTheScreen(),
@@ -89,12 +91,14 @@ describe('DevicePreferencesProvider', () => {
         theme: 'system',
         sound: 'chime',
         routineReorderHintDismissed: persisted,
+        recentTimerSeconds: [],
       }),
       saveTheme: async () => undefined,
       saveSound: async () => undefined,
       dismissRoutineReorderHint: async () => {
         persisted = true;
       },
+      saveRecentTimerSeconds: async () => undefined,
     };
     render(
       <DevicePreferencesProvider store={store}>

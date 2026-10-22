@@ -6,8 +6,10 @@ import {
   importRoutines,
   listRoutines,
   reorderRoutines,
+  restoreRoutine,
   updateRoutine,
 } from './repository';
+import { isRoutineColorKey } from './routineColors';
 import { runMigrations } from '@/src/db/migrations';
 import type { Database } from '@/src/db/database';
 import { createTestDatabase } from '@/src/test/createTestDatabase';
@@ -107,7 +109,7 @@ describe('routine repository', () => {
     it('orders routines by their explicit library positions', async () => {
       const db = await setup();
       await db.runAsync(
-        `INSERT INTO checklists
+        `INSERT INTO routines
            (id, title, created_at, updated_at, library_position)
          VALUES (?, ?, ?, ?, ?)`,
         'id-old',
@@ -117,7 +119,7 @@ describe('routine repository', () => {
         2,
       );
       await db.runAsync(
-        `INSERT INTO checklists
+        `INSERT INTO routines
            (id, title, created_at, updated_at, library_position)
          VALUES (?, ?, ?, ?, ?)`,
         'id-mid',
@@ -127,7 +129,7 @@ describe('routine repository', () => {
         1,
       );
       await db.runAsync(
-        `INSERT INTO checklists
+        `INSERT INTO routines
            (id, title, created_at, updated_at, library_position)
          VALUES (?, ?, ?, ?, ?)`,
         'id-new',
@@ -145,7 +147,7 @@ describe('routine repository', () => {
       const db = await setup();
       const ts = 1_700_000_000_000;
       await db.runAsync(
-        `INSERT INTO checklists
+        `INSERT INTO routines
            (id, title, created_at, updated_at, library_position)
          VALUES (?, ?, ?, ?, ?)`,
         'id-c',
@@ -155,7 +157,7 @@ describe('routine repository', () => {
         0,
       );
       await db.runAsync(
-        `INSERT INTO checklists
+        `INSERT INTO routines
            (id, title, created_at, updated_at, library_position)
          VALUES (?, ?, ?, ?, ?)`,
         'id-a',
@@ -165,7 +167,7 @@ describe('routine repository', () => {
         1,
       );
       await db.runAsync(
-        `INSERT INTO checklists
+        `INSERT INTO routines
            (id, title, created_at, updated_at, library_position)
          VALUES (?, ?, ?, ?, ?)`,
         'id-b',
@@ -241,16 +243,16 @@ describe('routine repository', () => {
       const db = await setup();
       const alpha = await createRoutine(db, { title: 'Alpha', steps: [{ text: 'Keep alpha' }] });
       const bravo = await createRoutine(db, { title: 'Bravo', steps: [{ text: 'Keep bravo' }] });
-      const before = await db.getAllAsync('SELECT * FROM checklists ORDER BY id');
+      const before = await db.getAllAsync('SELECT * FROM routines ORDER BY id');
       await db.execAsync(`CREATE TRIGGER fail_second_position
-        BEFORE UPDATE OF library_position ON checklists
+        BEFORE UPDATE OF library_position ON routines
         WHEN NEW.library_position = 1
         BEGIN SELECT RAISE(ABORT, 'simulated disk write failure'); END;`);
 
       await expect(reorderRoutines(db, [alpha.id, bravo.id]))
         .rejects.toMatchObject({ message: 'simulated disk write failure' });
 
-      expect(await db.getAllAsync('SELECT * FROM checklists ORDER BY id')).toEqual(before);
+      expect(await db.getAllAsync('SELECT * FROM routines ORDER BY id')).toEqual(before);
       expect((await exportAllRoutines(db)).map(({ title }) => title)).toEqual(['Bravo', 'Alpha']);
     });
 
@@ -258,9 +260,9 @@ describe('routine repository', () => {
       const db = await setup();
       const alpha = await createRoutine(db, { title: 'Alpha', steps: [] });
       const bravo = await createRoutine(db, { title: 'Bravo', steps: [] });
-      await db.runAsync('UPDATE checklists SET library_position = 500 WHERE id = ?', alpha.id);
+      await db.runAsync('UPDATE routines SET library_position = 500 WHERE id = ?', alpha.id);
       await reorderRoutines(db, [alpha.id, bravo.id]);
-      expect(await db.getAllAsync('SELECT id, library_position FROM checklists ORDER BY library_position'))
+      expect(await db.getAllAsync('SELECT id, library_position FROM routines ORDER BY library_position'))
         .toEqual([{ id: alpha.id, library_position: 0 }, { id: bravo.id, library_position: 1 }]);
     });
 
@@ -304,7 +306,7 @@ describe('routine repository', () => {
       const db = await setup();
       const ts = 1_700_000_000_000;
       await db.runAsync(
-        `INSERT INTO checklists
+        `INSERT INTO routines
            (id, title, created_at, updated_at, library_position)
          VALUES (?, ?, ?, ?, ?)`,
         'id-b',
@@ -314,7 +316,7 @@ describe('routine repository', () => {
         1,
       );
       await db.runAsync(
-        `INSERT INTO checklists
+        `INSERT INTO routines
            (id, title, created_at, updated_at, library_position)
          VALUES (?, ?, ?, ?, ?)`,
         'id-a',
@@ -324,7 +326,7 @@ describe('routine repository', () => {
         0,
       );
       await db.runAsync(
-        `INSERT INTO checklists
+        `INSERT INTO routines
            (id, title, created_at, updated_at, library_position)
          VALUES (?, ?, ?, ?, ?)`,
         'id-c',
@@ -334,14 +336,14 @@ describe('routine repository', () => {
         2,
       );
       await db.runAsync(
-        'INSERT INTO checklist_items (id, checklist_id, position, text) VALUES (?, ?, ?, ?)',
+        'INSERT INTO steps (id, routine_id, position, text) VALUES (?, ?, ?, ?)',
         'item-b-1',
         'id-b',
         1,
         'second',
       );
       await db.runAsync(
-        'INSERT INTO checklist_items (id, checklist_id, position, text) VALUES (?, ?, ?, ?)',
+        'INSERT INTO steps (id, routine_id, position, text) VALUES (?, ?, ?, ?)',
         'item-b-0',
         'id-b',
         0,
@@ -349,9 +351,13 @@ describe('routine repository', () => {
       );
 
       await expect(exportAllRoutines(db)).resolves.toEqual([
-        { title: 'Alpha', steps: [] },
-        { title: 'Beta', steps: [{ text: 'first' }, { text: 'second' }] },
-        { title: 'Later', steps: [] },
+        { title: 'Alpha', colorKey: expect.any(String), steps: [] },
+        {
+          title: 'Beta',
+          colorKey: expect.any(String),
+          steps: [{ text: 'first', timerSeconds: null }, { text: 'second', timerSeconds: null }],
+        },
+        { title: 'Later', colorKey: expect.any(String), steps: [] },
       ]);
     });
 
@@ -367,8 +373,8 @@ describe('routine repository', () => {
       await reorderRoutines(db, [alpha.id, bravo.id]);
 
       await expect(exportAllRoutines(db)).resolves.toEqual([
-        { title: 'Alpha', steps: [] },
-        { title: 'Bravo', steps: [] },
+        { title: 'Alpha', colorKey: expect.any(String), steps: [] },
+        { title: 'Bravo', colorKey: expect.any(String), steps: [] },
       ]);
     });
   });
@@ -379,7 +385,7 @@ describe('routine repository', () => {
       await createRoutine(db, { title: 'Existing', steps: [{ text: 'Keep this' }] });
       const before = await exportAllRoutines(db);
       await db.execAsync(`CREATE TRIGGER fail_import_step
-        BEFORE INSERT ON checklist_items WHEN NEW.text = 'Reject this step'
+        BEFORE INSERT ON steps WHEN NEW.text = 'Reject this step'
         BEGIN SELECT RAISE(ABORT, 'simulated disk write failure'); END;`);
 
       await expect(importRoutines(db, [
@@ -388,7 +394,7 @@ describe('routine repository', () => {
       ])).rejects.toMatchObject({ message: 'simulated disk write failure' });
 
       expect(await exportAllRoutines(db)).toEqual(before);
-      expect(await db.getAllAsync('SELECT text FROM checklist_items')).toEqual([{ text: 'Keep this' }]);
+      expect(await db.getAllAsync('SELECT text FROM steps')).toEqual([{ text: 'Keep this' }]);
     });
 
     it('inserts every routine and returns the count', async () => {
@@ -588,7 +594,7 @@ describe('routine repository', () => {
 
       expect(await getRoutine(db, created.id)).toBeNull();
       const remaining = await db.getAllAsync<{ count: number }>(
-        'SELECT COUNT(*) as count FROM checklist_items WHERE checklist_id = ?',
+        'SELECT COUNT(*) as count FROM steps WHERE routine_id = ?',
         created.id,
       );
       expect(remaining[0].count).toBe(0);
@@ -596,7 +602,129 @@ describe('routine repository', () => {
 
     it('is a no-op when the routine does not exist', async () => {
       const db = await setup();
-      await expect(deleteRoutine(db, 'missing')).resolves.toBeUndefined();
+      await expect(deleteRoutine(db, 'missing')).resolves.toBeNull();
+    });
+  });
+  describe('timers, colors and undoing a delete', () => {
+    it('saves each step timer and the routine color, and reads them back', async () => {
+      const db = await setup();
+      const created = await createRoutine(db, {
+        title: 'Stretch',
+        colorKey: 'teal-1',
+        steps: [{ text: 'Neck rolls', timerSeconds: 30 }, { text: 'Breathe' }],
+      });
+
+      const loaded = await getRoutine(db, created.id);
+      expect(loaded?.colorKey).toBe('teal-1');
+      expect(loaded?.steps.map(({ text, timerSeconds }) => ({ text, timerSeconds }))).toEqual([
+        { text: 'Neck rolls', timerSeconds: 30 },
+        { text: 'Breathe', timerSeconds: null },
+      ]);
+    });
+
+    it('changes timers and the color when a routine is updated', async () => {
+      const db = await setup();
+      const created = await createRoutine(db, {
+        title: 'Stretch',
+        colorKey: 'teal-1',
+        steps: [{ text: 'Neck rolls', timerSeconds: 30 }],
+      });
+
+      await updateRoutine(db, created.id, {
+        title: 'Stretch',
+        colorKey: 'violet-2',
+        steps: [{ text: 'Neck rolls', timerSeconds: null }, { text: 'Plank', timerSeconds: 3600 }],
+      });
+
+      const loaded = await getRoutine(db, created.id);
+      expect(loaded?.colorKey).toBe('violet-2');
+      expect(loaded?.steps.map((step) => step.timerSeconds)).toEqual([null, 3600]);
+    });
+
+    it('rejects timers that are not whole seconds from one second to an hour', async () => {
+      const db = await setup();
+      for (const timerSeconds of [0, 3601, 1.5, -1]) {
+        await expect(
+          createRoutine(db, { title: 'Bad', steps: [{ text: 'Step', timerSeconds }] }),
+        ).rejects.toThrow(/timer/i);
+      }
+      expect(await listRoutines(db)).toEqual([]);
+    });
+
+    it('gives a routine created without a color one the first six routines are not using', async () => {
+      const db = await setup();
+      const firstSix = ['pink-1', 'pink-2', 'red-1', 'orange-1', 'orange-2', 'taupe'];
+      for (const colorKey of firstSix) {
+        await createRoutine(db, { title: colorKey, colorKey, steps: [] });
+      }
+
+      const created = await createRoutine(db, { title: 'New', steps: [] });
+
+      expect(isRoutineColorKey(created.colorKey)).toBe(true);
+      expect(firstSix).not.toContain(created.colorKey);
+      expect((await getRoutine(db, created.id))?.colorKey).toBe(created.colorKey);
+    });
+
+    it('lists each routine with its color', async () => {
+      const db = await setup();
+      await createRoutine(db, { title: 'One', colorKey: 'slate', steps: [{ text: 'a' }] });
+
+      expect(await listRoutines(db)).toEqual([
+        expect.objectContaining({ title: 'One', colorKey: 'slate' }),
+      ]);
+    });
+
+    it('exports timers and colors with each routine', async () => {
+      const db = await setup();
+      await createRoutine(db, {
+        title: 'Stretch',
+        colorKey: 'lime-1',
+        steps: [{ text: 'Plank', timerSeconds: 45 }, { text: 'Rest' }],
+      });
+
+      expect(await exportAllRoutines(db)).toEqual([
+        {
+          title: 'Stretch',
+          colorKey: 'lime-1',
+          steps: [
+            { text: 'Plank', timerSeconds: 45 },
+            { text: 'Rest', timerSeconds: null },
+          ],
+        },
+      ]);
+    });
+
+    it('restores a deleted routine in its old place with the same identity, steps, timers and color', async () => {
+      const db = await setup();
+      const third = await createRoutine(db, { title: 'Third', steps: [] });
+      const doomed = await createRoutine(db, {
+        title: 'Doomed',
+        colorKey: 'amber-2',
+        steps: [{ text: 'Plank', timerSeconds: 60 }, { text: 'Rest' }],
+      });
+      const first = await createRoutine(db, { title: 'First', steps: [] });
+      const before = await getRoutine(db, doomed.id);
+
+      const deleted = await deleteRoutine(db, doomed.id);
+      expect((await listRoutines(db)).map((routine) => routine.title)).toEqual(['First', 'Third']);
+
+      await restoreRoutine(db, deleted!);
+
+      expect((await listRoutines(db)).map((routine) => routine.id)).toEqual([first.id, doomed.id, third.id]);
+      expect(await getRoutine(db, doomed.id)).toEqual(before);
+    });
+
+    it('restores into the same place after the library is reordered in the meantime', async () => {
+      const db = await setup();
+      const c = await createRoutine(db, { title: 'C', steps: [] });
+      const b = await createRoutine(db, { title: 'B', steps: [] });
+      const a = await createRoutine(db, { title: 'A', steps: [] });
+      const deleted = await deleteRoutine(db, b.id);
+
+      await reorderRoutines(db, [c.id, a.id]);
+      await restoreRoutine(db, deleted!);
+
+      expect((await listRoutines(db)).map((routine) => routine.title)).toEqual(['C', 'B', 'A']);
     });
   });
 });
