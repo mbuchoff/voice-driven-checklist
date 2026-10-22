@@ -71,7 +71,11 @@ Order of work:
   - `shell uiautomator dump` for element bounds
 
   Undo every phone setting you change.
-- **Guard every phone action; the phone is the owner's personal device.** Before each tap, swipe, key or screenshot, check the foreground app (`adb shell dumpsys activity activities`, the `topResumedActivity` line). Refuse to act unless it's the app under test or the system file picker. Never chain blind taps without checking the screen between them, since one stray Back or tap lands on the home screen. If a screenshot captures anything outside the app (home screen, other apps, photos, file names), delete it at once. A guarded helper exists at `~/repos/voice-todos/issue-39-evidence/phone.py`: `tap-text`, `tap-desc`, `find`, `shot`, `fg`.
+- **Guard every phone action; the phone is the owner's personal device.** Before each tap, swipe, key or screenshot, check the foreground app (`adb shell dumpsys activity activities`, the `topResumedActivity` line). Refuse to act unless it's the app under test or the system file picker. Never chain blind taps without checking the screen between them, since one stray Back or tap lands on the home screen. If a screenshot captures anything outside the app (home screen, other apps, photos, file names), delete it at once. Helpers in this skill's `scripts/` (set `PHONE_ADB` to the adb wrapper):
+  - `phone.py`: guarded `tap-id`, `tap-text`, `tap-desc`, `find`, `shot`, `tap`, `text`, `key`, `swipe`, `fg`
+  - `dumpdp.py [ymin] [ymax]`: element bounds in dp
+  - `side.sh <prototype.png> <phone.png> <out.png>`: the two shots side by side at the same dp width
+  - `p3.py <hex>`: an sRGB color as the phone's Display P3 screenshots record it
 - **In the system file picker, search for the file by name** instead of browsing folders, which shows the owner's files. A file pushed with adb needs a media scan before the picker lists it: `am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/<name>`.
 - **Lock rotation to portrait** for phone checks (`settings put system accelerometer_rotation 0` and `user_rotation 0`). Record the previous values and restore them afterwards.
 - **The phone has a fingerprint lock.** After a locking test, ask the user to unlock it, then continue.
