@@ -2,13 +2,8 @@ import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 
 import type { SoundPreference } from '@/src/features/settings/preferences';
 
-import { CUE_ACTIONS, type CueAction } from './cues';
+import type { CueAction } from './cues';
 export { CUE_ACTIONS, SOUND_OPTIONS, type CueAction } from './cues';
-
-// How long a cue may take to start before speech goes ahead without it.
-// After the screen has been off, the audio output can take several hundred
-// milliseconds to wake, so this must outlast that or the first cue is lost.
-const CUE_START_TIMEOUT_MS = 1500;
 
 const SOURCES: Record<Exclude<SoundPreference, 'quiet'>, Record<CueAction, number>> = {
   chime: {
@@ -31,76 +26,60 @@ const SOURCES: Record<Exclude<SoundPreference, 'quiet'>, Record<CueAction, numbe
   },
 };
 
+// A cue that never reports its end is freed after this long anyway.
+const CUE_MAX_MS = 3000;
+
 export class CueSoundPlayer {
   private family: SoundPreference | null = null;
-  private players = new Map<CueAction, AudioPlayer>();
-  private playRequest = 0;
+  private sounding = new Set<AudioPlayer>();
 
   prepare(family: SoundPreference): void {
     if (this.family === family) return;
-    this.release();
-    if (family === 'quiet') {
-      this.family = family;
-      return;
-    }
-
-    const players = new Map<CueAction, AudioPlayer>();
-    try {
-      for (const action of CUE_ACTIONS) {
-        players.set(action, createAudioPlayer(SOURCES[family][action]));
-      }
-      this.players = players;
-      this.family = family;
-    } catch {
-      this.releasePlayers(players);
-    }
+    this.stopSounding();
+    this.family = family;
   }
 
+  // Every cue gets a new player. A player prepared earlier keeps the audio
+  // track it made then, and after the phone locks that track can be gone:
+  // the first play after the lock then sounds like nothing at all.
   async play(action: CueAction): Promise<boolean> {
-    const player = this.players.get(action);
-    if (!player) return false;
-    const request = ++this.playRequest;
-    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const family = this.family;
+    if (!family || family === 'quiet') return false;
+    this.stopSounding();
+    let player: AudioPlayer | null = null;
     try {
-      const ready = await Promise.race([
-        Promise.resolve(player.seekTo(0)).then(() => true),
-        new Promise<boolean>((resolve) => {
-          timeout = setTimeout(() => resolve(false), CUE_START_TIMEOUT_MS);
-        }),
-      ]);
-      if (
-        !ready ||
-        request !== this.playRequest ||
-        this.players.get(action) !== player
-      ) {
-        console.info(`[cue] ${action} skipped (${ready ? 'superseded' : 'did not start'})`);
-        return false;
-      }
-      player.play();
+      const created = createAudioPlayer(SOURCES[family][action]);
+      player = created;
+      this.sounding.add(created);
+      created.addListener('playbackStatusUpdate', (status) => {
+        if (status.didJustFinish) this.free(created);
+      });
+      setTimeout(() => this.free(created), CUE_MAX_MS);
+      created.play();
       console.info(`[cue] ${action} play requested`);
       return true;
     } catch {
       // A cue must never prevent navigation, speech, or completion.
+      if (player) this.free(player);
       return false;
-    } finally {
-      if (timeout) clearTimeout(timeout);
     }
   }
 
   release(): void {
-    this.playRequest += 1;
-    this.releasePlayers();
+    this.stopSounding();
     this.family = null;
   }
 
-  private releasePlayers(players = this.players): void {
-    for (const player of players.values()) {
-      try {
-        player.release?.();
-      } catch {
-        // Releasing audio is best effort during navigation and app teardown.
-      }
+  private stopSounding(): void {
+    for (const player of [...this.sounding]) this.free(player);
+  }
+
+  private free(player: AudioPlayer): void {
+    if (!this.sounding.delete(player)) return;
+    try {
+      player.release();
+    } catch {
+      // Releasing audio is best effort during navigation and app teardown.
     }
-    players.clear();
   }
 }
