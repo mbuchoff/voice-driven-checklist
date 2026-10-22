@@ -232,6 +232,9 @@ async function editLastStep() {
   await waitForDisplayed(byId(driver, 'timer-panel'));
   await byId(driver, 'timer-plus').click();
   await byId(driver, 'timer-done').click();
+  // Done returns to typing in the step; ✓ closes it and puts the keyboard away.
+  await waitForDisplayed(byId(driver, 'item-done-9'));
+  await byId(driver, 'item-done-9').click();
   await waitForDisplayed(byId(driver, 'save'));
   await byId(driver, 'save').click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));
