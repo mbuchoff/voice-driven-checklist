@@ -41,7 +41,7 @@ export const RoutineHeroCard = forwardRef<TextInput, {
         gap: 4,
       }}
     >
-      <Text style={{ color: colors.ink, fontSize: 11, fontWeight: '800', letterSpacing: 1.5 }}>
+      <Text style={{ color: colors.ink, fontSize: 11, lineHeight: 13, fontWeight: '800', letterSpacing: 1.5 }}>
         SHAPE THE ROUTINE
       </Text>
       {props.colorsOpen ? (
@@ -98,7 +98,7 @@ export const RoutineHeroCard = forwardRef<TextInput, {
         )}
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <Text testID="hero-count" style={{ color: colors.ink, fontSize: 14, fontWeight: '700' }}>
+        <Text testID="hero-count" style={{ color: colors.ink, fontSize: 14, lineHeight: 16, fontWeight: '700' }}>
           {props.countLine}
         </Text>
         <Pressable

@@ -74,7 +74,7 @@ export function SheetTitle({ colors, children }: { colors: EditorColors; childre
   return (
     <Text
       accessibilityRole="header"
-      style={{ color: colors.text, fontSize: 20, fontWeight: '800', letterSpacing: -0.4 }}
+      style={{ color: colors.text, fontSize: 20, lineHeight: 24, fontWeight: '800', letterSpacing: -0.4 }}
     >
       {children}
     </Text>

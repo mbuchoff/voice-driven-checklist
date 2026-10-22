@@ -562,10 +562,10 @@ export function RoutineEditor({
           onLayout={(event) => { sectionY.current = event.nativeEvent.layout.y; }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12, paddingHorizontal: 2 }}>
-            <Text accessibilityRole="header" style={{ flex: 1, color: colors.text, fontSize: 13, fontWeight: '700' }}>
+            <Text accessibilityRole="header" style={{ flex: 1, color: colors.text, fontSize: 13, lineHeight: 15, fontWeight: '700' }}>
               Steps
             </Text>
-            <Text style={{ color: colors.muted2, fontSize: 12 }}>Tap to edit · swipe to delete</Text>
+            <Text style={{ color: colors.muted2, fontSize: 12, lineHeight: 14 }}>Tap to edit · swipe to delete</Text>
           </View>
 
           <View

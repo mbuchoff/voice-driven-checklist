@@ -107,10 +107,12 @@ export function TimerPanel({
 }) {
   return (
     <EditorSheet colors={colors} onDismiss={onDone} testID="timer-panel" accessibilityLabel="Timer">
+      {/* One block, so the sheet's gap doesn't space out the panel's parts. */}
+      <View>
       <SheetTitle colors={colors}>Timer</SheetTitle>
       <Text
         numberOfLines={1}
-        style={{ color: colors.muted, fontSize: 14, marginTop: -4, marginBottom: 6 }}
+        style={{ color: colors.muted, fontSize: 14, lineHeight: 16, marginTop: -4, marginBottom: 6 }}
       >
         {`Step ${stepNumber}: ${stepText}`}
       </Text>
@@ -149,6 +151,7 @@ export function TimerPanel({
         />
         <SheetButton colors={colors} variant="done" label="Done" testID="timer-done" onPress={onDone} />
       </SheetActions>
+      </View>
     </EditorSheet>
   );
 }

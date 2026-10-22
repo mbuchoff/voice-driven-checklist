@@ -157,7 +157,7 @@ export function EditorTopBar({
             >
               {title.trim() || 'Untitled routine'}
             </Text>
-            <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 12, fontWeight: '700' }}>
+            <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 12, lineHeight: 14, fontWeight: '700' }}>
               {countLine}
             </Text>
           </Animated.View>
