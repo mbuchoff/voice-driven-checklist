@@ -71,6 +71,9 @@ Order of work:
   - `shell uiautomator dump` for element bounds
 
   Undo every phone setting you change.
+- **Guard every phone action; the phone is the owner's personal device.** Before each tap, swipe, key or screenshot, check the foreground app (`adb shell dumpsys activity activities`, the `topResumedActivity` line). Refuse to act unless it's the app under test or the system file picker. Never chain blind taps without checking the screen between them, since one stray Back or tap lands on the home screen. If a screenshot captures anything outside the app (home screen, other apps, photos, file names), delete it at once. A guarded helper exists at `~/repos/voice-todos/issue-39-evidence/phone.py`: `tap-text`, `tap-desc`, `find`, `shot`, `fg`.
+- **In the system file picker, search for the file by name** instead of browsing folders, which shows the owner's files. A file pushed with adb needs a media scan before the picker lists it: `am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/<name>`.
+- **Lock rotation to portrait** for phone checks (`settings put system accelerometer_rotation 0` and `user_rotation 0`). Record the previous values and restore them afterwards.
 - **The phone has a fingerprint lock.** After a locking test, ask the user to unlock it, then continue.
 - **Audible things** (cues, speech) need the user's ears. Ask them to listen at named moments, and also log each cue's result in the app so the log corroborates what they heard.
 
@@ -134,3 +137,4 @@ Improve this skill first, then fix the defect.
 
 - 2026-10-21, #39 spike: the first "next" cue after locking the phone was silent. The likely cause is `CueSoundPlayer.play` giving up when `seekTo(0)` takes longer than 300 ms on a cold audio output. Rule: anything audible is verified by the user listening, and corroborated by a logged cue result.
 - 2026-10-21, #39 spike: with the phone locked and no wake lock, JS timers stalled for up to 14.6 s. Rule: always verify time-based behavior with the phone locked and in forced deep idle, and measure lateness from logs.
+- 2026-10-21, #39 red pass: chained blind adb taps ran past the app onto the home screen, opening Google search and the Weather app. Screenshots captured personal photos and saved locations; they were deleted. Rule: guard every phone action on the foreground app, check the screen between steps, and search the file picker instead of browsing it.
