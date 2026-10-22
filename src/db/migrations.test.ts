@@ -411,6 +411,9 @@ describe('database migrations', () => {
       ).resolves.toEqual([{ id: 'e1' }]);
     });
 
+    // better-sqlite3 keeps the error class of the first test file that loaded
+    // it, so in later files its errors aren't `Error`s to `toThrow`. These
+    // checks match the message instead.
     it('rejects step timers outside one second to an hour', async () => {
       const db = createTestDatabase();
       await db.execAsync(VERSION_THREE_LIBRARY);
@@ -419,7 +422,7 @@ describe('database migrations', () => {
       for (const bad of [0, 3601, -5]) {
         await expect(
           db.runAsync('UPDATE steps SET timer_seconds = ? WHERE id = ?', bad, 'a1'),
-        ).rejects.toThrow(/constraint/i);
+        ).rejects.toHaveProperty('message', expect.stringMatching(/constraint/i));
       }
       await db.runAsync('UPDATE steps SET timer_seconds = ? WHERE id = ?', 3600, 'a1');
     });
@@ -429,7 +432,10 @@ describe('database migrations', () => {
       await db.execAsync(VERSION_THREE_LIBRARY);
       await db.execAsync('CREATE TABLE routines (id TEXT);');
 
-      await expect(runMigrations(db)).rejects.toThrow(/routines/i);
+      await expect(runMigrations(db)).rejects.toHaveProperty(
+        'message',
+        expect.stringMatching(/routines/i),
+      );
 
       await expect(
         db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'),
