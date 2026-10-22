@@ -37,6 +37,8 @@ import {
   scrollToTop,
   scrollBeforeHoldActivation,
   scrollViewport,
+  dragFromTo,
+  swipeAcross,
   swipeHintAway,
   tapElementAt,
   tapLabel,
@@ -47,6 +49,7 @@ import {
 
 const e2eRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixturePath = resolve(e2eRoot, 'fixtures/17-routines.json');
+const timedFixturePath = resolve(e2eRoot, 'fixtures/timed-routine.json');
 const fixture = JSON.parse(await readFile(fixturePath, 'utf8'));
 const expectedTitles = fixture.checklists.map(({ title }) => title);
 const firstTitle = expectedTitles[0];
@@ -207,7 +210,7 @@ async function returnFromRunWithBackConfirmation() {
 async function editLastStep() {
   await expectTopTitle(firstTitle);
   await openEditor(firstTitle);
-  const lastStep = await scrollToLabel(driver, 'Hold row 11 to reorder');
+  const lastStep = await scrollToLabel(driver, `Edit step 11: ${fixture.checklists[0].items[10].text}`);
   await lastStep.click();
   const lastStepInput = await waitForDisplayed(byId(driver, 'item-text-10'));
   await lastStepInput.setValue('Make coffee and place the mug beside breakfast');
@@ -220,6 +223,16 @@ async function editLastStep() {
     inputRect.y + inputRect.height <= windowRect.height,
     'focused editor row should remain above the resized keyboard viewport',
   );
+  // A timer from the step's chips, and one from the timer panel.
+  await byId(driver, 'item-clock-10').click();
+  await tapLabel(driver, '30 seconds');
+  await byId(driver, 'item-clock-9').click();
+  await waitForDisplayed(byId(driver, 'item-more-9'));
+  await byId(driver, 'item-more-9').click();
+  await waitForDisplayed(byId(driver, 'timer-panel'));
+  await byId(driver, 'timer-plus').click();
+  await byId(driver, 'timer-done').click();
+  await waitForDisplayed(byId(driver, 'save'));
   await byId(driver, 'save').click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));
   await expectTopTitle(firstTitle);
@@ -281,11 +294,11 @@ function scenario(name, options, run) {
   });
 }
 
-async function importFreshLibrary() {
+async function importFreshLibrary({ path = fixturePath, titles = expectedTitles } = {}) {
   clearIsolatedApp();
   const backupName = `voice-checklist-e2e-import-${runId}-${randomUUID()}.json`;
   createdDocuments.add(`/sdcard/Download/${backupName}`);
-  pushFixture(fixturePath, backupName);
+  pushFixture(path, backupName);
   collapseSystemPanels();
   await driver.activateApp(APP_PACKAGE);
   await tapText(driver, 'Use on this device');
@@ -297,8 +310,8 @@ async function importFreshLibrary() {
   await waitForDisplayed(byText(driver, 'Import complete'), 30_000);
   await tapText(driver, 'OK');
   await returnFromSettings();
-  assert.deepEqual(await collectRoutineTitles(driver), expectedTitles);
-  await expectTopTitle(firstTitle);
+  assert.deepEqual(await collectRoutineTitles(driver), titles);
+  await expectTopTitle(titles[0]);
 }
 
 scenario(
@@ -514,24 +527,28 @@ scenario('create-delete: prepends a routine and deletes it from its editor', { t
   await importFreshLibrary();
   await tapLabel(driver, 'New routine');
   await waitForDisplayed(byId(driver, 'editor-safe-area'));
+  await waitForDisplayed(byText(driver, 'Tap + to add your first step'));
   await byId(driver, 'title-input').setValue(temporaryTitle);
-  await byLabel(driver, 'Hold row 1 to reorder').click();
+  await byId(driver, 'add-step').click();
+  await waitForDisplayed(byId(driver, 'item-text-0'));
   await byId(driver, 'item-text-0').setValue('Temporary step');
+  await tapLabel(driver, 'Done editing step 1');
   await byId(driver, 'save').click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));
   await expectTopTitle(temporaryTitle);
 
   await openEditor(temporaryTitle);
-  const deleteRoutine = await scrollToLabel(
-    driver,
-    `Delete ${temporaryTitle}`,
-  );
-  await deleteRoutine.click();
-  await waitForDisplayed(byText(driver, 'Delete routine?'));
-  const confirmDelete = await waitForDisplayed(
-    driver.$('id=android:id/button1'),
-  );
-  await confirmDelete.click();
+  await byId(driver, 'editor-delete').click();
+  await waitForDisplayed(byText(driver, 'Delete this routine?'));
+  await byId(driver, 'delete-confirm').click();
+  await waitForDisplayed(byId(driver, 'library-safe-area'));
+  await waitForDisplayed(byText(driver, `“${temporaryTitle}” deleted`));
+  await tapLabel(driver, 'Undo');
+  await expectTopTitle(temporaryTitle);
+
+  await openEditor(temporaryTitle);
+  await byId(driver, 'editor-delete').click();
+  await byId(driver, 'delete-confirm').click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));
   await expectTopTitle(firstTitle);
   assert.equal(await isDisplayed(byLabel(driver, `Edit ${temporaryTitle}`)), false);
@@ -597,10 +614,65 @@ scenario('editor-settings-backup: preserves a keyboard edit through settings and
   assert.equal(exported.version, 1);
   assert.equal(Number.isNaN(Date.parse(exported.exportedAt)), false);
   const expectedBackup = structuredClone(fixture.checklists);
-  expectedBackup[0].items[10].text = 'Make coffee and place the mug beside breakfast';
+  expectedBackup[0].items[10] = { text: 'Make coffee and place the mug beside breakfast', timer: 30 };
+  expectedBackup[0].items[9] = { ...expectedBackup[0].items[9], timer: 60 };
   assert.deepEqual(exported.checklists, expectedBackup,
     'backup must retain routine/step order and edits, with checklist-only data');
   await returnFromSettings();
+});
+
+scenario('timers: a timed routine moves on by itself, also with the app in the background', { timeout: 4 * 60_000 }, async () => {
+  await importFreshLibrary({ path: timedFixturePath, titles: ['E2E Timed Routine'] });
+  grantRunPermissions();
+  await tapLabel(driver, 'Start E2E Timed Routine');
+  await waitForDisplayed(byId(driver, 'run-header'), 45_000);
+  await waitForDisplayed(byId(driver, 'run-countdown'));
+  // Both 5 s steps run out while the app is away; the voice run keeps going.
+  await driver.background(14);
+  await waitForDisplayed(byId(driver, 'completion-screen'), 20_000);
+  await byId(driver, 'completion-return').click();
+  await waitForDisplayed(byId(driver, 'library-safe-area'));
+});
+
+scenario('editor-gestures: swipe delete with UNDO, Back asks to save, grip drag and color', { timeout: 6 * 60_000 }, async () => {
+  await importFreshLibrary();
+  const steps = fixture.checklists[0].items.map(({ text }) => text);
+  await openEditor(firstTitle);
+
+  // Swipe a step away, then bring it back.
+  await swipeAcross(driver, byId(driver, 'item-row-0'));
+  await waitForDisplayed(byText(driver, 'Step deleted'));
+  await tapLabel(driver, 'Undo deleting this step');
+  await waitForDisplayed(byLabel(driver, `Edit step 1: ${steps[0]}`));
+
+  // Swipe it away again and leave: the editor asks, and Discard keeps it.
+  await swipeAcross(driver, byId(driver, 'item-row-0'));
+  await waitForDisplayed(byText(driver, 'Step deleted'));
+  await driver.back();
+  await waitForDisplayed(byText(driver, 'Save your changes?'));
+  await byId(driver, 'leave-discard').click();
+  await waitForDisplayed(byId(driver, 'library-safe-area'));
+  await openEditor(firstTitle);
+  await waitForDisplayed(byLabel(driver, `Edit step 1: ${steps[0]}`));
+
+  // Drag the first step by its grip below the third.
+  const first = await elementRect(driver, byId(driver, 'item-row-0'));
+  const third = await elementRect(driver, byId(driver, 'item-row-2'));
+  await dragFromTo(
+    driver,
+    { x: Math.round(first.x + 12), y: Math.round(first.y + first.height / 2) },
+    { x: Math.round(first.x + 12), y: Math.round(third.y + third.height * 0.8) },
+  );
+  await waitForDisplayed(byLabel(driver, `Edit step 3: ${steps[0]}`));
+
+  // Pick a color on the card, then save.
+  await byId(driver, 'hero-color-dot').click();
+  await tapLabel(driver, 'slate');
+  await byId(driver, 'save').click();
+  await waitForDisplayed(byId(driver, 'library-safe-area'));
+  await openEditor(firstTitle);
+  await waitForDisplayed(byLabel(driver, `Edit step 1: ${steps[1]}`));
+  await waitForDisplayed(byLabel(driver, 'Card color: slate. Change it'));
 });
 
 scenario('responsive: restores temporary font scale and viewport', { timeout: 4 * 60_000 }, async () => {

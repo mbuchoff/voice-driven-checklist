@@ -265,3 +265,44 @@ export async function collectRoutineTitles(driver) {
 
   return [...seen];
 }
+
+/** A one-finger swipe across `element` from one horizontal share to another. */
+export async function swipeAcross(driver, element, { fromX = 0.85, toX = 0.1, durationMs = 220 } = {}) {
+  const rect = await elementRect(driver, element);
+  const y = Math.round(rect.y + rect.height / 2);
+  await driver.performActions([
+    {
+      type: 'pointer',
+      id: 'step-swipe',
+      parameters: { pointerType: 'touch' },
+      actions: [
+        { type: 'pointerMove', duration: 0, x: Math.round(rect.x + rect.width * fromX), y },
+        { type: 'pointerDown', button: 0 },
+        { type: 'pointerMove', duration: durationMs, x: Math.round(rect.x + rect.width * toX), y },
+        { type: 'pointerUp', button: 0 },
+      ],
+    },
+  ]);
+  await driver.releaseActions();
+}
+
+/** Presses at `from`, then drags to `to` without waiting for a hold. */
+export async function dragFromTo(driver, from, to, { durationMs = 420 } = {}) {
+  await driver.performActions([
+    {
+      type: 'pointer',
+      id: 'grip-drag',
+      parameters: { pointerType: 'touch' },
+      actions: [
+        { type: 'pointerMove', duration: 0, ...from },
+        { type: 'pointerDown', button: 0 },
+        { type: 'pause', duration: 60 },
+        { type: 'pointerMove', duration: durationMs, ...to },
+        { type: 'pause', duration: 120 },
+        { type: 'pointerUp', button: 0 },
+      ],
+    },
+  ]);
+  await driver.releaseActions();
+}
+
