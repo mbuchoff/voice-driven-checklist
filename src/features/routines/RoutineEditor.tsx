@@ -83,6 +83,7 @@ import {
   type StepperState,
 } from './timers';
 import type { DeletedRoutine, Routine } from './types';
+import { scrollToKeepAboveKeyboard } from './keepAboveKeyboard';
 import { useStepReorder } from './useStepReorder';
 
 const EDITOR_KEYBOARD_OFFSET = 24;
@@ -139,6 +140,8 @@ export function RoutineEditor({
   const titleRef = useRef<ComponentRef<typeof TextInput>>(null);
   const inputRefs = useRef<Record<string, ComponentRef<typeof TextInput> | null>>({});
   const viewportTop = useRef(0);
+  const scrollY = useRef(0);
+  const keyboardTop = useRef<number | null>(null);
   const viewportHeight = useRef(0);
   const heroY = useRef(0);
   const titleRow = useRef<{ y: number; height: number } | null>(null);
@@ -186,12 +189,16 @@ export function RoutineEditor({
     },
   });
 
-  // Keep the step being typed in above the keyboard.
+  // Keep the step being typed in, with its chips, above the keyboard.
   useEffect(() => {
     const shown = Keyboard.addListener('keyboardDidShow', (event) => {
+      keyboardTop.current = event.endCoordinates.screenY;
       setKeyboardClearance(Math.max(0, Dimensions.get('screen').height - event.endCoordinates.screenY));
     });
-    const hidden = Keyboard.addListener('keyboardDidHide', () => setKeyboardClearance(0));
+    const hidden = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardTop.current = null;
+      setKeyboardClearance(0);
+    });
     return () => {
       shown.remove();
       hidden.remove();
@@ -200,13 +207,18 @@ export function RoutineEditor({
 
   const scrollOpenStepIntoView = useCallback(() => {
     const id = modelRef.current.openId;
-    const input = id ? inputRefs.current[id] : null;
-    if (!input) return;
-    scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(
-      input,
-      viewportTop.current + EDITOR_KEYBOARD_OFFSET,
-      true,
-    );
+    const row = id ? rowLayouts.current[id] : null;
+    if (!row || keyboardTop.current == null) return;
+    const top = sectionY.current + groupY.current + row.y;
+    const target = scrollToKeepAboveKeyboard({
+      top,
+      bottom: top + row.height,
+      scrollY: scrollY.current,
+      viewportTop: viewportTop.current,
+      keyboardTop: keyboardTop.current,
+      margin: EDITOR_KEYBOARD_OFFSET,
+    });
+    if (target != null) scrollRef.current?.scrollTo({ y: target, animated: true });
   }, []);
 
   useEffect(() => {
@@ -425,6 +437,7 @@ export function RoutineEditor({
   const onScroll = (event: { nativeEvent: { contentOffset: { y: number } } }) => {
     reorder.onScroll(event as never);
     const y = event.nativeEvent.contentOffset.y;
+    scrollY.current = y;
     // The bar folds once the name has scrolled up under it.
     const row = titleRow.current;
     setCollapsed(!!row && y > heroY.current + row.y + row.height);

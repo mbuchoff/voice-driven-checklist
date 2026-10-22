@@ -44,11 +44,8 @@ describe('RoutineEditor', () => {
           callback(0);
           return 1;
         });
-      const revealInput = jest
-        .spyOn(
-          ScrollView.prototype,
-          'scrollResponderScrollNativeHandleToKeyboard',
-        )
+      const scrollTo = jest
+        .spyOn(ScrollView.prototype, 'scrollTo')
         .mockImplementation(jest.fn());
       const scrollToEnd = jest
         .spyOn(ScrollView.prototype, 'scrollToEnd')
@@ -75,7 +72,12 @@ describe('RoutineEditor', () => {
         },
       });
 
-      tapToEdit(4);
+      // Step 7 sits 336–392 dp down the list.
+      fireEvent(screen.getByTestId('item-row-6'), 'layout', {
+        nativeEvent: { layout: { x: 0, y: 336, width: 360, height: 56 } },
+      });
+
+      tapToEdit(6);
       const keyboardShown = keyboardListener.mock.calls
         .filter(([event]) => event === 'keyboardDidShow')
         .at(-1);
@@ -84,7 +86,9 @@ describe('RoutineEditor', () => {
         keyboardShown?.[1]({ endCoordinates: { screenY: 400 } } as never);
       });
 
-      expect(revealInput).toHaveBeenCalledWith(expect.anything(), 108, true);
+      // 316 dp of list show above the keyboard (400 − 84), so the step's
+      // bottom plus 24 dp (392 + 24) needs the list scrolled by 100.
+      expect(scrollTo).toHaveBeenCalledWith({ y: 100, animated: true });
       expect(scrollToEnd).not.toHaveBeenCalled();
     });
 
@@ -526,6 +530,9 @@ describe('RoutineEditor', () => {
       const scrollTo = jest
         .spyOn(ScrollView.prototype, 'scrollTo')
         .mockImplementation(jest.fn());
+      // React Native's Jest setup makes scrollTo a mock already, so spying on
+      // it returns that shared mock, calls from earlier tests and all.
+      scrollTo.mockClear();
       const database = await setupDb();
       const existing = await createRoutine(database, {
         title: 'scroll me',
