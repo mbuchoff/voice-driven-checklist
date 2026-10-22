@@ -45,6 +45,7 @@ import {
   tapText,
   visibleRoutineTitles,
   waitForDisplayed,
+  waitForSettled,
 } from '../support/ui.mjs';
 
 const e2eRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -224,11 +225,14 @@ async function editLastStep() {
     'focused editor row should remain above the resized keyboard viewport',
   );
   // A timer from the step's chips, and one from the timer panel.
+  // Chips open under the step and the list scrolls them above the keyboard;
+  // tap them once they've stopped moving.
   await byId(driver, 'item-clock-10').click();
-  await tapLabel(driver, '30 seconds');
+  const thirtySeconds = await waitForDisplayed(byLabel(driver, '30 seconds'));
+  await (await waitForSettled(driver, thirtySeconds)).click();
   await byId(driver, 'item-clock-9').click();
-  await waitForDisplayed(byId(driver, 'item-more-9'));
-  await byId(driver, 'item-more-9').click();
+  const more = await waitForDisplayed(byId(driver, 'item-more-9'));
+  await (await waitForSettled(driver, more)).click();
   await waitForDisplayed(byId(driver, 'timer-panel'));
   await byId(driver, 'timer-plus').click();
   await byId(driver, 'timer-done').click();

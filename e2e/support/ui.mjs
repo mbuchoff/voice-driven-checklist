@@ -27,6 +27,20 @@ export async function waitForDisplayed(element, timeout = 15_000) {
   return element;
 }
 
+// Waits until an element stops moving, e.g. while the list scrolls a step
+// into view; a press on a moving view is cancelled.
+export async function waitForSettled(driver, element, timeout = 3_000) {
+  const deadline = Date.now() + timeout;
+  let last = await elementRect(driver, element);
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const rect = await elementRect(driver, element);
+    if (rect.x === last.x && rect.y === last.y) return element;
+    last = rect;
+  }
+  throw new Error('element kept moving');
+}
+
 export async function elementRect(driver, element) {
   const resolvedElement = await element;
   return driver.getElementRect(resolvedElement.elementId);
