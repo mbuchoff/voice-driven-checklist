@@ -585,7 +585,7 @@ scenario('editor-settings-backup: preserves a keyboard edit through settings and
 
   const localAccount = await scrollToLabel(
     driver,
-    'This device. Local checklist library. Selected',
+    'This device. Local routine library. Selected',
   );
   assert.equal(await localAccount.isDisplayed(), true);
 
