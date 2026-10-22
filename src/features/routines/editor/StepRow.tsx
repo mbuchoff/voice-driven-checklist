@@ -93,7 +93,12 @@ export function StepRow(props: StepRowProps) {
     .failOffsetY([-SWIPE_START, SWIPE_START])
     .onUpdate((event) => {
       'worklet';
-      if (swipeDirection.value === 0) swipeDirection.value = event.translationX < 0 ? -1 : 1;
+      // Android's first update after the swipe starts reports no movement,
+      // so the direction locks on the first update that has some.
+      if (swipeDirection.value === 0) {
+        if (event.translationX === 0) return;
+        swipeDirection.value = event.translationX < 0 ? -1 : 1;
+      }
       // Locked to the first direction: moving back past the start stops at 0.
       const along = event.translationX * swipeDirection.value;
       translateX.value = swipeDirection.value * Math.min(rowWidth.value, Math.max(0, along));

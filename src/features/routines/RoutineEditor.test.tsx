@@ -1,5 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
 import { Alert, BackHandler, Platform } from 'react-native';
+import { State } from 'react-native-gesture-handler';
+import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 
 import type { Database } from '@/src/db/database';
 import {
@@ -364,6 +366,27 @@ describe('RoutineEditor', () => {
       fireEvent.press(screen.getByRole('button', { name: 'Undo deleting this step' }));
       expect(screen.getByTestId('item-label-0')).toHaveTextContent('Neck rolls');
       expect(screen.getByTestId('item-clock-0')).toHaveTextContent('30s');
+    });
+
+    it('deletes a step swiped left past 40% of its width', async () => {
+      const database = await setupDb();
+      const routine = await existing(database);
+      await renderEditor({ initialRoutine: routine }, { database });
+      const row = screen.getByTestId('item-row-0');
+      fireEvent(row, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 380, height: 56 } } });
+
+      // Android reports no movement in a swipe's first update after it starts.
+      fireGestureHandler(getByGestureTestId(`item-swipe-gesture-${row.props.nativeID}-0`), [
+        { state: State.BEGAN, translationX: 0 },
+        { state: State.ACTIVE, translationX: 0 },
+        { state: State.ACTIVE, translationX: 0 },
+        { state: State.ACTIVE, translationX: -60 },
+        { state: State.ACTIVE, translationX: -200 },
+        { state: State.END, translationX: -200 },
+      ]);
+
+      expect(await screen.findByText('Step deleted')).toBeOnTheScreen();
+      expect(screen.getByTestId('item-label-0')).toHaveTextContent('Breathe');
     });
 
     it('deletes the routine from its sheet and hands back what undoes it', async () => {
