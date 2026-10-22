@@ -23,7 +23,7 @@ import { useDevicePreferences } from '@/src/features/settings/DevicePreferencesP
 import { useTheme } from '@/src/theme/useTheme';
 
 import { moveItem } from './reorder';
-import { listChecklists, reorderChecklists } from './repository';
+import { listRoutines, reorderRoutines } from './repository';
 import {
   RoutineArrangeHint,
   shouldShowRoutineArrangeHint,
@@ -31,7 +31,7 @@ import {
 import { RoutineArrangeLesson } from './RoutineArrangeLesson';
 import { getRoutineGridMetrics } from './routineGrid';
 import { RoutineReorderGrid } from './RoutineReorderGrid';
-import type { LibraryChecklist } from './types';
+import type { LibraryRoutine } from './types';
 import { useRoutineSelectionFeedback } from './useRoutineSelectionFeedback';
 
 // The scroll ref must expose a gesture-handler tag for a pending card hold to
@@ -114,7 +114,7 @@ export function LibraryScreen({
     preferences: { routineReorderHintDismissed: reorderHintDismissed },
     dismissRoutineReorderHint: dismissReorderHint,
   } = useDevicePreferences();
-  const [items, setItems] = useState<LibraryChecklist[]>([]);
+  const [items, setItems] = useState<LibraryRoutine[]>([]);
   const [orderRevision, setOrderRevision] = useState(0);
   const [loadFailed, setLoadFailed] = useState(false);
   const loadRequest = useRef(0);
@@ -139,7 +139,7 @@ export function LibraryScreen({
 
   const refresh = useCallback(() => {
     const request = ++loadRequest.current;
-    listChecklists(db).then((loaded) => {
+    listRoutines(db).then((loaded) => {
       if (request !== loadRequest.current) return;
       persistedItems.current = loaded;
       setItems(loaded);
@@ -176,7 +176,7 @@ export function LibraryScreen({
       const byId = new Map(itemsRef.current.map((item) => [item.id, item]));
       const orderedItems = orderedIds
         .map((id) => byId.get(id))
-        .filter((item): item is LibraryChecklist => item !== undefined);
+        .filter((item): item is LibraryRoutine => item !== undefined);
       if (savingOrderRef.current || orderedItems.length !== itemsRef.current.length) {
         // Reconcile slots without undoing another move's pending optimistic order.
         setOrderRevision(revision => revision + 1);
@@ -188,7 +188,7 @@ export function LibraryScreen({
       setSavingOrder(true);
       setItems(orderedItems);
       try {
-        await reorderChecklists(db, orderedIds);
+        await reorderRoutines(db, orderedIds);
         persistedItems.current = orderedItems;
         return true;
       } catch {
@@ -304,11 +304,11 @@ export function LibraryScreen({
           Routines
         </Text>
         <HeaderControl
-          accessibilityLabel="New checklist"
+          accessibilityLabel="New routine"
           filled
           icon="plus"
           onPress={() => { closeArrangeLesson(); onCreate(); }}
-          testID="new-checklist"
+          testID="new-routine"
         />
         <HeaderControl
           accessibilityLabel="Settings"
@@ -386,7 +386,7 @@ export function LibraryScreen({
                 marginTop: 6,
               }}
             >
-              Use + to create your first voice checklist.
+              Use + to create your first routine.
             </Text>
           </View>
         ) : null}

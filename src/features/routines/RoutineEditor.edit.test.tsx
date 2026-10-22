@@ -11,7 +11,7 @@ import * as Reanimated from 'react-native-reanimated';
 
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
-import { ChecklistEditor } from './ChecklistEditor';
+import { RoutineEditor } from './RoutineEditor';
 import {
   beginRowDrag,
   cancelRowDrag,
@@ -24,11 +24,11 @@ import {
   rowGesture,
   setupEditorDatabase as setupDb,
   tapToEdit,
-} from './ChecklistEditor.testSupport';
-import { createChecklist, getChecklist } from './repository';
+} from './RoutineEditor.testSupport';
+import { createRoutine, getRoutine } from './repository';
 import type { Database } from '@/src/db/database';
 
-describe('ChecklistEditor', () => {
+describe('RoutineEditor', () => {
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
@@ -37,14 +37,14 @@ describe('ChecklistEditor', () => {
     it('deletes the persisted routine from the editor after confirmation', async () => {
       const alert = jest.spyOn(Alert, 'alert');
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'Original title',
-        items: [{ text: 'Keep until confirmed' }],
+        steps: [{ text: 'Keep until confirmed' }],
       });
       const onDeleted = jest.fn();
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onDeleted={onDeleted}
           onCancel={jest.fn()}
@@ -62,9 +62,9 @@ describe('ChecklistEditor', () => {
       buttons.find((button) => button.style === 'destructive')?.onPress?.();
 
       await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1));
-      await expect(getChecklist(database, existing.id)).resolves.toBeNull();
+      await expect(getRoutine(database, existing.id)).resolves.toBeNull();
       expect(
-        within(screen.getByTestId('checklist-editor-scroll')).getByTestId(
+        within(screen.getByTestId('routine-editor-scroll')).getByTestId(
           'routine-delete',
         ),
       ).toBeOnTheScreen();
@@ -73,9 +73,9 @@ describe('ChecklistEditor', () => {
     it('keeps the unsaved editor state available when routine deletion fails', async () => {
       const alert = jest.spyOn(Alert, 'alert');
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'Stored title',
-        items: [{ text: 'Stored step' }],
+        steps: [{ text: 'Stored step' }],
       });
       const failingDatabase: Database = {
         ...database,
@@ -88,8 +88,8 @@ describe('ChecklistEditor', () => {
       };
       const onDeleted = jest.fn();
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onDeleted={onDeleted}
           onCancel={jest.fn()}
@@ -108,12 +108,12 @@ describe('ChecklistEditor', () => {
       expect(alert.mock.calls[1][0]).toMatch(/delete failed/i);
       expect(screen.getByTestId('title-input').props.value).toBe('Unsaved title');
       expect(onDeleted).not.toHaveBeenCalled();
-      await expect(getChecklist(database, existing.id)).resolves.toMatchObject({
+      await expect(getRoutine(database, existing.id)).resolves.toMatchObject({
         id: existing.id,
       });
     });
 
-    it('reveals a tapped existing step instead of scrolling to the checklist end', async () => {
+    it('reveals a tapped existing step instead of scrolling to the routine end', async () => {
       jest
         .spyOn(global, 'requestAnimationFrame')
         .mockImplementation((callback) => {
@@ -131,21 +131,21 @@ describe('ChecklistEditor', () => {
         .mockImplementation(jest.fn());
       const keyboardListener = jest.spyOn(Keyboard, 'addListener');
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'keep the selected row visible',
-        items: Array.from({ length: 8 }, (_, index) => ({
+        steps: Array.from({ length: 8 }, (_, index) => ({
           text: `step ${index + 1}`,
         })),
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
         { database },
       );
-      fireEvent(screen.getByTestId('checklist-editor-scroll'), 'layout', {
+      fireEvent(screen.getByTestId('routine-editor-scroll'), 'layout', {
         nativeEvent: {
           layout: { x: 0, y: 84, width: 360, height: 500 },
         },
@@ -166,13 +166,13 @@ describe('ChecklistEditor', () => {
 
     it('activates reordering from the whole row without a visible drag handle', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'hold row',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -190,16 +190,16 @@ describe('ChecklistEditor', () => {
 
       expect(screen.getByTestId('item-text-2').props.value).toBe('a');
     });
-    it('pre-fills the form from the initial checklist and updates it on save', async () => {
+    it('pre-fills the form from the initial routine and updates it on save', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'Original',
-        items: [{ text: 'one' }, { text: 'two' }],
+        steps: [{ text: 'one' }, { text: 'two' }],
       });
       const onSaved = jest.fn();
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={onSaved}
           onCancel={jest.fn()}
         />,
@@ -219,19 +219,19 @@ describe('ChecklistEditor', () => {
       const saved = onSaved.mock.calls[0][0];
       expect(saved.id).toBe(existing.id);
       expect(saved.title).toBe('Renamed');
-      expect(saved.items.map((i: { text: string }) => i.text)).toEqual(['uno', 'two']);
+      expect(saved.steps.map((i: { text: string }) => i.text)).toEqual(['uno', 'two']);
     });
 
     it('removes an item and shifts positions contiguously after save', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'x',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       const onSaved = jest.fn();
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={onSaved}
           onCancel={jest.fn()}
         />,
@@ -242,8 +242,8 @@ describe('ChecklistEditor', () => {
       fireEvent.press(screen.getByTestId('save'));
 
       await screen.findByTestId('save');
-      const reloaded = await getChecklist(database, existing.id);
-      expect(reloaded?.items.map((i) => ({ text: i.text, order: i.order }))).toEqual([
+      const reloaded = await getRoutine(database, existing.id);
+      expect(reloaded?.steps.map((i) => ({ text: i.text, order: i.order }))).toEqual([
         { text: 'a', order: 0 },
         { text: 'c', order: 1 },
       ]);
@@ -251,14 +251,14 @@ describe('ChecklistEditor', () => {
 
     it('persists items reordered by holding and dragging a row', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'reorder me',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       const onSaved = jest.fn();
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={onSaved}
           onCancel={jest.fn()}
         />,
@@ -270,19 +270,19 @@ describe('ChecklistEditor', () => {
       fireEvent.press(screen.getByTestId('save'));
 
       await screen.findByTestId('save');
-      const reloaded = await getChecklist(database, existing.id);
-      expect(reloaded?.items.map((i) => i.text)).toEqual(['b', 'c', 'a']);
+      const reloaded = await getRoutine(database, existing.id);
+      expect(reloaded?.steps.map((i) => i.text)).toEqual(['b', 'c', 'a']);
     });
 
     it('shows a floating preview and insertion target while dragging', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'preview me',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -320,13 +320,13 @@ describe('ChecklistEditor', () => {
 
     it('replaces the gap with reordered rows without remounting displaced rows', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'settle smoothly',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -353,13 +353,13 @@ describe('ChecklistEditor', () => {
     it('keeps the settling preview mounted until its release animation finishes', async () => {
       const releaseCallbacks: ((finished?: boolean) => void)[] = [];
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'finish the release',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -391,13 +391,13 @@ describe('ChecklistEditor', () => {
 
     it('moves the real insertion target while keeping the preview coordinate base fixed', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'smooth targets',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -427,15 +427,15 @@ describe('ChecklistEditor', () => {
 
     it('does not rerender again while the pointer stays in one insertion slot', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'smooth drag',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       const onRender = jest.fn();
       await renderWithDatabase(
         <Profiler id="editor" onRender={onRender}>
-          <ChecklistEditor
-            initialChecklist={existing}
+          <RoutineEditor
+            initialRoutine={existing}
             onSaved={jest.fn()}
             onCancel={jest.fn()}
           />
@@ -459,13 +459,13 @@ describe('ChecklistEditor', () => {
 
     it('ignores a second row gesture while another row is being dragged', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'one drag at a time',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -492,13 +492,13 @@ describe('ChecklistEditor', () => {
 
     it('allows another drag when the claimed row disappears before drag setup', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'recover a claimed drag',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -526,13 +526,13 @@ describe('ChecklistEditor', () => {
       const vibrate = jest.spyOn(Vibration, 'vibrate').mockImplementation();
       vibrate.mockClear();
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'serialize releases',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -555,9 +555,9 @@ describe('ChecklistEditor', () => {
 
     it('forgets deleted row measurements before calculating the bottom slot', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'delete then drag',
-        items: [
+        steps: [
           { text: 'a' },
           { text: 'b' },
           { text: 'c' },
@@ -565,8 +565,8 @@ describe('ChecklistEditor', () => {
         ],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -583,13 +583,13 @@ describe('ChecklistEditor', () => {
 
     it('starts a second drag from the item current row after reordering', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'drag again',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -612,13 +612,13 @@ describe('ChecklistEditor', () => {
 
     it('does not reuse temporary drop-gap layouts on later drags', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'drag cleanly',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -650,23 +650,23 @@ describe('ChecklistEditor', () => {
         .spyOn(ScrollView.prototype, 'scrollTo')
         .mockImplementation(jest.fn());
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'scroll me',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
         { database },
       );
 
-      fireEvent(screen.getByTestId('checklist-editor-scroll'), 'layout', {
+      fireEvent(screen.getByTestId('routine-editor-scroll'), 'layout', {
         nativeEvent: { layout: { y: 64, height: 300 } },
       });
-      fireEvent(screen.getByTestId('checklist-editor-scroll'), 'contentSizeChange', 0, 1000);
+      fireEvent(screen.getByTestId('routine-editor-scroll'), 'contentSizeChange', 0, 1000);
       primeRowLayouts([50, 50, 50]);
 
       await beginRowDrag(2, 289, 340);
@@ -690,23 +690,23 @@ describe('ChecklistEditor', () => {
         .spyOn(ScrollView.prototype, 'scrollTo')
         .mockImplementation(jest.fn());
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'keep scrolling',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
         { database },
       );
-      fireEvent(screen.getByTestId('checklist-editor-scroll'), 'layout', {
+      fireEvent(screen.getByTestId('routine-editor-scroll'), 'layout', {
         nativeEvent: { layout: { y: 0, height: 300 } },
       });
       fireEvent(
-        screen.getByTestId('checklist-editor-scroll'),
+        screen.getByTestId('routine-editor-scroll'),
         'contentSizeChange',
         0,
         1000,
@@ -738,23 +738,23 @@ describe('ChecklistEditor', () => {
       });
       jest.spyOn(ScrollView.prototype, 'scrollTo').mockImplementation(jest.fn());
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'scroll target',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
         { database },
       );
 
-      fireEvent(screen.getByTestId('checklist-editor-scroll'), 'layout', {
+      fireEvent(screen.getByTestId('routine-editor-scroll'), 'layout', {
         nativeEvent: { layout: { y: 0, height: 300 } },
       });
-      fireEvent(screen.getByTestId('checklist-editor-scroll'), 'contentSizeChange', 0, 1000);
+      fireEvent(screen.getByTestId('routine-editor-scroll'), 'contentSizeChange', 0, 1000);
       fireEvent(screen.getByTestId('item-row-0'), 'layout', {
         nativeEvent: { layout: { y: 0, height: 50 } },
       });
@@ -777,13 +777,13 @@ describe('ChecklistEditor', () => {
 
     it('cancels a drag when the responder is terminated', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'cancel drag',
-        items: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -800,13 +800,13 @@ describe('ChecklistEditor', () => {
 
     it('waits for a hold before disabling native scroll for the row drag', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'keep drag',
-        items: [{ text: 'a' }, { text: 'b' }],
+        steps: [{ text: 'a' }, { text: 'b' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -820,25 +820,25 @@ describe('ChecklistEditor', () => {
       const localId = screen.getByTestId('item-row-0').props.nativeID;
       const gesture = getByGestureTestId(`item-hold-gesture-${localId}-0`);
       expect(gesture.config.activateAfterLongPress).toBe(350);
-      expect(screen.getByTestId('checklist-editor-scroll').props.scrollEnabled).toBe(true);
+      expect(screen.getByTestId('routine-editor-scroll').props.scrollEnabled).toBe(true);
 
       await beginRowDrag(0, 25, 25);
 
       expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
-      expect(screen.getByTestId('checklist-editor-scroll').props.scrollEnabled).toBe(false);
+      expect(screen.getByTestId('routine-editor-scroll').props.scrollEnabled).toBe(false);
 
       await finishRowDrag(gesture);
     });
 
     it('enters native text editing only after a quick tap on an idle step', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'keep drag',
-        items: [{ text: 'hold this text' }],
+        steps: [{ text: 'hold this text' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -877,13 +877,13 @@ describe('ChecklistEditor', () => {
 
     it('uses the whole row and accessible adjustments without visible move controls', async () => {
       const database = await setupDb();
-      const existing = await createChecklist(database, {
+      const existing = await createRoutine(database, {
         title: 'x',
-        items: [{ text: 'a' }, { text: 'b' }],
+        steps: [{ text: 'a' }, { text: 'b' }],
       });
       await renderWithDatabase(
-        <ChecklistEditor
-          initialChecklist={existing}
+        <RoutineEditor
+          initialRoutine={existing}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,

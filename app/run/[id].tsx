@@ -7,8 +7,8 @@ import { useDatabase } from '@/src/db/DatabaseProvider';
 import { RunScreen } from '@/src/features/run/RunScreen';
 import { createSnapshot } from '@/src/features/run/snapshot';
 import { requestRunStopConfirmation } from '@/src/features/run/stopConfirmation';
-import type { ChecklistRunSnapshot } from '@/src/features/run/types';
-import { getChecklist } from '@/src/features/checklists/repository';
+import type { RoutineRunSnapshot } from '@/src/features/run/types';
+import { getRoutine } from '@/src/features/routines/repository';
 import { useDevicePreferences } from '@/src/features/settings/DevicePreferencesProvider';
 import { CueSoundPlayer } from '@/src/services/audio/CueSoundPlayer';
 import type { CueAction } from '@/src/services/audio/cues';
@@ -25,7 +25,7 @@ type LoadState =
   | { kind: 'empty' }
   | {
       kind: 'ready';
-      snapshot: ChecklistRunSnapshot;
+      snapshot: RoutineRunSnapshot;
       initialAvailability: { spokenPlaybackAvailable: boolean; voiceControlAvailable: boolean };
     };
 
@@ -79,17 +79,17 @@ export default function RunRoute() {
     if (!id) return;
     let cancelled = false;
     (async () => {
-      const checklist = await getChecklist(db, id);
+      const routine = await getRoutine(db, id);
       if (cancelled) return;
-      if (!checklist) {
+      if (!routine) {
         setLoadState({ kind: 'missing' });
         return;
       }
-      if (checklist.items.length === 0) {
+      if (routine.steps.length === 0) {
         setLoadState({ kind: 'empty' });
         return;
       }
-      const snapshot = createSnapshot(checklist);
+      const snapshot = createSnapshot(routine);
       const playbackAvail = await adapters.playback.isAvailable();
       let voiceAvail = await adapters.recognition.isAvailable();
       if (voiceAvail) {
@@ -132,10 +132,10 @@ export default function RunRoute() {
 
   useEffect(() => setListeningNotificationStopHandler(exitRun), [exitRun]);
 
-  const checklistTitle = loadState.kind === 'ready' ? loadState.snapshot.checklistTitle : '';
+  const routineTitle = loadState.kind === 'ready' ? loadState.snapshot.routineTitle : '';
   const startVoiceRun = useCallback(
-    () => startListeningNotification(checklistTitle),
-    [checklistTitle],
+    () => startListeningNotification(routineTitle),
+    [routineTitle],
   );
   const playCompletionSound = useCallback(
     async () => {
@@ -159,7 +159,7 @@ export default function RunRoute() {
   if (loadState.kind === 'missing') {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <Text>That checklist no longer exists.</Text>
+        <Text>That routine no longer exists.</Text>
       </View>
     );
   }
@@ -167,7 +167,7 @@ export default function RunRoute() {
   if (loadState.kind === 'empty') {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <Text>This checklist has no items. Add at least one before starting.</Text>
+        <Text>This routine has no items. Add at least one before starting.</Text>
       </View>
     );
   }

@@ -50,7 +50,7 @@ describe('RunScreen stop control', () => {
     );
 
     const gesture = await beginStopHold();
-    expect(screen.queryByText(snapshot.checklistTitle)).toBeNull();
+    expect(screen.queryByText(snapshot.routineTitle)).toBeNull();
     expect(screen.getByText(/keep holding/i)).toBeOnTheScreen();
     act(() => jest.advanceTimersByTime(600));
     await releaseStopHold(gesture);
@@ -65,7 +65,7 @@ describe('RunScreen stop control', () => {
     expect(onExit).not.toHaveBeenCalled();
     expect(onRequestStop).not.toHaveBeenCalled();
     expect(screen.queryByText(/keep holding/i)).toBeNull();
-    expect(screen.getByText(snapshot.checklistTitle)).toBeOnTheScreen();
+    expect(screen.getByText(snapshot.routineTitle)).toBeOnTheScreen();
   });
 
   it('stops directly after the complete 1.2-second pointer hold', async () => {
@@ -137,9 +137,9 @@ describe('RunScreen stop control', () => {
     const { onExit } = setup({
       screenReaderEnabled: false,
       snapshot: {
-        checklistId: 'one-step',
-        checklistTitle: 'One step',
-        items: [{ id: 'only', text: 'Only step', order: 0 }],
+        routineId: 'one-step',
+        routineTitle: 'One step',
+        steps: [{ id: 'only', text: 'Only step', order: 0 }],
       },
     });
     await flush();

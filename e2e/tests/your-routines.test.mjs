@@ -92,7 +92,7 @@ async function openSettings() {
 }
 
 async function returnFromSettings() {
-  await tapLabel(driver, 'Back to my checklists');
+  await tapLabel(driver, 'Back to my routines');
   await waitForDisplayed(byId(driver, 'library-safe-area'));
 }
 
@@ -346,7 +346,7 @@ scenario(
 
     const [titleRect, newRect, settingsRect] = await Promise.all([
       elementRect(driver, byText(driver, 'Routines')),
-      elementRect(driver, byLabel(driver, 'New checklist')),
+      elementRect(driver, byLabel(driver, 'New routine')),
       elementRect(driver, byLabel(driver, 'Settings')),
     ]);
     const centersY = [titleRect, newRect, settingsRect].map(
@@ -397,7 +397,7 @@ scenario(
       JSON.stringify(parseGfxInfo(scrollFrames), null, 2));
 
     await scrollToLabel(driver, `Edit ${lastTitle}`);
-    assert.equal(await byLabel(driver, 'New checklist').isDisplayed(), true);
+    assert.equal(await byLabel(driver, 'New routine').isDisplayed(), true);
     assert.equal(await byLabel(driver, 'Settings').isDisplayed(), true);
     await capture(driver, '02-library-seventeen-routines');
   },
@@ -512,7 +512,7 @@ scenario('run: stops with confirmation and completes all steps', { timeout: 5 * 
 
 scenario('create-delete: prepends a routine and deletes it from its editor', { timeout: 4 * 60_000 }, async () => {
   await importFreshLibrary();
-  await tapLabel(driver, 'New checklist');
+  await tapLabel(driver, 'New routine');
   await waitForDisplayed(byId(driver, 'editor-safe-area'));
   await byId(driver, 'title-input').setValue(temporaryTitle);
   await byLabel(driver, 'Hold row 1 to reorder').click();
@@ -527,7 +527,7 @@ scenario('create-delete: prepends a routine and deletes it from its editor', { t
     `Delete ${temporaryTitle}`,
   );
   await deleteRoutine.click();
-  await waitForDisplayed(byText(driver, 'Delete checklist?'));
+  await waitForDisplayed(byText(driver, 'Delete routine?'));
   const confirmDelete = await waitForDisplayed(
     driver.$('id=android:id/button1'),
   );
@@ -610,7 +610,7 @@ scenario('responsive: restores temporary font scale and viewport', { timeout: 4 
   await driver.terminateApp(APP_PACKAGE);
   await activateLibrary();
   await expectTopTitle(firstTitle);
-  assert.equal(await byLabel(driver, 'New checklist').isDisplayed(), true);
+  assert.equal(await byLabel(driver, 'New routine').isDisplayed(), true);
   assert.equal(await byLabel(driver, 'Settings').isDisplayed(), true);
   await capture(driver, '09-large-font-narrow-viewport');
 

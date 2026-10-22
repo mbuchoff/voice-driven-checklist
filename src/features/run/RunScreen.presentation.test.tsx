@@ -12,7 +12,7 @@ import {
   getStopControlPosition,
 } from './StopRunControl';
 import { RUN_ITEM_GAP } from './runPresentation';
-import type { ChecklistRunSnapshot } from './types';
+import type { RoutineRunSnapshot } from './types';
 const defaultPlatformOS = Platform.OS;
 const defaultPlatformVersion = Platform.Version;
 
@@ -31,7 +31,7 @@ describe('RunScreen presentation', () => {
   });
 
   describe('initial render', () => {
-    it('shows the checklist title, current item, and progress label', async () => {
+    it('shows the routine title, current item, and progress label', async () => {
       setup();
       await flush();
 
@@ -55,7 +55,7 @@ describe('RunScreen presentation', () => {
       expect(screen.getByTestId('stop-run-icon')).toBeOnTheScreen();
     });
 
-    it('renders continuous arcs for checklist and stop progress', async () => {
+    it('renders continuous arcs for routine and stop progress', async () => {
       setup();
       await flush();
 
@@ -82,7 +82,7 @@ describe('RunScreen presentation', () => {
       expect(center.r).toBeLessThan(track.r);
     });
 
-    it('stacks the progress orbit above overflowing checklist rows', async () => {
+    it('stacks the progress orbit above overflowing routine rows', async () => {
       setup();
       await flush();
 
@@ -156,10 +156,10 @@ describe('RunScreen presentation', () => {
     });
 
     it('keeps every snapshot item mounted while only the current row is selected', async () => {
-      const longSnapshot: ChecklistRunSnapshot = {
-        checklistId: 'long',
-        checklistTitle: 'Long routine',
-        items: Array.from({ length: 17 }, (_, index) => ({
+      const longSnapshot: RoutineRunSnapshot = {
+        routineId: 'long',
+        routineTitle: 'Long routine',
+        steps: Array.from({ length: 17 }, (_, index) => ({
           id: `long-${index}`,
           text: `Step ${index + 1}`,
           order: index,
@@ -223,7 +223,7 @@ describe('RunScreen presentation', () => {
       setup({
         snapshot: {
           ...snapshot,
-          items: [
+          steps: [
             {
               id: 'long',
               text: 'A long step that wraps across several lines on a phone screen',
@@ -252,7 +252,7 @@ describe('RunScreen presentation', () => {
       setup({
         snapshot: {
           ...snapshot,
-          items: [
+          steps: [
             {
               id: 'glass',
               text: 'Drink a full glass of water',

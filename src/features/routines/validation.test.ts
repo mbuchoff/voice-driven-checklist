@@ -1,47 +1,47 @@
-import { validateChecklistTitle, validateChecklistItemText } from './validation';
+import { validateRoutineTitle, validateStepText } from './validation';
 
-describe('validateChecklistTitle', () => {
+describe('validateRoutineTitle', () => {
   it('accepts a non-empty title and returns the trimmed value', () => {
-    expect(validateChecklistTitle('  Morning routine  ')).toEqual({
+    expect(validateRoutineTitle('  Morning routine  ')).toEqual({
       ok: true,
       value: 'Morning routine',
     });
   });
 
   it('rejects an empty string', () => {
-    expect(validateChecklistTitle('')).toEqual({
+    expect(validateRoutineTitle('')).toEqual({
       ok: false,
       error: 'Title is required.',
     });
   });
 
   it('rejects whitespace-only input', () => {
-    expect(validateChecklistTitle('   \t  \n')).toEqual({
+    expect(validateRoutineTitle('   \t  \n')).toEqual({
       ok: false,
       error: 'Title is required.',
     });
   });
 });
 
-describe('validateChecklistItemText', () => {
+describe('validateStepText', () => {
   it('accepts non-empty text and returns the trimmed value', () => {
-    expect(validateChecklistItemText('  Brush teeth  ')).toEqual({
+    expect(validateStepText('  Brush teeth  ')).toEqual({
       ok: true,
       value: 'Brush teeth',
     });
   });
 
   it('rejects an empty string', () => {
-    expect(validateChecklistItemText('')).toEqual({
+    expect(validateStepText('')).toEqual({
       ok: false,
-      error: 'Item text is required.',
+      error: 'Step text is required.',
     });
   });
 
   it('rejects whitespace-only input', () => {
-    expect(validateChecklistItemText('  \n ')).toEqual({
+    expect(validateStepText('  \n ')).toEqual({
       ok: false,
-      error: 'Item text is required.',
+      error: 'Step text is required.',
     });
   });
 });

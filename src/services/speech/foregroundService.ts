@@ -44,7 +44,7 @@ export function setListeningNotificationStopHandler(handler: StopHandler): () =>
   };
 }
 
-export async function startListeningNotification(checklistTitle: string): Promise<void> {
+export async function startListeningNotification(routineTitle: string): Promise<void> {
   if (Platform.OS !== 'android') return;
 
   const settings = await notifee.requestPermission();
@@ -60,7 +60,7 @@ export async function startListeningNotification(checklistTitle: string): Promis
 
   await notifee.displayNotification({
     id: LISTENING_NOTIFICATION_ID,
-    title: `Listening - ${checklistTitle}`,
+    title: `Listening - ${routineTitle}`,
     body: 'Say next, repeat, or previous',
     android: {
       channelId: LISTENING_CHANNEL_ID,

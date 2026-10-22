@@ -13,7 +13,7 @@ import { createTestDatabase } from '@/src/test/createTestDatabase';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
 import { LibraryScreen } from './LibraryScreen';
-import { createChecklist } from './repository';
+import { createRoutine } from './repository';
 
 async function setupDb(): Promise<Database> {
   const db = createTestDatabase();
@@ -24,8 +24,8 @@ async function setupDb(): Promise<Database> {
 describe('LibraryScreen', () => {
   it('shows a recoverable read error instead of claiming the saved library is empty', async () => {
     const database = await setupDb();
-    const routine = await createChecklist(database, {
-      title: 'Saved routine', items: [{ text: 'Kept step' }],
+    const routine = await createRoutine(database, {
+      title: 'Saved routine', steps: [{ text: 'Kept step' }],
     });
     jest.spyOn(database, 'getAllAsync').mockRejectedValueOnce(new Error('temporary read failure'));
     await renderWithDatabase(
@@ -41,10 +41,10 @@ describe('LibraryScreen', () => {
 
   it('hides stale routines after a failed refresh and restores the current library on retry', async () => {
     const database = await setupDb();
-    const routine = await createChecklist(database, {
-      title: 'Saved routine', items: [{ text: 'Kept step' }],
+    const routine = await createRoutine(database, {
+      title: 'Saved routine', steps: [{ text: 'Kept step' }],
     });
-    await createChecklist(database, { title: 'Another routine', items: [] });
+    await createRoutine(database, { title: 'Another routine', steps: [] });
     const callbacks = { onCreate: jest.fn(), onEdit: jest.fn(), onStart: jest.fn() };
     const view = await renderWithDatabase(
       <LibraryScreen {...callbacks} refreshKey={0} />,
@@ -60,7 +60,7 @@ describe('LibraryScreen', () => {
     expect(screen.queryByLabelText('Learn how to move routines')).toBeNull();
     expect(screen.queryByTestId('library-empty-state')).toBeNull();
 
-    const added = await createChecklist(database, { title: 'Added while away', items: [] });
+    const added = await createRoutine(database, { title: 'Added while away', steps: [] });
     fireEvent.press(screen.getByTestId('library-load-retry'));
     await screen.findByTestId(`routine-card-${added.id}`);
     expect(screen.getByTestId(`routine-card-${routine.id}`)).toBeOnTheScreen();
@@ -87,9 +87,9 @@ describe('LibraryScreen', () => {
 
   it('renders every saved step inside a fixed-height, clipped routine card', async () => {
     const database = await setupDb();
-    const routine = await createChecklist(database, {
+    const routine = await createRoutine(database, {
       title: 'Morning routine with a deliberately long title',
-      items: [
+      steps: [
         { text: 'Open blinds' },
         { text: 'Drink a full glass of water before making breakfast' },
         { text: 'Leave with keys, phone, wallet, and packed lunch' },
@@ -128,9 +128,9 @@ describe('LibraryScreen', () => {
 
   it('navigates immediately on successful releases but not cancelled card, Play, New, or Settings contacts', async () => {
     const database = await setupDb();
-    const routine = await createChecklist(database, {
+    const routine = await createRoutine(database, {
       title: 'Errands',
-      items: [{ text: 'Bank' }],
+      steps: [{ text: 'Bank' }],
     });
     const onCreate = jest.fn();
     const onEdit = jest.fn();
@@ -151,7 +151,7 @@ describe('LibraryScreen', () => {
     // may navigate, even once the animation would have finished.
     jest.useFakeTimers();
     try {
-      for (const name of [`Edit ${routine.title}`, `Start ${routine.title}`, 'New checklist', 'Settings']) {
+      for (const name of [`Edit ${routine.title}`, `Start ${routine.title}`, 'New routine', 'Settings']) {
         const button = screen.getByRole('button', { name });
         fireEvent(button, 'pressIn');
         act(() => jest.advanceTimersByTime(120));
@@ -173,7 +173,7 @@ describe('LibraryScreen', () => {
     );
     expect(onStart).toHaveBeenCalledWith(routine.id);
 
-    fireEvent.press(screen.getByRole('button', { name: /new checklist/i }));
+    fireEvent.press(screen.getByRole('button', { name: /new routine/i }));
     expect(onCreate).toHaveBeenCalledTimes(1);
 
     fireEvent.press(screen.getByRole('button', { name: /settings/i }));
@@ -182,9 +182,9 @@ describe('LibraryScreen', () => {
 
   it('keeps Play in place but disables it for an empty routine', async () => {
     const database = await setupDb();
-    const empty = await createChecklist(database, {
+    const empty = await createRoutine(database, {
       title: 'Draft',
-      items: [],
+      steps: [],
     });
     const onStart = jest.fn();
     await renderWithDatabase(
@@ -205,9 +205,9 @@ describe('LibraryScreen', () => {
 
   it('does not expose separate Edit or Delete controls on a routine card', async () => {
     const database = await setupDb();
-    const routine = await createChecklist(database, {
+    const routine = await createRoutine(database, {
       title: 'Errands',
-      items: [{ text: 'Bank' }],
+      steps: [{ text: 'Bank' }],
     });
     await renderWithDatabase(
       <LibraryScreen
@@ -244,7 +244,7 @@ describe('LibraryScreen', () => {
       ),
     ).toBeNull();
     expect(
-      screen.getByRole('button', { name: /new checklist/i }),
+      screen.getByRole('button', { name: /new routine/i }),
     ).toBeOnTheScreen();
     expect(
       screen.getByRole('button', { name: /settings/i }),
@@ -263,9 +263,9 @@ describe('LibraryScreen', () => {
       { database },
     );
     await screen.findByTestId('library-empty-state');
-    const routine = await createChecklist(database, {
+    const routine = await createRoutine(database, {
       title: 'Added elsewhere',
-      items: [{ text: 'Return home' }],
+      steps: [{ text: 'Return home' }],
     });
 
     view.rerender(<LibraryScreen {...callbacks} refreshKey={1} />);

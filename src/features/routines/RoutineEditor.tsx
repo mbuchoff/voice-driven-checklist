@@ -31,28 +31,28 @@ import { useDatabase } from '@/src/db/DatabaseProvider';
 import { useTheme } from '@/src/theme/useTheme';
 
 import {
-  createChecklist,
-  deleteChecklist,
-  updateChecklist,
+  createRoutine,
+  deleteRoutine,
+  updateRoutine,
 } from './repository';
-import type { Checklist } from './types';
+import type { Routine } from './types';
 import {
-  CHECKLIST_REORDER_HOLD_MS,
+  STEP_REORDER_HOLD_MS,
   animateEditorRows,
-  useChecklistReorder,
+  useStepReorder,
   type ReorderItem,
-} from './useChecklistReorder';
+} from './useStepReorder';
 import {
-  validateChecklistItemText,
-  validateChecklistTitle,
+  validateStepText,
+  validateRoutineTitle,
 } from './validation';
 
 type EditorItem = ReorderItem;
 const EDITOR_KEYBOARD_OFFSET = 24;
 
-export type ChecklistEditorProps = {
-  initialChecklist?: Checklist;
-  onSaved: (saved: Checklist) => void;
+export type RoutineEditorProps = {
+  initialRoutine?: Routine;
+  onSaved: (saved: Routine) => void;
   onDeleted?: () => void;
   onCancel: () => void;
 };
@@ -65,9 +65,9 @@ function makeBlankItem(): EditorItem {
   return { localId: uuidv4(), text: '' };
 }
 
-function initialItems(checklist?: Checklist): EditorItem[] {
-  if (checklist && checklist.items.length > 0) {
-    return checklist.items.map((item) => ({
+function initialItems(routine?: Routine): EditorItem[] {
+  if (routine && routine.steps.length > 0) {
+    return routine.steps.map((item) => ({
       localId: uuidv4(),
       text: item.text,
     }));
@@ -75,12 +75,12 @@ function initialItems(checklist?: Checklist): EditorItem[] {
   return [makeBlankItem()];
 }
 
-export function ChecklistEditor({
-  initialChecklist,
+export function RoutineEditor({
+  initialRoutine,
   onSaved,
   onDeleted,
   onCancel,
-}: ChecklistEditorProps) {
+}: RoutineEditorProps) {
   const database = useDatabase();
   const theme = useTheme();
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -88,9 +88,9 @@ export function ChecklistEditor({
   const itemInputRefs = useRef<
     Record<string, ComponentRef<typeof TextInput> | null>
   >({});
-  const [title, setTitle] = useState(initialChecklist?.title ?? '');
+  const [title, setTitle] = useState(initialRoutine?.title ?? '');
   const [items, setItems] = useState<EditorItem[]>(() =>
-    initialItems(initialChecklist),
+    initialItems(initialRoutine),
   );
   const [focusItemId, setFocusItemId] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -106,7 +106,7 @@ export function ChecklistEditor({
     onScroll,
     onViewportLayout,
     setContentHeight,
-  } = useChecklistReorder({ items, setItems, scrollRef });
+  } = useStepReorder({ items, setItems, scrollRef });
 
   const scrollFocusedItemIntoView = useCallback(() => {
     if (!focusItemId) return;
@@ -195,11 +195,11 @@ export function ChecklistEditor({
     ) : null;
 
   const handleSave = async () => {
-    const titleResult = validateChecklistTitle(title);
+    const titleResult = validateRoutineTitle(title);
     const nextItemErrors: Record<string, string> = {};
     const validItems: { text: string }[] = [];
     for (const item of items) {
-      const result = validateChecklistItemText(item.text);
+      const result = validateStepText(item.text);
       if (!result.ok) nextItemErrors[item.localId] = result.error;
       else validItems.push({ text: result.value });
     }
@@ -207,25 +207,25 @@ export function ChecklistEditor({
     setItemErrors(nextItemErrors);
     if (!titleResult.ok || Object.keys(nextItemErrors).length > 0) return;
 
-    const input = { title: titleResult.value, items: validItems };
-    const saved = initialChecklist
-      ? await updateChecklist(database, initialChecklist.id, input)
-      : await createChecklist(database, input);
+    const input = { title: titleResult.value, steps: validItems };
+    const saved = initialRoutine
+      ? await updateRoutine(database, initialRoutine.id, input)
+      : await createRoutine(database, input);
     onSaved(saved);
   };
 
   const handleDelete = async () => {
-    if (!initialChecklist || !onDeleted) return;
+    if (!initialRoutine || !onDeleted) return;
     const confirmed = await confirmAction({
-      title: 'Delete checklist?',
-      message: `Delete “${initialChecklist.title}”? This cannot be undone.`,
+      title: 'Delete routine?',
+      message: `Delete “${initialRoutine.title}”? This cannot be undone.`,
       confirmLabel: 'Delete',
       destructive: true,
     });
     if (!confirmed) return;
 
     try {
-      await deleteChecklist(database, initialChecklist.id);
+      await deleteRoutine(database, initialRoutine.id);
       onDeleted();
     } catch {
       await notify(
@@ -274,7 +274,7 @@ export function ChecklistEditor({
             flex: 1,
           }}
         >
-          {initialChecklist ? 'EDIT CHECKLIST' : 'NEW CHECKLIST'}
+          {initialRoutine ? 'EDIT ROUTINE' : 'NEW ROUTINE'}
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -304,7 +304,7 @@ export function ChecklistEditor({
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           scrollEnabled={!drag}
-          testID="checklist-editor-scroll"
+          testID="routine-editor-scroll"
           onLayout={handleViewportLayout}
           onContentSizeChange={(_, height) => {
             setContentHeight(height);
@@ -327,7 +327,7 @@ export function ChecklistEditor({
 
           <View style={{ gap: 7 }}>
             <View style={{ flexDirection: 'row' }}>
-              <Text style={{ color: theme.text, fontWeight: '700', fontSize: 13, flex: 1 }}>Checklist name</Text>
+              <Text style={{ color: theme.text, fontWeight: '700', fontSize: 13, flex: 1 }}>Routine name</Text>
               <Text style={{ color: theme.textFaint, fontSize: 12, fontWeight: '500' }}>Required</Text>
             </View>
             <TextInput
@@ -377,7 +377,7 @@ export function ChecklistEditor({
                 const isEditing = focusItemId === item.localId;
                 const editGesture = Gesture.Tap()
                   .withTestId(`item-edit-gesture-${item.localId}-${index}`)
-                  .maxDuration(CHECKLIST_REORDER_HOLD_MS - 1)
+                  .maxDuration(STEP_REORDER_HOLD_MS - 1)
                   .runOnJS(true)
                   .onEnd((_event, success) => {
                     if (success) setFocusItemId(item.localId);
@@ -577,10 +577,10 @@ export function ChecklistEditor({
               <Text style={{ color: theme.primary, fontWeight: '700', fontSize: 14 }}>Add another step</Text>
             </Pressable>
           </View>
-          {initialChecklist && onDeleted ? (
+          {initialRoutine && onDeleted ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Delete ${initialChecklist.title}`}
+              accessibilityLabel={`Delete ${initialRoutine.title}`}
               testID="routine-delete"
               onPress={() => void handleDelete()}
               style={{

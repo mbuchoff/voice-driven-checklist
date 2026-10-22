@@ -43,7 +43,7 @@ export async function exportBackupFile(jsonText: string, suggestedName: string):
     await Sharing.shareAsync(file.uri, {
       mimeType: BACKUP_MIME_TYPE,
       UTI: 'public.json',
-      dialogTitle: 'Export checklists',
+      dialogTitle: 'Export routines',
     });
   }
 }

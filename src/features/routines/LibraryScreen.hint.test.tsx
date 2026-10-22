@@ -18,7 +18,7 @@ import { SqliteDevicePreferenceStore } from '@/src/features/settings/preferences
 import { createTestDatabase } from '@/src/test/createTestDatabase';
 
 import { LibraryScreen } from './LibraryScreen';
-import { createChecklist } from './repository';
+import { createRoutine } from './repository';
 import {
   ROUTINE_ARRANGE_SWIPE_DISTANCE,
   shouldShowRoutineArrangeHint,
@@ -33,9 +33,9 @@ async function setupDb(routineCount: number): Promise<Database> {
   const database = createTestDatabase();
   await runMigrations(database);
   for (let index = 0; index < routineCount; index += 1) {
-    await createChecklist(database, {
+    await createRoutine(database, {
       title: `Routine ${index + 1}`,
-      items: [{ text: `Step ${index + 1}` }],
+      steps: [{ text: `Step ${index + 1}` }],
     });
   }
   return database;

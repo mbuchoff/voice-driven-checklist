@@ -2,11 +2,11 @@ import { useRef } from 'react';
 import { useSharedValue } from 'react-native-reanimated';
 
 import type { RoutineScrollThresholds } from './routineMotion';
-import type { LibraryChecklist } from './types';
+import type { LibraryRoutine } from './types';
 
 export type SlotMap = Record<string, number>;
 
-export function mapRoutineSlots(items: LibraryChecklist[]): SlotMap {
+export function mapRoutineSlots(items: LibraryRoutine[]): SlotMap {
   return Object.fromEntries(items.map((item, index) => [item.id, index]));
 }
 
@@ -14,7 +14,7 @@ export function mapRoutineSlots(items: LibraryChecklist[]): SlotMap {
 // must not cancel tilt/release animations or invalidate unrelated subscribers.
 // Every useSharedValue call must still run on every render (Rules of Hooks);
 // Reanimated retains each value, while the outer ref retains the bundle identity.
-export function useRoutineDragState(items: LibraryChecklist[]) {
+export function useRoutineDragState(items: LibraryRoutine[]) {
   return useRef({
     slots: useSharedValue<SlotMap>(mapRoutineSlots(items)),
     initialSlots: useSharedValue<SlotMap>(mapRoutineSlots(items)),

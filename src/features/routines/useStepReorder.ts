@@ -28,8 +28,8 @@ import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 import { moveItem } from './reorder';
 import { getEdgeAutoscrollDelta as calculateEdgeAutoscrollDelta } from './edgeAutoscroll';
 
-export const CHECKLIST_REORDER_HOLD_MS = 350;
-export const CHECKLIST_REORDER_RELEASE_MS = 120;
+export const STEP_REORDER_HOLD_MS = 350;
+export const STEP_REORDER_RELEASE_MS = 120;
 const EDGE_AUTOSCROLL_THRESHOLD = 56;
 const EDGE_AUTOSCROLL_MAX_SPEED = 480;
 const MAX_AUTOSCROLL_FRAME_MS = 32;
@@ -44,8 +44,8 @@ export function getEdgeAutoscrollDelta(
 }
 
 export type ReorderItem = { localId: string; text: string };
-export type ChecklistRowLayout = { y: number; height: number };
-export type ChecklistDragState = {
+export type StepRowLayout = { y: number; height: number };
+export type StepDragState = {
   localId: string;
   text: string;
   from: number;
@@ -65,14 +65,14 @@ type DragContext = {
   startScrollY: number;
 };
 
-type ChecklistReorderOptions = {
+type StepReorderOptions = {
   items: ReorderItem[];
   setItems: Dispatch<SetStateAction<ReorderItem[]>>;
   scrollRef: RefObject<ComponentRef<typeof ScrollView> | null>;
 };
 
 export function getDropTargetOffset(
-  layouts: (ChecklistRowLayout | null)[],
+  layouts: (StepRowLayout | null)[],
   from: number,
   to: number,
 ): number {
@@ -86,7 +86,7 @@ export function getDropTargetOffset(
 }
 
 function getDropIndex(
-  layouts: (ChecklistRowLayout | null)[],
+  layouts: (StepRowLayout | null)[],
   activeIndex: number,
   contentY: number,
 ): number {
@@ -101,7 +101,7 @@ function getDropIndex(
   return index;
 }
 
-function dragStateFrom(context: DragContext): ChecklistDragState {
+function dragStateFrom(context: DragContext): StepDragState {
   return {
     localId: context.localId,
     text: context.text,
@@ -143,12 +143,12 @@ function animateReorderRows() {
   });
 }
 
-export function useChecklistReorder({
+export function useStepReorder({
   items,
   setItems,
   scrollRef,
-}: ChecklistReorderOptions) {
-  const rowLayouts = useRef<(ChecklistRowLayout | null)[]>([]);
+}: StepReorderOptions) {
+  const rowLayouts = useRef<(StepRowLayout | null)[]>([]);
   const dragRef = useRef<DragContext | null>(null);
   const scrollY = useRef(0);
   const viewportTop = useRef(0);
@@ -157,7 +157,7 @@ export function useChecklistReorder({
   const dragPageY = useRef<number | null>(null);
   const autoscrollFrame = useRef<number | null>(null);
   const lastAutoscrollTime = useRef<number | null>(null);
-  const rowLayoutsValue = useSharedValue<(ChecklistRowLayout | null)[]>([]);
+  const rowLayoutsValue = useSharedValue<(StepRowLayout | null)[]>([]);
   const scrollYValue = useSharedValue(0);
   const viewportTopValue = useSharedValue(0);
   const viewportHeightValue = useSharedValue(0);
@@ -171,9 +171,9 @@ export function useChecklistReorder({
   const dragPreviewOpacity = useSharedValue(1);
   const itemsRef = useRef(items);
   itemsRef.current = items;
-  const [drag, setDrag] = useState<ChecklistDragState | null>(null);
+  const [drag, setDrag] = useState<StepDragState | null>(null);
   const [settlingPreview, setSettlingPreview] =
-    useState<ChecklistDragState | null>(null);
+    useState<StepDragState | null>(null);
   const dragPreview = drag ?? settlingPreview;
   const dragPreviewStyle = useAnimatedStyle(() => ({
     opacity: dragPreviewOpacity.value,
@@ -343,13 +343,13 @@ export function useChecklistReorder({
     setSettlingPreview(dragStateFrom(current));
     setItems((previous) => moveItem(previous, current.from, current.to));
     dragOffset.value = withTiming(targetOffset, {
-      duration: CHECKLIST_REORDER_RELEASE_MS,
+      duration: STEP_REORDER_RELEASE_MS,
       easing: REORDER_ROW_EASING,
     });
     dragPreviewOpacity.value = withTiming(
       0,
       {
-        duration: CHECKLIST_REORDER_RELEASE_MS,
+        duration: STEP_REORDER_RELEASE_MS,
         easing: REORDER_ROW_EASING,
       },
       (finished) => {
@@ -383,7 +383,7 @@ export function useChecklistReorder({
   const gestureFor = (item: ReorderItem, itemIndex: number) =>
     Gesture.Pan()
       .withTestId(`item-hold-gesture-${item.localId}-${itemIndex}`)
-      .activateAfterLongPress(CHECKLIST_REORDER_HOLD_MS)
+      .activateAfterLongPress(STEP_REORDER_HOLD_MS)
       .maxPointers(1)
       .shouldCancelWhenOutside(false)
       .blocksExternalGesture(scrollRef as never)

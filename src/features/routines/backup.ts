@@ -1,52 +1,60 @@
-import type { ChecklistInput } from './types';
-import { validateChecklistItemText, validateChecklistTitle } from './validation';
+import type { RoutineInput } from './types';
+import { validateStepText, validateRoutineTitle } from './validation';
 
 export const BACKUP_FORMAT = 'voice-driven-checklist-backup';
 export const BACKUP_VERSION = 1;
+
+// The file keeps its original field names (`checklists`, `items`) so backups
+// stay readable by every app version.
+type BackupStep = { text: string };
+type BackupRoutine = { title: string; items: BackupStep[] };
 
 type BackupEnvelope = {
   format: typeof BACKUP_FORMAT;
   version: typeof BACKUP_VERSION;
   exportedAt: string;
-  checklists: ChecklistInput[];
+  checklists: BackupRoutine[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function readChecklistInput(value: unknown): ChecklistInput {
+function readRoutineInput(value: unknown): RoutineInput {
   if (!isRecord(value) || typeof value.title !== 'string' || !Array.isArray(value.items)) {
-    throw new Error('Backup file contains an invalid checklist.');
+    throw new Error('Backup file contains an invalid routine.');
   }
 
-  const title = validateChecklistTitle(value.title);
+  const title = validateRoutineTitle(value.title);
   if (!title.ok) throw new Error(title.error);
 
   return {
     title: title.value,
-    items: value.items.map((item) => {
+    steps: value.items.map((item) => {
       if (!isRecord(item) || typeof item.text !== 'string') {
-        throw new Error('Backup file contains an invalid checklist item.');
+        throw new Error('Backup file contains an invalid step.');
       }
-      const text = validateChecklistItemText(item.text);
+      const text = validateStepText(item.text);
       if (!text.ok) throw new Error(text.error);
       return { text: text.value };
     }),
   };
 }
 
-export function serializeBackup(inputs: ChecklistInput[]): string {
+export function serializeBackup(inputs: RoutineInput[]): string {
   const envelope: BackupEnvelope = {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
-    checklists: inputs,
+    checklists: inputs.map(({ title, steps }) => ({
+      title,
+      items: steps.map(({ text }) => ({ text })),
+    })),
   };
   return JSON.stringify(envelope, null, 2);
 }
 
-export function parseBackup(jsonText: string): ChecklistInput[] {
+export function parseBackup(jsonText: string): RoutineInput[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonText);
@@ -63,8 +71,8 @@ export function parseBackup(jsonText: string): ChecklistInput[] {
   }
 
   if (!Array.isArray(parsed.checklists)) {
-    throw new Error('Backup file is missing checklists.');
+    throw new Error('Backup file is missing routines.');
   }
 
-  return parsed.checklists.map(readChecklistInput);
+  return parsed.checklists.map(readRoutineInput);
 }

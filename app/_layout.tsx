@@ -34,8 +34,8 @@ function ThemedNavigation() {
     <ThemeProvider value={navigationTheme}>
       <Stack>
         <Stack.Screen name="index" options={{ title: 'Voice Checklist' }} />
-        <Stack.Screen name="checklists/new" options={{ headerShown: false }} />
-        <Stack.Screen name="checklists/[id]/edit" options={{ headerShown: false }} />
+        <Stack.Screen name="routines/new" options={{ headerShown: false }} />
+        <Stack.Screen name="routines/[id]/edit" options={{ headerShown: false }} />
         <Stack.Screen name="run/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="settings/index" options={{ headerShown: false }} />
         <Stack.Screen name="settings/account" options={{ headerShown: false }} />

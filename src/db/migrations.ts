@@ -76,16 +76,16 @@ const migrations: Migration[] = [
     await db.execAsync(
       'ALTER TABLE checklists ADD COLUMN library_position INTEGER;',
     );
-    const checklists = await db.getAllAsync<{ id: string }>(
+    const routines = await db.getAllAsync<{ id: string }>(
       `SELECT id
        FROM checklists
        ORDER BY updated_at DESC, title ASC, id ASC`,
     );
-    for (const [position, checklist] of checklists.entries()) {
+    for (const [position, routine] of routines.entries()) {
       await db.runAsync(
         'UPDATE checklists SET library_position = ? WHERE id = ?',
         position,
-        checklist.id,
+        routine.id,
       );
     }
     await db.execAsync(`

@@ -1,12 +1,12 @@
 import { useRouter } from 'expo-router';
 
-import { ChecklistEditor } from '@/src/features/checklists/ChecklistEditor';
+import { RoutineEditor } from '@/src/features/routines/RoutineEditor';
 
-export default function NewChecklistRoute() {
+export default function NewRoutineRoute() {
   const router = useRouter();
 
   return (
-    <ChecklistEditor
+    <RoutineEditor
       onSaved={() => router.back()}
       onCancel={() => router.back()}
     />

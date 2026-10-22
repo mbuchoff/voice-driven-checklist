@@ -1,11 +1,11 @@
-import type { Checklist } from '../checklists/types';
+import type { Routine } from '../routines/types';
 
-import type { ChecklistRunSnapshot } from './types';
+import type { RoutineRunSnapshot } from './types';
 
-export function createSnapshot(checklist: Checklist): ChecklistRunSnapshot {
+export function createSnapshot(routine: Routine): RoutineRunSnapshot {
   return {
-    checklistId: checklist.id,
-    checklistTitle: checklist.title,
-    items: checklist.items.map((item) => ({ ...item })),
+    routineId: routine.id,
+    routineTitle: routine.title,
+    steps: routine.steps.map((item) => ({ ...item })),
   };
 }

@@ -6,12 +6,12 @@ import { ScreenBackground } from '@/src/components/ScreenBackground';
 
 export function CompletionView({
   totalItems,
-  checklistTitle,
+  routineTitle,
   onRestart,
   onExit,
 }: {
   totalItems: number;
-  checklistTitle?: string;
+  routineTitle?: string;
   onRestart: () => void;
   onExit: () => void | Promise<void>;
 }) {
@@ -61,7 +61,7 @@ export function CompletionView({
               marginBottom: 8,
             }}
           >
-            CHECKLIST COMPLETE
+            ROUTINE COMPLETE
           </Text>
           <Text
             style={{
@@ -84,7 +84,7 @@ export function CompletionView({
               marginBottom: 36,
             }}
           >
-            All {totalItems} steps in “{checklistTitle}” are checked off.
+            All {totalItems} steps in “{routineTitle}” are checked off.
           </Text>
           <View style={{ width: '100%', gap: 10 }}>
             <Pressable
@@ -121,7 +121,7 @@ export function CompletionView({
               }}
             >
               <Text style={{ color: '#fffaf1', fontWeight: '700', fontSize: 16 }}>
-                Back to my checklists
+                Back to my routines
               </Text>
             </Pressable>
           </View>

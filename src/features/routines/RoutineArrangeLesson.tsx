@@ -7,7 +7,7 @@ import type { Palette } from '@/src/theme/palette';
 import { getRoutineCardColors, RoutineCard } from './RoutineCard';
 import { RoutineHoldOutline } from './RoutineHoldOutline';
 import { getRoutinePosition, type RoutineGridMetrics } from './routineGrid';
-import type { LibraryChecklist } from './types';
+import type { LibraryRoutine } from './types';
 
 export const ROUTINE_ARRANGE_LESSON_DURATION_MS = 2700;
 
@@ -18,7 +18,7 @@ export function RoutineArrangeLesson({
   theme,
   onFinish,
 }: {
-  item: LibraryChecklist;
+  item: LibraryRoutine;
   layout: RoutineGridMetrics;
   viewportOrigin: { x: number; y: number };
   theme: Palette;

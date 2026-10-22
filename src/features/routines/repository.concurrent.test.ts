@@ -3,7 +3,7 @@ import { runMigrations } from '@/src/db/migrations';
 import { SqliteDevicePreferenceStore } from '@/src/features/settings/preferences';
 import { createTestDatabase } from '@/src/test/createTestDatabase';
 
-import { createChecklist, deleteChecklist, getChecklist, listChecklists, reorderChecklists } from './repository';
+import { createRoutine, deleteRoutine, getRoutine, listRoutines, reorderRoutines } from './repository';
 
 function pauseBeforeRollback(database: Database) {
   let entered!: () => void;
@@ -30,15 +30,15 @@ describe('independent operations during a failed reorder', () => {
   beforeEach(async () => {
     database = createTestDatabase();
     await runMigrations(database);
-    second = (await createChecklist(database, { title: 'Second', items: [] })).id;
-    first = (await createChecklist(database, { title: 'First', items: [] })).id;
+    second = (await createRoutine(database, { title: 'Second', steps: [] })).id;
+    first = (await createRoutine(database, { title: 'First', steps: [] })).id;
   });
 
   afterEach(async () => { await database.closeAsync(); });
 
   it('keeps a successful hint dismissal after the reorder rolls back', async () => {
     const pause = pauseBeforeRollback(database);
-    const order = reorderChecklists(database, [second, first]);
+    const order = reorderRoutines(database, [second, first]);
     const failedOrder = expect(order).rejects.toThrow('simulated late save failure');
     await pause.ready;
     const store = new SqliteDevicePreferenceStore(database);
@@ -51,10 +51,10 @@ describe('independent operations during a failed reorder', () => {
 
   it('returns committed order to a concurrent reader, never the rolled-back preview', async () => {
     const pause = pauseBeforeRollback(database);
-    const order = reorderChecklists(database, [second, first]);
+    const order = reorderRoutines(database, [second, first]);
     const failedOrder = expect(order).rejects.toThrow('simulated late save failure');
     await pause.ready;
-    const read = listChecklists(database);
+    const read = listRoutines(database);
     pause.release();
     await failedOrder;
     expect((await read).map(item => item.id)).toEqual([first, second]);
@@ -62,13 +62,13 @@ describe('independent operations during a failed reorder', () => {
 
   it('does not resurrect an independently deleted routine after rollback', async () => {
     const pause = pauseBeforeRollback(database);
-    const order = reorderChecklists(database, [second, first]);
+    const order = reorderRoutines(database, [second, first]);
     const failedOrder = expect(order).rejects.toThrow('simulated late save failure');
     await pause.ready;
-    const deletion = deleteChecklist(database, first);
+    const deletion = deleteRoutine(database, first);
     pause.release();
     await failedOrder;
     await deletion;
-    await expect(getChecklist(database, first)).resolves.toBeNull();
+    await expect(getRoutine(database, first)).resolves.toBeNull();
   });
 });

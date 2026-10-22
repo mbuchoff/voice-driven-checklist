@@ -2,10 +2,10 @@ import { fireEvent, screen, render, act } from '@testing-library/react-native';
 
 import { runMigrations } from '@/src/db/migrations';
 import {
-  createChecklist,
-  deleteChecklist,
-  getChecklist,
-} from '@/src/features/checklists/repository';
+  createRoutine,
+  deleteRoutine,
+  getRoutine,
+} from '@/src/features/routines/repository';
 import { createSnapshot } from '@/src/features/run/snapshot';
 import { RunScreen } from '@/src/features/run/RunScreen';
 import {
@@ -21,12 +21,12 @@ async function flush() {
 }
 
 describe('regression: snapshot survives source deletion mid-run', () => {
-  it('finishes the run from the in-memory snapshot even after the source checklist is deleted from SQLite', async () => {
+  it('finishes the run from the in-memory snapshot even after the source routine is deleted from SQLite', async () => {
     const db = createTestDatabase();
     await runMigrations(db);
-    const created = await createChecklist(db, {
+    const created = await createRoutine(db, {
       title: 'Doomed',
-      items: [{ text: 'first' }, { text: 'second' }],
+      steps: [{ text: 'first' }, { text: 'second' }],
     });
     const snapshot = createSnapshot(created);
 
@@ -50,8 +50,8 @@ describe('regression: snapshot survives source deletion mid-run', () => {
     await flush();
 
     // Delete the source while the run is in progress.
-    await deleteChecklist(db, created.id);
-    expect(await getChecklist(db, created.id)).toBeNull();
+    await deleteRoutine(db, created.id);
+    expect(await getRoutine(db, created.id)).toBeNull();
 
     // The run continues from the in-memory snapshot.
     fireEvent.press(screen.getByTestId('manual-next'));
@@ -59,7 +59,7 @@ describe('regression: snapshot survives source deletion mid-run', () => {
     fireEvent.press(screen.getByTestId('manual-next'));
     await flush();
 
-    expect(screen.getByText(/checklist complete/i)).toBeOnTheScreen();
+    expect(screen.getByText(/routine complete/i)).toBeOnTheScreen();
     expect(onCompletion).toHaveBeenCalledTimes(1);
     expect(playback.spoken).toEqual(['first', 'second']);
   });

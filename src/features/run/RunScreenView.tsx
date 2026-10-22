@@ -25,7 +25,7 @@ import {
   type RunItemStatus,
 } from './runPresentation';
 import { StopRunControl } from './StopRunControl';
-import type { ChecklistRunState } from './types';
+import type { RoutineRunState } from './types';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -44,7 +44,7 @@ export function ActiveRunView({
   onRequestStop,
   onAction,
 }: {
-  state: ChecklistRunState;
+  state: RoutineRunState;
   theme: Palette;
   androidApi: number;
   talkBackEnabled: boolean;
@@ -56,8 +56,8 @@ export function ActiveRunView({
   onRequestStop: () => void | Promise<void>;
   onAction: (action: RunCommand) => void;
 }) {
-  const totalItems = state.snapshot?.items.length ?? 0;
-  const items = state.snapshot?.items ?? [];
+  const totalItems = state.snapshot?.steps.length ?? 0;
+  const items = state.snapshot?.steps ?? [];
   const progressPalette = getRunProgressPalette(theme.mode);
   const trackStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: getRunTrackOffset(animatedCurrentIndex.value) }],
@@ -118,14 +118,14 @@ export function ActiveRunView({
                 width: '100%',
               }}
             >
-              {state.snapshot?.checklistTitle}
+              {state.snapshot?.routineTitle}
             </Text>
           ) : null}
         </View>
       </View>
 
       <ProgressOrbit
-        current={state.currentItemIndex + 1}
+        current={state.currentStepIndex + 1}
         total={totalItems}
         animatedCurrentIndex={animatedCurrentIndex}
         color={theme.runText}
@@ -154,7 +154,7 @@ export function ActiveRunView({
             <RunItem
               key={item.id}
               index={index}
-              status={getRunItemStatus(index, state.currentItemIndex)}
+              status={getRunItemStatus(index, state.currentStepIndex)}
               text={item.text}
               androidApi={androidApi}
               textColor={theme.runText}

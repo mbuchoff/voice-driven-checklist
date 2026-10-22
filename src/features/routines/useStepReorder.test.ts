@@ -1,9 +1,9 @@
 import {
   getDropTargetOffset,
   getEdgeAutoscrollDelta,
-} from './useChecklistReorder';
+} from './useStepReorder';
 
-describe('checklist edge autoscroll', () => {
+describe('routine edge autoscroll', () => {
   it('travels the same controlled distance at different display refresh rates', () => {
     const distanceAt60Hz = Array.from(
       { length: 60 },
@@ -33,7 +33,7 @@ describe('checklist edge autoscroll', () => {
   });
 });
 
-describe('checklist row placement', () => {
+describe('routine row placement', () => {
   it('places the insertion target correctly among variable-height rows', () => {
     const layouts = [
       { y: 0, height: 70 },

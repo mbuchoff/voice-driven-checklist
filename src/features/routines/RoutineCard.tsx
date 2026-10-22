@@ -14,7 +14,7 @@ import { Icon } from '@/src/components/Icon';
 import type { Palette } from '@/src/theme/palette';
 
 import type { RoutineGridMetrics } from './routineGrid';
-import type { LibraryChecklist } from './types';
+import type { LibraryRoutine } from './types';
 import { useRoutineSelectionFeedback } from './useRoutineSelectionFeedback';
 import type { RoutinePressGuard } from './useRoutinePressGuard';
 
@@ -65,7 +65,7 @@ export function RoutineCard({
   accessibilityActions,
   onAccessibilityAction,
 }: {
-  item: LibraryChecklist;
+  item: LibraryRoutine;
   layout: RoutineGridMetrics;
   theme: Palette;
   onEdit: () => void;
@@ -77,7 +77,7 @@ export function RoutineCard({
   onAccessibilityAction?: ComponentProps<typeof Pressable>['onAccessibilityAction'];
 }) {
   const { ink, fill } = getRoutineCardColors(item.id, theme.mode);
-  const empty = item.items.length === 0;
+  const empty = item.steps.length === 0;
   const cardSelection = useRoutineSelectionFeedback('card', onEdit);
   const playSelection = useRoutineSelectionFeedback('control', onStart);
 
@@ -129,9 +129,9 @@ export function RoutineCard({
             fontWeight: '700',
           }}
         >
-          {stepCountLabel(item.items.length)}
+          {stepCountLabel(item.steps.length)}
         </Text>
-        {item.items.length > 0 ? (
+        {item.steps.length > 0 ? (
           <Text
             testID={`routine-step-list-${item.id}`}
             style={{
@@ -141,7 +141,7 @@ export function RoutineCard({
               borderTopColor: 'rgba(128, 128, 128, 0.22)',
             }}
           >
-            {item.items.map(({ text }) => text).join(' · ')}
+            {item.steps.map(({ text }) => text).join(' · ')}
           </Text>
         ) : null}
       </View>

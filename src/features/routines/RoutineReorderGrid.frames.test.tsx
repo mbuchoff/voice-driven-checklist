@@ -27,7 +27,7 @@ it('keeps the released card in front until completion and ignores an old complet
   const shared = (value: number) => ({ value } as Reanimated.SharedValue<number>);
   const props = {
     orderRevision: 0,
-    items: ['a', 'b'].map(id => ({ id, title: id, items: [{ text: 'Step' }] })),
+    items: ['a', 'b'].map(id => ({ id, title: id, steps: [{ text: 'Step' }] })),
     layout: getRoutineGridMetrics(361, 2), theme: light,
     scrollRef: createRef<ScrollView>() as Reanimated.AnimatedRef<ScrollView>,
     scrollY: shared(0), viewportHeight: shared(400), contentHeight: shared(400),
@@ -71,7 +71,7 @@ it('runs adaptive-edge scrolling through the frame loop and drops into the newly
   const onReorder = jest.fn();
   const items = Array.from({ length: 8 }, (_, index) => ({
     id: `${index}`, title: `Routine ${index}`,
-    items: [{ text: 'Step' }],
+    steps: [{ text: 'Step' }],
   }));
   render(<RoutineReorderGrid
     orderRevision={0}

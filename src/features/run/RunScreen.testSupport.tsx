@@ -8,12 +8,12 @@ import {
 } from '@/src/services/speech/fakes';
 
 import { RunScreen, type RunScreenProps } from './RunScreen';
-import type { ChecklistRunSnapshot } from './types';
+import type { RoutineRunSnapshot } from './types';
 
-export const runSnapshot: ChecklistRunSnapshot = {
-  checklistId: 'cl-1',
-  checklistTitle: 'Demo',
-  items: [
+export const runSnapshot: RoutineRunSnapshot = {
+  routineId: 'cl-1',
+  routineTitle: 'Demo',
+  steps: [
     { id: 'i1', text: 'Item one', order: 0 },
     { id: 'i2', text: 'Item two', order: 1 },
     { id: 'i3', text: 'Item three', order: 2 },
@@ -32,7 +32,7 @@ type RunRenderOptions = Partial<
     | 'onCue'
     | 'screenReaderEnabled'
   >
-> & { snapshot?: ChecklistRunSnapshot };
+> & { snapshot?: RoutineRunSnapshot };
 
 export function setupRunScreen(options: RunRenderOptions = {}) {
   const playback = new FakeSpeechPlaybackAdapter();

@@ -3,14 +3,14 @@ import { Keyboard, ScrollView } from 'react-native';
 
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
-import { ChecklistEditor, focusEditorInput } from './ChecklistEditor';
+import { RoutineEditor, focusEditorInput } from './RoutineEditor';
 import {
   setupEditorDatabase as setupDb,
   tapToEdit,
-} from './ChecklistEditor.testSupport';
-import { getChecklist } from './repository';
+} from './RoutineEditor.testSupport';
+import { getRoutine } from './repository';
 
-describe('ChecklistEditor', () => {
+describe('RoutineEditor', () => {
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
@@ -28,7 +28,7 @@ describe('ChecklistEditor', () => {
     it('renders an empty form with a single blank item row by default', async () => {
       const database = await setupDb();
       await renderWithDatabase(
-        <ChecklistEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
+        <RoutineEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
 
@@ -41,7 +41,7 @@ describe('ChecklistEditor', () => {
     it('adds a new blank item row when Add item is pressed', async () => {
       const database = await setupDb();
       await renderWithDatabase(
-        <ChecklistEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
+        <RoutineEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
 
@@ -52,7 +52,7 @@ describe('ChecklistEditor', () => {
     it('uses the prototype icons for adding and deleting steps', async () => {
       const database = await setupDb();
       await renderWithDatabase(
-        <ChecklistEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
+        <RoutineEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
 
@@ -71,7 +71,7 @@ describe('ChecklistEditor', () => {
       const keyboardListener = jest.spyOn(Keyboard, 'addListener');
       const database = await setupDb();
       await renderWithDatabase(
-        <ChecklistEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
+        <RoutineEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
 
@@ -87,14 +87,14 @@ describe('ChecklistEditor', () => {
         keyboardShown?.[1]({ endCoordinates: { screenY: 400 } } as never);
       });
       fireEvent(
-        screen.getByTestId('checklist-editor-scroll'),
+        screen.getByTestId('routine-editor-scroll'),
         'contentSizeChange',
         100,
         2_000,
       );
 
       expect(
-        screen.getByTestId('checklist-editor-scroll').props
+        screen.getByTestId('routine-editor-scroll').props
           .contentContainerStyle.paddingBottom,
       ).toBeGreaterThan(48);
       expect(revealInput).toHaveBeenCalled();
@@ -104,7 +104,7 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-text-1').props.autoFocus).toBe(false);
       expect(screen.getByTestId('item-text-2').props.autoFocus).toBe(true);
       fireEvent(
-        screen.getByTestId('checklist-editor-scroll'),
+        screen.getByTestId('routine-editor-scroll'),
         'contentSizeChange',
         100,
         2_200,
@@ -118,14 +118,14 @@ describe('ChecklistEditor', () => {
       keyboardListener.mockRestore();
     });
 
-    it('keeps Cancel and Save outside the scrolling checklist content', async () => {
+    it('keeps Cancel and Save outside the scrolling routine content', async () => {
       const database = await setupDb();
       await renderWithDatabase(
-        <ChecklistEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
+        <RoutineEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
 
-      const scroll = within(screen.getByTestId('checklist-editor-scroll'));
+      const scroll = within(screen.getByTestId('routine-editor-scroll'));
       expect(scroll.queryByTestId('save')).toBeNull();
       expect(scroll.queryByTestId('cancel')).toBeNull();
       expect(screen.getByTestId('editor-actions')).toBeOnTheScreen();
@@ -136,7 +136,7 @@ describe('ChecklistEditor', () => {
     it('keeps the sticky actions below Android system insets', async () => {
       const database = await setupDb();
       await renderWithDatabase(
-        <ChecklistEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
+        <RoutineEditor onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
 
@@ -150,11 +150,11 @@ describe('ChecklistEditor', () => {
       ).toBeOnTheScreen();
     });
 
-    it('persists a new checklist with trimmed title and trimmed item text on save', async () => {
+    it('persists a new routine with trimmed title and trimmed item text on save', async () => {
       const database = await setupDb();
       const onSaved = jest.fn();
       await renderWithDatabase(
-        <ChecklistEditor onSaved={onSaved} onCancel={jest.fn()} />,
+        <RoutineEditor onSaved={onSaved} onCancel={jest.fn()} />,
         { database },
       );
 
@@ -170,18 +170,18 @@ describe('ChecklistEditor', () => {
       expect(onSaved).toHaveBeenCalledTimes(1);
       const saved = onSaved.mock.calls[0][0];
       expect(saved.title).toBe('Groceries');
-      expect(saved.items.map((i: { text: string }) => i.text)).toEqual(['Milk', 'Bread']);
+      expect(saved.steps.map((i: { text: string }) => i.text)).toEqual(['Milk', 'Bread']);
 
-      const reloaded = await getChecklist(database, saved.id);
+      const reloaded = await getRoutine(database, saved.id);
       expect(reloaded?.title).toBe('Groceries');
-      expect(reloaded?.items.map((i) => i.text)).toEqual(['Milk', 'Bread']);
+      expect(reloaded?.steps.map((i) => i.text)).toEqual(['Milk', 'Bread']);
     });
 
     it('blocks save and shows a validation error when the title is blank', async () => {
       const database = await setupDb();
       const onSaved = jest.fn();
       await renderWithDatabase(
-        <ChecklistEditor onSaved={onSaved} onCancel={jest.fn()} />,
+        <RoutineEditor onSaved={onSaved} onCancel={jest.fn()} />,
         { database },
       );
       tapToEdit(0);
@@ -196,7 +196,7 @@ describe('ChecklistEditor', () => {
       const database = await setupDb();
       const onSaved = jest.fn();
       await renderWithDatabase(
-        <ChecklistEditor onSaved={onSaved} onCancel={jest.fn()} />,
+        <RoutineEditor onSaved={onSaved} onCancel={jest.fn()} />,
         { database },
       );
       fireEvent.changeText(screen.getByTestId('title-input'), 'Title');
@@ -210,11 +210,11 @@ describe('ChecklistEditor', () => {
       expect(screen.getByTestId('item-error-1')).toBeOnTheScreen();
     });
 
-    it('allows saving a draft checklist with no items as long as the title is valid', async () => {
+    it('allows saving a draft routine with no items as long as the title is valid', async () => {
       const database = await setupDb();
       const onSaved = jest.fn();
       await renderWithDatabase(
-        <ChecklistEditor onSaved={onSaved} onCancel={jest.fn()} />,
+        <RoutineEditor onSaved={onSaved} onCancel={jest.fn()} />,
         { database },
       );
       fireEvent.changeText(screen.getByTestId('title-input'), 'Draft');
@@ -224,14 +224,14 @@ describe('ChecklistEditor', () => {
       await screen.findByTestId('save');
       expect(onSaved).toHaveBeenCalledTimes(1);
       const saved = onSaved.mock.calls[0][0];
-      expect(saved.items).toEqual([]);
+      expect(saved.steps).toEqual([]);
     });
 
     it('calls onCancel when the cancel button is pressed', async () => {
       const database = await setupDb();
       const onCancel = jest.fn();
       await renderWithDatabase(
-        <ChecklistEditor onSaved={jest.fn()} onCancel={onCancel} />,
+        <RoutineEditor onSaved={jest.fn()} onCancel={onCancel} />,
         { database },
       );
 

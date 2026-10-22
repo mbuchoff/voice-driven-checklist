@@ -1,4 +1,4 @@
-import type { ChecklistInput } from './types';
+import type { RoutineInput } from './types';
 import {
   BACKUP_FORMAT,
   BACKUP_VERSION,
@@ -6,21 +6,21 @@ import {
   serializeBackup,
 } from './backup';
 
-describe('checklist backup', () => {
-  it('round-trips checklist inputs', () => {
-    const inputs: ChecklistInput[] = [
+describe('routine backup', () => {
+  it('round-trips routine inputs', () => {
+    const inputs: RoutineInput[] = [
       {
         title: 'Morning routine',
-        items: [{ text: 'Wake up' }, { text: 'Brush teeth' }],
+        steps: [{ text: 'Wake up' }, { text: 'Brush teeth' }],
       },
-      { title: 'Empty draft', items: [] },
+      { title: 'Empty draft', steps: [] },
     ];
 
     expect(parseBackup(serializeBackup(inputs))).toEqual(inputs);
   });
 
   it('serializes a versioned backup envelope', () => {
-    const parsed = JSON.parse(serializeBackup([{ title: 'Trip', items: [] }]));
+    const parsed = JSON.parse(serializeBackup([{ title: 'Trip', steps: [] }]));
 
     expect(parsed.format).toBe(BACKUP_FORMAT);
     expect(parsed.version).toBe(BACKUP_VERSION);
@@ -64,7 +64,7 @@ describe('checklist backup', () => {
       { format: BACKUP_FORMAT, version: BACKUP_VERSION, checklists: {} },
     ],
   ])('rejects %s', (_name, backup) => {
-    expect(() => parseBackup(JSON.stringify(backup))).toThrow(/checklists/i);
+    expect(() => parseBackup(JSON.stringify(backup))).toThrow(/routines/i);
   });
 
   it.each([
@@ -104,7 +104,7 @@ describe('checklist backup', () => {
       checklists: [{ title: '  Trip  ', items: [{ text: '  Pack  ' }] }],
     });
 
-    expect(parseBackup(json)).toEqual([{ title: 'Trip', items: [{ text: 'Pack' }] }]);
+    expect(parseBackup(json)).toEqual([{ title: 'Trip', steps: [{ text: 'Pack' }] }]);
   });
 
   it('round-trips an empty library', () => {

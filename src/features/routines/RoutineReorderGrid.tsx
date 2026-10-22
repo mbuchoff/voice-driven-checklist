@@ -49,7 +49,7 @@ import {
   ROUTINE_HOLD_ACTIVATION_MS,
   ROUTINE_HOLD_FEEDBACK_DELAY_MS,
 } from './routineMotion';
-import type { LibraryChecklist } from './types';
+import type { LibraryRoutine } from './types';
 import { mapRoutineSlots, useRoutineDragState, type RoutineDragState, type SlotMap } from './useRoutineDragState';
 import { useRoutinePressGuard } from './useRoutinePressGuard';
 
@@ -130,7 +130,7 @@ function RoutinePosition({
   onMoveEarlier,
   onMoveLater,
 }: {
-  item: LibraryChecklist;
+  item: LibraryRoutine;
   fallbackIndex: number;
   layout: RoutineGridMetrics;
   theme: Palette;
@@ -336,7 +336,7 @@ export function RoutineReorderGrid({
   onReorder,
   onMoveByAccessibility,
 }: {
-  items: LibraryChecklist[];
+  items: LibraryRoutine[];
   orderRevision: number;
   layout: RoutineGridMetrics;
   theme: Palette;

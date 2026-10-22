@@ -83,7 +83,7 @@ describe('database migrations', () => {
     await expect(accountPreference(db)).resolves.toMatchObject({ mode: 'local' });
   });
 
-  it('preserves every legacy checklist while initializing local mode', async () => {
+  it('preserves every legacy routine while initializing local mode', async () => {
     const db = createTestDatabase();
     await db.execAsync(LEGACY_SCHEMA);
     await db.runAsync(

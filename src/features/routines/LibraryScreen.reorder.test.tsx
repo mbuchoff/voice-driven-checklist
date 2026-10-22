@@ -16,7 +16,7 @@ import { createTestDatabase } from '@/src/test/createTestDatabase';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
 import { LibraryScreen } from './LibraryScreen';
-import { createChecklist, listChecklists } from './repository';
+import { createRoutine, listRoutines } from './repository';
 import * as DragState from './useRoutineDragState';
 
 const { getByGestureTestId } = jest.requireActual(
@@ -30,17 +30,17 @@ async function setupDb(): Promise<Database> {
 }
 
 async function seedThree(database: Database) {
-  const last = await createChecklist(database, {
+  const last = await createRoutine(database, {
     title: 'Last',
-    items: [{ text: 'Last step' }],
+    steps: [{ text: 'Last step' }],
   });
-  const middle = await createChecklist(database, {
+  const middle = await createRoutine(database, {
     title: 'Middle',
-    items: [{ text: 'Middle step' }],
+    steps: [{ text: 'Middle step' }],
   });
-  const first = await createChecklist(database, {
+  const first = await createRoutine(database, {
     title: 'First',
-    items: [{ text: 'First step' }],
+    steps: [{ text: 'First step' }],
   });
   return { first, middle, last };
 }
@@ -257,7 +257,7 @@ describe('LibraryScreen routine reordering', () => {
     expect(manager.fail).toHaveBeenCalledTimes(1);
     expect(onEdit).not.toHaveBeenCalled();
     expect(vibrate).not.toHaveBeenCalled();
-    expect((await listChecklists(database)).map(({ id }) => id)).toEqual([first.id, middle.id, last.id]);
+    expect((await listRoutines(database)).map(({ id }) => id)).toEqual([first.id, middle.id, last.id]);
 
     // Android's separate accessibility click has no touch payload or new Pan
     // contact. Drive Pressability's real click handler after the rejected swipe.
@@ -310,7 +310,7 @@ describe('LibraryScreen routine reordering', () => {
       firstGesture.handlers.onFinalize?.({} as never, true);
     });
     expect(vibrate).toHaveBeenCalledTimes(1);
-    await waitFor(async () => expect((await listChecklists(database)).map(({ id }) => id))
+    await waitFor(async () => expect((await listRoutines(database)).map(({ id }) => id))
       .toEqual([middle.id, last.id, first.id]));
   });
 
@@ -342,7 +342,7 @@ describe('LibraryScreen routine reordering', () => {
     });
 
     await waitFor(async () => {
-      expect((await listChecklists(database)).map(({ id }) => id)).toEqual([
+      expect((await listRoutines(database)).map(({ id }) => id)).toEqual([
         middle.id,
         last.id,
         first.id,
@@ -371,7 +371,7 @@ describe('LibraryScreen routine reordering', () => {
     );
 
     await waitFor(async () => {
-      expect((await listChecklists(database)).map(({ id }) => id)).toEqual([
+      expect((await listRoutines(database)).map(({ id }) => id)).toEqual([
         middle.id,
         first.id,
         last.id,
@@ -395,7 +395,7 @@ describe('LibraryScreen routine reordering', () => {
     } finally {
       await act(async () => { delayed.releaseSave(); });
     }
-    await waitFor(async () => expect((await listChecklists(database)).map(({ id }) => id))
+    await waitFor(async () => expect((await listRoutines(database)).map(({ id }) => id))
       .toEqual([middle.id, first.id, last.id]));
     expect(announce).toHaveBeenCalledWith(expect.stringMatching(/2 of 3/i));
   });
@@ -433,7 +433,7 @@ describe('LibraryScreen routine reordering', () => {
     } finally {
       await act(async () => { delayed.releaseSave(); });
     }
-    await waitFor(async () => expect((await listChecklists(database)).map(({ id }) => id))
+    await waitFor(async () => expect((await listRoutines(database)).map(({ id }) => id))
       .toEqual([middle.id, first.id, last.id]));
   });
 
@@ -536,7 +536,7 @@ describe('LibraryScreen routine reordering', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('routine-drop-slot')).toBeNull();
     });
-    expect((await listChecklists(database)).map(({ id }) => id)).toEqual([
+    expect((await listRoutines(database)).map(({ id }) => id)).toEqual([
       first.id, middle.id, last.id,
     ]);
     expect(onEdit).not.toHaveBeenCalled();
@@ -564,7 +564,7 @@ describe('LibraryScreen routine reordering', () => {
         expect.any(String),
       );
     });
-    expect((await listChecklists(database)).map(({ id }) => id)).toEqual([
+    expect((await listRoutines(database)).map(({ id }) => id)).toEqual([
       first.id,
       middle.id,
       last.id,
@@ -613,7 +613,7 @@ describe('LibraryScreen routine reordering', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('routine-drop-slot')).toBeNull();
     });
-    expect((await listChecklists(database)).map(({ id }) => id)).toEqual([
+    expect((await listRoutines(database)).map(({ id }) => id)).toEqual([
       first.id,
       middle.id,
       last.id,

@@ -24,7 +24,7 @@ import { initialRunState, runReducer } from './runReducer';
 import { CompletionView } from './CompletionView';
 import { ActiveRunView } from './RunScreenView';
 import { RUN_TRANSITION_CONFIG } from './runPresentation';
-import type { ChecklistRunSnapshot } from './types';
+import type { RoutineRunSnapshot } from './types';
 
 const LOCALE = 'en-US';
 
@@ -46,7 +46,7 @@ const CUE_TO_SPEECH_DELAY_MS = 175;
 const STOP_HOLD_DURATION_MS = 1200;
 
 export type RunScreenProps = {
-  snapshot: ChecklistRunSnapshot;
+  snapshot: RoutineRunSnapshot;
   playback: SpeechPlaybackAdapter;
   recognition: SpeechRecognitionAdapter;
   initialAvailability: { spokenPlaybackAvailable: boolean; voiceControlAvailable: boolean };
@@ -143,17 +143,17 @@ export function RunScreen({
 
   useEffect(() => {
     animatedCurrentIndex.value = withTiming(
-      state.currentItemIndex,
+      state.currentStepIndex,
       RUN_TRANSITION_CONFIG,
     );
-  }, [animatedCurrentIndex, state.currentItemIndex]);
+  }, [animatedCurrentIndex, state.currentStepIndex]);
 
   const runAction = useCallback(
     (action: 'next' | 'previous' | 'repeat') => {
       const completes =
         action === 'next' &&
         state.snapshot != null &&
-        state.currentItemIndex === state.snapshot.items.length - 1;
+        state.currentStepIndex === state.snapshot.steps.length - 1;
       cueStartedRef.current = onCue && !completes
         ? Promise.resolve(onCue(action)).then(
             (audible) => audible !== false,
@@ -164,7 +164,7 @@ export function RunScreen({
       else if (action === 'previous') dispatch({ type: 'PREVIOUS' });
       else dispatch({ type: 'REPEAT' });
     },
-    [onCue, state.currentItemIndex, state.snapshot],
+    [onCue, state.currentStepIndex, state.snapshot],
   );
 
   const completeStopHold = useCallback((generation: number) => {
@@ -225,7 +225,7 @@ export function RunScreen({
   // self-arms that route before speaking.
   useEffect(() => {
     if (state.status !== 'speaking' || !state.snapshot || !spokenPlaybackReady) return;
-    const item = state.snapshot.items[state.currentItemIndex];
+    const item = state.snapshot.steps[state.currentStepIndex];
     let cancelled = false;
     let speechTimer: ReturnType<typeof setTimeout> | null = null;
     const speak = () => {
@@ -260,7 +260,7 @@ export function RunScreen({
   }, [
     state.status,
     state.snapshot,
-    state.currentItemIndex,
+    state.currentStepIndex,
     state.playbackTick,
     spokenPlaybackReady,
     playback,
@@ -431,14 +431,14 @@ export function RunScreen({
     return () => sub.remove();
   }, [state.status, onExit, onRequestStop]);
 
-  const totalItems = state.snapshot?.items.length ?? 0;
+  const totalItems = state.snapshot?.steps.length ?? 0;
   const androidApi = Platform.OS === 'android' ? Number(Platform.Version) : 0;
 
   if (state.status === 'completed') {
     return (
       <CompletionView
         totalItems={totalItems}
-        checklistTitle={state.snapshot?.checklistTitle}
+        routineTitle={state.snapshot?.routineTitle}
         onRestart={() => {
           cueStartedRef.current = null;
           dispatch({ type: 'RESTART' });

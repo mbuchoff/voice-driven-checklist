@@ -1,12 +1,12 @@
 import {
-  createChecklist,
-  deleteChecklist,
-  exportAllChecklists,
-  getChecklist,
-  importChecklists,
-  listChecklists,
-  reorderChecklists,
-  updateChecklist,
+  createRoutine,
+  deleteRoutine,
+  exportAllRoutines,
+  getRoutine,
+  importRoutines,
+  listRoutines,
+  reorderRoutines,
+  updateRoutine,
 } from './repository';
 import { runMigrations } from '@/src/db/migrations';
 import type { Database } from '@/src/db/database';
@@ -18,93 +18,93 @@ async function setup(): Promise<Database> {
   return db;
 }
 
-describe('checklist repository', () => {
-  describe('createChecklist', () => {
-    it('persists a checklist with items in order', async () => {
+describe('routine repository', () => {
+  describe('createRoutine', () => {
+    it('persists a routine with items in order', async () => {
       const db = await setup();
-      const created = await createChecklist(db, {
+      const created = await createRoutine(db, {
         title: 'Morning routine',
-        items: [{ text: 'Wake up' }, { text: 'Brush teeth' }],
+        steps: [{ text: 'Wake up' }, { text: 'Brush teeth' }],
       });
 
       expect(created.title).toBe('Morning routine');
-      expect(created.items).toHaveLength(2);
-      expect(created.items[0]).toMatchObject({ text: 'Wake up', order: 0 });
-      expect(created.items[1]).toMatchObject({ text: 'Brush teeth', order: 1 });
+      expect(created.steps).toHaveLength(2);
+      expect(created.steps[0]).toMatchObject({ text: 'Wake up', order: 0 });
+      expect(created.steps[1]).toMatchObject({ text: 'Brush teeth', order: 1 });
       expect(created.id).toEqual(expect.any(String));
-      expect(created.items[0].id).toEqual(expect.any(String));
+      expect(created.steps[0].id).toEqual(expect.any(String));
     });
 
     it('trims the title before storage', async () => {
       const db = await setup();
-      const created = await createChecklist(db, {
+      const created = await createRoutine(db, {
         title: '  Surrounded title  ',
-        items: [{ text: '  An item  ' }],
+        steps: [{ text: '  An item  ' }],
       });
 
       expect(created.title).toBe('Surrounded title');
-      expect(created.items[0].text).toBe('An item');
+      expect(created.steps[0].text).toBe('An item');
     });
 
     it('rejects an empty title', async () => {
       const db = await setup();
       await expect(
-        createChecklist(db, { title: '   ', items: [] }),
+        createRoutine(db, { title: '   ', steps: [] }),
       ).rejects.toThrow(/Title is required/);
     });
 
     it('rejects an item whose text is empty after trimming', async () => {
       const db = await setup();
       await expect(
-        createChecklist(db, { title: 'OK', items: [{ text: '   ' }] }),
-      ).rejects.toThrow(/Item text is required/);
+        createRoutine(db, { title: 'OK', steps: [{ text: '   ' }] }),
+      ).rejects.toThrow(/Step text is required/);
     });
 
-    it('allows creating a checklist with zero items as a draft', async () => {
+    it('allows creating a routine with zero items as a draft', async () => {
       const db = await setup();
-      const created = await createChecklist(db, { title: 'Draft', items: [] });
-      expect(created.items).toEqual([]);
+      const created = await createRoutine(db, { title: 'Draft', steps: [] });
+      expect(created.steps).toEqual([]);
     });
 
     it('places each newly saved routine first', async () => {
       const db = await setup();
-      const first = await createChecklist(db, { title: 'First', items: [] });
-      const second = await createChecklist(db, { title: 'Second', items: [] });
+      const first = await createRoutine(db, { title: 'First', steps: [] });
+      const second = await createRoutine(db, { title: 'Second', steps: [] });
 
-      await expect(listChecklists(db)).resolves.toEqual([
+      await expect(listRoutines(db)).resolves.toEqual([
         expect.objectContaining({ id: second.id }),
         expect.objectContaining({ id: first.id }),
       ]);
     });
   });
 
-  describe('getChecklist', () => {
-    it('returns the persisted checklist with items in position order', async () => {
+  describe('getRoutine', () => {
+    it('returns the persisted routine with items in position order', async () => {
       const db = await setup();
-      const created = await createChecklist(db, {
+      const created = await createRoutine(db, {
         title: 'Errands',
-        items: [{ text: 'Bank' }, { text: 'Pharmacy' }, { text: 'Groceries' }],
+        steps: [{ text: 'Bank' }, { text: 'Pharmacy' }, { text: 'Groceries' }],
       });
 
-      const loaded = await getChecklist(db, created.id);
+      const loaded = await getRoutine(db, created.id);
       expect(loaded?.title).toBe('Errands');
-      expect(loaded?.items.map((i) => i.text)).toEqual(['Bank', 'Pharmacy', 'Groceries']);
-      expect(loaded?.items.map((i) => i.order)).toEqual([0, 1, 2]);
+      expect(loaded?.steps.map((i) => i.text)).toEqual(['Bank', 'Pharmacy', 'Groceries']);
+      expect(loaded?.steps.map((i) => i.order)).toEqual([0, 1, 2]);
     });
 
-    it('returns null when the checklist does not exist', async () => {
+    it('returns null when the routine does not exist', async () => {
       const db = await setup();
-      expect(await getChecklist(db, 'missing')).toBeNull();
+      expect(await getRoutine(db, 'missing')).toBeNull();
     });
   });
 
-  describe('listChecklists', () => {
-    it('returns an empty array when there are no checklists', async () => {
+  describe('listRoutines', () => {
+    it('returns an empty array when there are no routines', async () => {
       const db = await setup();
-      expect(await listChecklists(db)).toEqual([]);
+      expect(await listRoutines(db)).toEqual([]);
     });
 
-    it('orders checklists by their explicit library positions', async () => {
+    it('orders routines by their explicit library positions', async () => {
       const db = await setup();
       await db.runAsync(
         `INSERT INTO checklists
@@ -137,7 +137,7 @@ describe('checklist repository', () => {
         0,
       );
 
-      const list = await listChecklists(db);
+      const list = await listRoutines(db);
       expect(list.map((row) => row.id)).toEqual(['id-new', 'id-mid', 'id-old']);
     });
 
@@ -175,21 +175,21 @@ describe('checklist repository', () => {
         2,
       );
 
-      const list = await listChecklists(db);
+      const list = await listRoutines(db);
       expect(list.map((row) => row.title)).toEqual(['Charlie', 'Alpha', 'Bravo']);
     });
 
-    it('returns the item count for each checklist', async () => {
+    it('returns the item count for each routine', async () => {
       const db = await setup();
-      const a = await createChecklist(db, { title: 'A', items: [{ text: '1' }] });
-      const b = await createChecklist(db, {
+      const a = await createRoutine(db, { title: 'A', steps: [{ text: '1' }] });
+      const b = await createRoutine(db, {
         title: 'B',
-        items: [{ text: '1' }, { text: '2' }, { text: '3' }],
+        steps: [{ text: '1' }, { text: '2' }, { text: '3' }],
       });
-      const c = await createChecklist(db, { title: 'C', items: [] });
+      const c = await createRoutine(db, { title: 'C', steps: [] });
 
-      const list = await listChecklists(db);
-      const byId = new Map(list.map((row) => [row.id, row.items.length]));
+      const list = await listRoutines(db);
+      const byId = new Map(list.map((row) => [row.id, row.steps.length]));
       expect(byId.get(a.id)).toBe(1);
       expect(byId.get(b.id)).toBe(3);
       expect(byId.get(c.id)).toBe(0);
@@ -197,19 +197,19 @@ describe('checklist repository', () => {
 
     it('returns every item in step order without another repository read', async () => {
       const db = await setup();
-      await createChecklist(db, {
+      await createRoutine(db, {
         title: 'Morning',
-        items: [
+        steps: [
           { text: 'Open blinds' },
           { text: 'Drink water' },
           { text: 'Make bed' },
         ],
       });
 
-      await expect(listChecklists(db)).resolves.toEqual([
+      await expect(listRoutines(db)).resolves.toEqual([
         expect.objectContaining({
           title: 'Morning',
-          items: [
+          steps: [
             { text: 'Open blinds' },
             { text: 'Drink water' },
             { text: 'Make bed' },
@@ -220,59 +220,59 @@ describe('checklist repository', () => {
 
     it('keeps a manually arranged routine in place after editing it', async () => {
       const db = await setup();
-      const first = await createChecklist(db, { title: 'First', items: [] });
-      const second = await createChecklist(db, { title: 'Second', items: [] });
-      await reorderChecklists(db, [first.id, second.id]);
+      const first = await createRoutine(db, { title: 'First', steps: [] });
+      const second = await createRoutine(db, { title: 'Second', steps: [] });
+      await reorderRoutines(db, [first.id, second.id]);
 
-      await updateChecklist(db, first.id, {
+      await updateRoutine(db, first.id, {
         title: 'First renamed',
-        items: [{ text: 'Still first' }],
+        steps: [{ text: 'Still first' }],
       });
 
-      await expect(listChecklists(db)).resolves.toEqual([
+      await expect(listRoutines(db)).resolves.toEqual([
         expect.objectContaining({ id: first.id, title: 'First renamed' }),
         expect.objectContaining({ id: second.id, title: 'Second' }),
       ]);
     });
   });
 
-  describe('reorderChecklists', () => {
+  describe('reorderRoutines', () => {
     it('restores every position when SQLite rejects a later write in a reorder', async () => {
       const db = await setup();
-      const alpha = await createChecklist(db, { title: 'Alpha', items: [{ text: 'Keep alpha' }] });
-      const bravo = await createChecklist(db, { title: 'Bravo', items: [{ text: 'Keep bravo' }] });
+      const alpha = await createRoutine(db, { title: 'Alpha', steps: [{ text: 'Keep alpha' }] });
+      const bravo = await createRoutine(db, { title: 'Bravo', steps: [{ text: 'Keep bravo' }] });
       const before = await db.getAllAsync('SELECT * FROM checklists ORDER BY id');
       await db.execAsync(`CREATE TRIGGER fail_second_position
         BEFORE UPDATE OF library_position ON checklists
         WHEN NEW.library_position = 1
         BEGIN SELECT RAISE(ABORT, 'simulated disk write failure'); END;`);
 
-      await expect(reorderChecklists(db, [alpha.id, bravo.id]))
+      await expect(reorderRoutines(db, [alpha.id, bravo.id]))
         .rejects.toMatchObject({ message: 'simulated disk write failure' });
 
       expect(await db.getAllAsync('SELECT * FROM checklists ORDER BY id')).toEqual(before);
-      expect((await exportAllChecklists(db)).map(({ title }) => title)).toEqual(['Bravo', 'Alpha']);
+      expect((await exportAllRoutines(db)).map(({ title }) => title)).toEqual(['Bravo', 'Alpha']);
     });
 
     it('reorders a sparse library without colliding with existing unique positions', async () => {
       const db = await setup();
-      const alpha = await createChecklist(db, { title: 'Alpha', items: [] });
-      const bravo = await createChecklist(db, { title: 'Bravo', items: [] });
+      const alpha = await createRoutine(db, { title: 'Alpha', steps: [] });
+      const bravo = await createRoutine(db, { title: 'Bravo', steps: [] });
       await db.runAsync('UPDATE checklists SET library_position = 500 WHERE id = ?', alpha.id);
-      await reorderChecklists(db, [alpha.id, bravo.id]);
+      await reorderRoutines(db, [alpha.id, bravo.id]);
       expect(await db.getAllAsync('SELECT id, library_position FROM checklists ORDER BY library_position'))
         .toEqual([{ id: alpha.id, library_position: 0 }, { id: bravo.id, library_position: 1 }]);
     });
 
     it('persists the complete requested order', async () => {
       const db = await setup();
-      const alpha = await createChecklist(db, { title: 'Alpha', items: [] });
-      const bravo = await createChecklist(db, { title: 'Bravo', items: [] });
-      const charlie = await createChecklist(db, { title: 'Charlie', items: [] });
+      const alpha = await createRoutine(db, { title: 'Alpha', steps: [] });
+      const bravo = await createRoutine(db, { title: 'Bravo', steps: [] });
+      const charlie = await createRoutine(db, { title: 'Charlie', steps: [] });
 
-      await reorderChecklists(db, [bravo.id, alpha.id, charlie.id]);
+      await reorderRoutines(db, [bravo.id, alpha.id, charlie.id]);
 
-      await expect(listChecklists(db)).resolves.toEqual([
+      await expect(listRoutines(db)).resolves.toEqual([
         expect.objectContaining({ id: bravo.id }),
         expect.objectContaining({ id: alpha.id }),
         expect.objectContaining({ id: charlie.id }),
@@ -285,22 +285,22 @@ describe('checklist repository', () => {
       ['contains an unknown routine', (ids: string[]) => [ids[0], 'missing']],
     ])('rejects an order that %s without changing the library', async (_name, arrange) => {
       const db = await setup();
-      const first = await createChecklist(db, { title: 'First', items: [] });
-      const second = await createChecklist(db, { title: 'Second', items: [] });
-      const before = (await listChecklists(db)).map((checklist) => checklist.id);
+      const first = await createRoutine(db, { title: 'First', steps: [] });
+      const second = await createRoutine(db, { title: 'Second', steps: [] });
+      const before = (await listRoutines(db)).map((routine) => routine.id);
 
       await expect(
-        reorderChecklists(db, arrange([first.id, second.id])),
+        reorderRoutines(db, arrange([first.id, second.id])),
       ).rejects.toThrow(/complete library order/i);
 
-      await expect(listChecklists(db)).resolves.toEqual(
+      await expect(listRoutines(db)).resolves.toEqual(
         before.map((id) => expect.objectContaining({ id })),
       );
     });
   });
 
-  describe('exportAllChecklists', () => {
-    it('returns all stored checklists as input-shaped data with items in position order', async () => {
+  describe('exportAllRoutines', () => {
+    it('returns all stored routines as input-shaped data with items in position order', async () => {
       const db = await setup();
       const ts = 1_700_000_000_000;
       await db.runAsync(
@@ -348,77 +348,77 @@ describe('checklist repository', () => {
         'first',
       );
 
-      await expect(exportAllChecklists(db)).resolves.toEqual([
-        { title: 'Alpha', items: [] },
-        { title: 'Beta', items: [{ text: 'first' }, { text: 'second' }] },
-        { title: 'Later', items: [] },
+      await expect(exportAllRoutines(db)).resolves.toEqual([
+        { title: 'Alpha', steps: [] },
+        { title: 'Beta', steps: [{ text: 'first' }, { text: 'second' }] },
+        { title: 'Later', steps: [] },
       ]);
     });
 
-    it('returns an empty array when there are no checklists', async () => {
+    it('returns an empty array when there are no routines', async () => {
       const db = await setup();
-      await expect(exportAllChecklists(db)).resolves.toEqual([]);
+      await expect(exportAllRoutines(db)).resolves.toEqual([]);
     });
 
     it('exports routines in their manually arranged order', async () => {
       const db = await setup();
-      const alpha = await createChecklist(db, { title: 'Alpha', items: [] });
-      const bravo = await createChecklist(db, { title: 'Bravo', items: [] });
-      await reorderChecklists(db, [alpha.id, bravo.id]);
+      const alpha = await createRoutine(db, { title: 'Alpha', steps: [] });
+      const bravo = await createRoutine(db, { title: 'Bravo', steps: [] });
+      await reorderRoutines(db, [alpha.id, bravo.id]);
 
-      await expect(exportAllChecklists(db)).resolves.toEqual([
-        { title: 'Alpha', items: [] },
-        { title: 'Bravo', items: [] },
+      await expect(exportAllRoutines(db)).resolves.toEqual([
+        { title: 'Alpha', steps: [] },
+        { title: 'Bravo', steps: [] },
       ]);
     });
   });
 
-  describe('importChecklists', () => {
+  describe('importRoutines', () => {
     it('rolls back earlier routines and steps when SQLite rejects a later imported step', async () => {
       const db = await setup();
-      await createChecklist(db, { title: 'Existing', items: [{ text: 'Keep this' }] });
-      const before = await exportAllChecklists(db);
+      await createRoutine(db, { title: 'Existing', steps: [{ text: 'Keep this' }] });
+      const before = await exportAllRoutines(db);
       await db.execAsync(`CREATE TRIGGER fail_import_step
         BEFORE INSERT ON checklist_items WHEN NEW.text = 'Reject this step'
         BEGIN SELECT RAISE(ABORT, 'simulated disk write failure'); END;`);
 
-      await expect(importChecklists(db, [
-        { title: 'First import', items: [{ text: 'Earlier write' }] },
-        { title: 'Second import', items: [{ text: 'Reject this step' }] },
+      await expect(importRoutines(db, [
+        { title: 'First import', steps: [{ text: 'Earlier write' }] },
+        { title: 'Second import', steps: [{ text: 'Reject this step' }] },
       ])).rejects.toMatchObject({ message: 'simulated disk write failure' });
 
-      expect(await exportAllChecklists(db)).toEqual(before);
+      expect(await exportAllRoutines(db)).toEqual(before);
       expect(await db.getAllAsync('SELECT text FROM checklist_items')).toEqual([{ text: 'Keep this' }]);
     });
 
-    it('inserts every checklist and returns the count', async () => {
+    it('inserts every routine and returns the count', async () => {
       const db = await setup();
 
       await expect(
-        importChecklists(db, [
-          { title: 'Morning', items: [{ text: 'Wake up' }] },
-          { title: 'Evening', items: [] },
+        importRoutines(db, [
+          { title: 'Morning', steps: [{ text: 'Wake up' }] },
+          { title: 'Evening', steps: [] },
         ]),
       ).resolves.toBe(2);
 
-      await expect(listChecklists(db)).resolves.toHaveLength(2);
+      await expect(listRoutines(db)).resolves.toHaveLength(2);
     });
 
-    it('adds imported checklists without replacing existing checklists', async () => {
+    it('adds imported routines without replacing existing routines', async () => {
       const db = await setup();
-      const existing = await createChecklist(db, {
+      const existing = await createRoutine(db, {
         title: 'Existing',
-        items: [{ text: 'Keep' }],
+        steps: [{ text: 'Keep' }],
       });
 
-      await importChecklists(db, [
-        { title: 'Imported 1', items: [] },
-        { title: 'Imported 2', items: [] },
+      await importRoutines(db, [
+        { title: 'Imported 1', steps: [] },
+        { title: 'Imported 2', steps: [] },
       ]);
 
-      const list = await listChecklists(db);
+      const list = await listRoutines(db);
       expect(list).toHaveLength(3);
-      expect(await getChecklist(db, existing.id)).toMatchObject({
+      expect(await getRoutine(db, existing.id)).toMatchObject({
         id: existing.id,
         title: 'Existing',
       });
@@ -426,17 +426,17 @@ describe('checklist repository', () => {
 
     it('appends imported routines after existing routines in backup order', async () => {
       const db = await setup();
-      const existing = await createChecklist(db, {
+      const existing = await createRoutine(db, {
         title: 'Existing',
-        items: [],
+        steps: [],
       });
 
-      await importChecklists(db, [
-        { title: 'Zulu import', items: [] },
-        { title: 'Alpha import', items: [] },
+      await importRoutines(db, [
+        { title: 'Zulu import', steps: [] },
+        { title: 'Alpha import', steps: [] },
       ]);
 
-      await expect(listChecklists(db)).resolves.toEqual([
+      await expect(listRoutines(db)).resolves.toEqual([
         expect.objectContaining({ id: existing.id, title: 'Existing' }),
         expect.objectContaining({ title: 'Zulu import' }),
         expect.objectContaining({ title: 'Alpha import' }),
@@ -446,46 +446,46 @@ describe('checklist repository', () => {
     it('preserves item text and order', async () => {
       const db = await setup();
 
-      await importChecklists(db, [
+      await importRoutines(db, [
         {
           title: 'Ordered',
-          items: [{ text: 'one' }, { text: 'two' }, { text: 'three' }],
+          steps: [{ text: 'one' }, { text: 'two' }, { text: 'three' }],
         },
       ]);
 
-      const [summary] = await listChecklists(db);
-      const loaded = await getChecklist(db, summary.id);
-      expect(loaded?.items.map((item) => item.text)).toEqual(['one', 'two', 'three']);
-      expect(loaded?.items.map((item) => item.order)).toEqual([0, 1, 2]);
+      const [summary] = await listRoutines(db);
+      const loaded = await getRoutine(db, summary.id);
+      expect(loaded?.steps.map((item) => item.text)).toEqual(['one', 'two', 'three']);
+      expect(loaded?.steps.map((item) => item.order)).toEqual([0, 1, 2]);
     });
 
     it('imports an exported library into a fresh database', async () => {
       const source = await setup();
-      await createChecklist(source, {
+      await createRoutine(source, {
         title: 'Trip',
-        items: [{ text: 'Pack' }, { text: 'Drive' }],
+        steps: [{ text: 'Pack' }, { text: 'Drive' }],
       });
-      await createChecklist(source, { title: 'Draft', items: [] });
-      const exported = await exportAllChecklists(source);
+      await createRoutine(source, { title: 'Draft', steps: [] });
+      const exported = await exportAllRoutines(source);
 
       const target = await setup();
-      await importChecklists(target, exported);
+      await importRoutines(target, exported);
 
-      const summaries = await listChecklists(target);
+      const summaries = await listRoutines(target);
       const loaded = await Promise.all(
         summaries.map(async (summary) => {
-          const checklist = await getChecklist(target, summary.id);
+          const routine = await getRoutine(target, summary.id);
           return {
-            title: checklist?.title,
-            items: checklist?.items.map((item) => ({ text: item.text, order: item.order })),
+            title: routine?.title,
+            steps: routine?.steps.map((item) => ({ text: item.text, order: item.order })),
           };
         }),
       );
       expect(loaded.sort((a, b) => String(a.title).localeCompare(String(b.title)))).toEqual([
-        { title: 'Draft', items: [] },
+        { title: 'Draft', steps: [] },
         {
           title: 'Trip',
-          items: [
+          steps: [
             { text: 'Pack', order: 0 },
             { text: 'Drive', order: 1 },
           ],
@@ -493,36 +493,36 @@ describe('checklist repository', () => {
       ]);
     });
 
-    it('rolls back the whole import when one checklist is invalid', async () => {
+    it('rolls back the whole import when one routine is invalid', async () => {
       const db = await setup();
 
       await expect(
-        importChecklists(db, [
-          { title: 'Valid', items: [{ text: 'Keep' }] },
-          { title: '   ', items: [] },
+        importRoutines(db, [
+          { title: 'Valid', steps: [{ text: 'Keep' }] },
+          { title: '   ', steps: [] },
         ]),
       ).rejects.toThrow(/Title is required/);
 
-      await expect(listChecklists(db)).resolves.toEqual([]);
+      await expect(listRoutines(db)).resolves.toEqual([]);
     });
   });
 
-  describe('updateChecklist', () => {
+  describe('updateRoutine', () => {
     it('replaces title and items and rewrites positions contiguously', async () => {
       const db = await setup();
-      const created = await createChecklist(db, {
+      const created = await createRoutine(db, {
         title: 'Trip',
-        items: [{ text: 'Pack' }, { text: 'Drive' }, { text: 'Arrive' }],
+        steps: [{ text: 'Pack' }, { text: 'Drive' }, { text: 'Arrive' }],
       });
 
-      const updated = await updateChecklist(db, created.id, {
+      const updated = await updateRoutine(db, created.id, {
         title: 'Trip 2',
-        items: [{ text: 'Drive' }, { text: 'Arrive' }],
+        steps: [{ text: 'Drive' }, { text: 'Arrive' }],
       });
 
       expect(updated.title).toBe('Trip 2');
-      expect(updated.items).toHaveLength(2);
-      expect(updated.items.map((i) => ({ text: i.text, order: i.order }))).toEqual([
+      expect(updated.steps).toHaveLength(2);
+      expect(updated.steps.map((i) => ({ text: i.text, order: i.order }))).toEqual([
         { text: 'Drive', order: 0 },
         { text: 'Arrive', order: 1 },
       ]);
@@ -530,63 +530,63 @@ describe('checklist repository', () => {
 
     it('reorders items by writing them in the new order with contiguous positions', async () => {
       const db = await setup();
-      const created = await createChecklist(db, {
+      const created = await createRoutine(db, {
         title: 'Mix',
-        items: [{ text: 'one' }, { text: 'two' }, { text: 'three' }],
+        steps: [{ text: 'one' }, { text: 'two' }, { text: 'three' }],
       });
 
-      const reordered = await updateChecklist(db, created.id, {
+      const reordered = await updateRoutine(db, created.id, {
         title: 'Mix',
-        items: [{ text: 'three' }, { text: 'one' }, { text: 'two' }],
+        steps: [{ text: 'three' }, { text: 'one' }, { text: 'two' }],
       });
 
-      expect(reordered.items.map((i) => i.text)).toEqual(['three', 'one', 'two']);
-      expect(reordered.items.map((i) => i.order)).toEqual([0, 1, 2]);
+      expect(reordered.steps.map((i) => i.text)).toEqual(['three', 'one', 'two']);
+      expect(reordered.steps.map((i) => i.order)).toEqual([0, 1, 2]);
     });
 
     it('trims title and item text on update', async () => {
       const db = await setup();
-      const created = await createChecklist(db, {
+      const created = await createRoutine(db, {
         title: 'Original',
-        items: [{ text: 'first' }],
+        steps: [{ text: 'first' }],
       });
 
-      const updated = await updateChecklist(db, created.id, {
+      const updated = await updateRoutine(db, created.id, {
         title: '  Renamed  ',
-        items: [{ text: '  trimmed  ' }],
+        steps: [{ text: '  trimmed  ' }],
       });
 
       expect(updated.title).toBe('Renamed');
-      expect(updated.items[0].text).toBe('trimmed');
+      expect(updated.steps[0].text).toBe('trimmed');
     });
 
     it('rejects an empty title', async () => {
       const db = await setup();
-      const created = await createChecklist(db, { title: 'Keep', items: [] });
+      const created = await createRoutine(db, { title: 'Keep', steps: [] });
       await expect(
-        updateChecklist(db, created.id, { title: '   ', items: [] }),
+        updateRoutine(db, created.id, { title: '   ', steps: [] }),
       ).rejects.toThrow(/Title is required/);
     });
 
-    it('throws when the checklist does not exist', async () => {
+    it('throws when the routine does not exist', async () => {
       const db = await setup();
       await expect(
-        updateChecklist(db, 'missing', { title: 'x', items: [] }),
+        updateRoutine(db, 'missing', { title: 'x', steps: [] }),
       ).rejects.toThrow(/not found/i);
     });
   });
 
-  describe('deleteChecklist', () => {
-    it('removes the checklist and cascades to its items', async () => {
+  describe('deleteRoutine', () => {
+    it('removes the routine and cascades to its items', async () => {
       const db = await setup();
-      const created = await createChecklist(db, {
+      const created = await createRoutine(db, {
         title: 'Doomed',
-        items: [{ text: 'a' }, { text: 'b' }],
+        steps: [{ text: 'a' }, { text: 'b' }],
       });
 
-      await deleteChecklist(db, created.id);
+      await deleteRoutine(db, created.id);
 
-      expect(await getChecklist(db, created.id)).toBeNull();
+      expect(await getRoutine(db, created.id)).toBeNull();
       const remaining = await db.getAllAsync<{ count: number }>(
         'SELECT COUNT(*) as count FROM checklist_items WHERE checklist_id = ?',
         created.id,
@@ -594,9 +594,9 @@ describe('checklist repository', () => {
       expect(remaining[0].count).toBe(0);
     });
 
-    it('is a no-op when the checklist does not exist', async () => {
+    it('is a no-op when the routine does not exist', async () => {
       const db = await setup();
-      await expect(deleteChecklist(db, 'missing')).resolves.toBeUndefined();
+      await expect(deleteRoutine(db, 'missing')).resolves.toBeUndefined();
     });
   });
 });

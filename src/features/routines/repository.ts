@@ -3,50 +3,50 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Database, DatabaseQueries } from '@/src/db/database';
 
 import type {
-  Checklist,
-  ChecklistInput,
-  ChecklistItem,
-  LibraryChecklist,
+  Routine,
+  RoutineInput,
+  Step,
+  LibraryRoutine,
 } from './types';
-import { validateChecklistItemText, validateChecklistTitle } from './validation';
+import { validateStepText, validateRoutineTitle } from './validation';
 
 function trimTitle(title: string): string {
-  const result = validateChecklistTitle(title);
+  const result = validateRoutineTitle(title);
   if (!result.ok) throw new Error(result.error);
   return result.value;
 }
 
-function buildItems(inputs: ChecklistInput['items']): ChecklistItem[] {
+function buildSteps(inputs: RoutineInput['steps']): Step[] {
   return inputs.map((input, order) => {
-    const result = validateChecklistItemText(input.text);
+    const result = validateStepText(input.text);
     if (!result.ok) throw new Error(result.error);
     return { id: uuidv4(), text: result.value, order };
   });
 }
 
-async function insertItems(db: DatabaseQueries, checklistId: string, items: ChecklistItem[]): Promise<void> {
-  for (const item of items) {
+async function insertSteps(db: DatabaseQueries, routineId: string, steps: Step[]): Promise<void> {
+  for (const step of steps) {
     await db.runAsync(
       'INSERT INTO checklist_items (id, checklist_id, position, text) VALUES (?, ?, ?, ?)',
-      item.id,
-      checklistId,
-      item.order,
-      item.text,
+      step.id,
+      routineId,
+      step.order,
+      step.text,
     );
   }
 }
 
-function prepareChecklist(input: ChecklistInput): Checklist {
+function prepareRoutine(input: RoutineInput): Routine {
   return {
     id: uuidv4(),
     title: trimTitle(input.title),
-    items: buildItems(input.items),
+    steps: buildSteps(input.steps),
   };
 }
 
-async function writeChecklist(
+async function writeRoutine(
   db: DatabaseQueries,
-  checklist: Checklist,
+  routine: Routine,
   libraryPosition: number,
 ): Promise<void> {
   const now = Date.now();
@@ -55,13 +55,13 @@ async function writeChecklist(
     `INSERT INTO checklists
        (id, title, created_at, updated_at, library_position)
      VALUES (?, ?, ?, ?, ?)`,
-    checklist.id,
-    checklist.title,
+    routine.id,
+    routine.title,
     now,
     now,
     libraryPosition,
   );
-  await insertItems(db, checklist.id, checklist.items);
+  await insertSteps(db, routine.id, routine.steps);
 }
 
 async function getLastLibraryPosition(db: DatabaseQueries): Promise<number> {
@@ -72,7 +72,7 @@ async function getLastLibraryPosition(db: DatabaseQueries): Promise<number> {
   return row?.position ?? -1;
 }
 
-async function makeRoomForFirstChecklist(db: DatabaseQueries): Promise<void> {
+async function makeRoomForFirstRoutine(db: DatabaseQueries): Promise<void> {
   // SQLite checks UNIQUE per row, so a direct +1 update can collide. Stage
   // above the occupied range, then shift back to leave exactly slot zero free.
   const lastPosition = await getLastLibraryPosition(db);
@@ -89,24 +89,24 @@ async function makeRoomForFirstChecklist(db: DatabaseQueries): Promise<void> {
   );
 }
 
-export async function createChecklist(db: Database, input: ChecklistInput): Promise<Checklist> {
-  const checklist = prepareChecklist(input);
+export async function createRoutine(db: Database, input: RoutineInput): Promise<Routine> {
+  const routine = prepareRoutine(input);
 
   await db.withTransactionAsync(async (transaction) => {
-    await makeRoomForFirstChecklist(transaction);
-    await writeChecklist(transaction, checklist, 0);
+    await makeRoomForFirstRoutine(transaction);
+    await writeRoutine(transaction, routine, 0);
   });
 
-  return checklist;
+  return routine;
 }
 
-export async function updateChecklist(
+export async function updateRoutine(
   db: Database,
   id: string,
-  input: ChecklistInput,
-): Promise<Checklist> {
+  input: RoutineInput,
+): Promise<Routine> {
   const title = trimTitle(input.title);
-  const items = buildItems(input.items);
+  const steps = buildSteps(input.steps);
   const now = Date.now();
 
   await db.withTransactionAsync(async (transaction) => {
@@ -117,40 +117,40 @@ export async function updateChecklist(
       id,
     );
     if (result.changes === 0) {
-      throw new Error(`Checklist not found: ${id}`);
+      throw new Error(`Routine not found: ${id}`);
     }
     await transaction.runAsync('DELETE FROM checklist_items WHERE checklist_id = ?', id);
-    await insertItems(transaction, id, items);
+    await insertSteps(transaction, id, steps);
   });
 
-  return { id, title, items };
+  return { id, title, steps };
 }
 
-export async function deleteChecklist(db: Database, id: string): Promise<void> {
+export async function deleteRoutine(db: Database, id: string): Promise<void> {
   await db.runAsync('DELETE FROM checklists WHERE id = ?', id);
 }
 
-export async function exportAllChecklists(db: Database): Promise<ChecklistInput[]> {
-  return (await listChecklists(db)).map(({ title, items }) => ({ title, items }));
+export async function exportAllRoutines(db: Database): Promise<RoutineInput[]> {
+  return (await listRoutines(db)).map(({ title, steps }) => ({ title, steps }));
 }
 
-export async function importChecklists(
+export async function importRoutines(
   db: Database,
-  inputs: ChecklistInput[],
+  inputs: RoutineInput[],
 ): Promise<number> {
-  const prepared = inputs.map(prepareChecklist);
+  const prepared = inputs.map(prepareRoutine);
 
   await db.withTransactionAsync(async (transaction) => {
     const firstPosition = (await getLastLibraryPosition(transaction)) + 1;
-    for (const [index, checklist] of prepared.entries()) {
-      await writeChecklist(transaction, checklist, firstPosition + index);
+    for (const [index, routine] of prepared.entries()) {
+      await writeRoutine(transaction, routine, firstPosition + index);
     }
   });
 
   return prepared.length;
 }
 
-export async function getChecklist(db: Database, id: string): Promise<Checklist | null> {
+export async function getRoutine(db: Database, id: string): Promise<Routine | null> {
   const row = await db.getFirstAsync<{ id: string; title: string }>(
     'SELECT id, title FROM checklists WHERE id = ?',
     id,
@@ -165,11 +165,11 @@ export async function getChecklist(db: Database, id: string): Promise<Checklist 
   return {
     id: row.id,
     title: row.title,
-    items: itemRows.map((r) => ({ id: r.id, text: r.text, order: r.position })),
+    steps: itemRows.map((r) => ({ id: r.id, text: r.text, order: r.position })),
   };
 }
 
-export async function listChecklists(db: Database): Promise<LibraryChecklist[]> {
+export async function listRoutines(db: Database): Promise<LibraryRoutine[]> {
   const rows = await db.getAllAsync<{
     id: string;
     title: string;
@@ -184,27 +184,27 @@ export async function listChecklists(db: Database): Promise<LibraryChecklist[]> 
      ORDER BY c.library_position ASC, ci.position ASC`,
   );
 
-  const summaries: LibraryChecklist[] = [];
+  const summaries: LibraryRoutine[] = [];
   let currentId: string | null = null;
-  let current: LibraryChecklist | null = null;
+  let current: LibraryRoutine | null = null;
   for (const row of rows) {
     if (row.id !== currentId) {
       currentId = row.id;
       current = {
         id: row.id,
         title: row.title,
-        items: [],
+        steps: [],
       };
       summaries.push(current);
     }
     if (row.item_text != null && current) {
-      current.items.push({ text: row.item_text });
+      current.steps.push({ text: row.item_text });
     }
   }
   return summaries;
 }
 
-export async function reorderChecklists(
+export async function reorderRoutines(
   db: Database,
   orderedIds: string[],
 ): Promise<void> {

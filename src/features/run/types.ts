@@ -1,15 +1,15 @@
-export type ChecklistRunSnapshot = {
-  checklistId: string;
-  checklistTitle: string;
-  items: { id: string; text: string; order: number }[];
+export type RoutineRunSnapshot = {
+  routineId: string;
+  routineTitle: string;
+  steps: { id: string; text: string; order: number }[];
 };
 
 export type RunStatus = 'idle' | 'speaking' | 'listening' | 'manual' | 'completed';
 
-export type ChecklistRunState = {
+export type RoutineRunState = {
   status: RunStatus;
-  snapshot: ChecklistRunSnapshot | null;
-  currentItemIndex: number;
+  snapshot: RoutineRunSnapshot | null;
+  currentStepIndex: number;
   voiceControlAvailable: boolean;
   spokenPlaybackAvailable: boolean;
   latestRecognizedPhrase: string;

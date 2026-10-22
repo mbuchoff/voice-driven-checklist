@@ -458,7 +458,7 @@ describe('RunScreen', () => {
       fireEvent.press(screen.getByTestId('manual-next'));
       await flush();
 
-      expect(screen.getByText(/checklist complete/i)).toBeOnTheScreen();
+      expect(screen.getByText(/routine complete/i)).toBeOnTheScreen();
       expect(screen.getByTestId('completion-restart')).toBeOnTheScreen();
       expect(screen.getByTestId('completion-return')).toBeOnTheScreen();
       expect(recognition.isListening()).toBe(false);
@@ -722,7 +722,7 @@ describe('RunScreen', () => {
       act(() => recognition.emitResult({ transcript: 'next', isFinal: true }));
       await flush();
       expect(playback.spoken.length).toBe(before);
-      expect(screen.getByText(/checklist complete/i)).toBeOnTheScreen();
+      expect(screen.getByText(/routine complete/i)).toBeOnTheScreen();
     });
   });
 
