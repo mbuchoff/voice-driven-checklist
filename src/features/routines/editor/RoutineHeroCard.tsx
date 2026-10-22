@@ -1,5 +1,5 @@
 import { forwardRef } from 'react';
-import { Pressable, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
+import { Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
 
 import { Icon } from '@/src/components/Icon';
 
@@ -8,7 +8,7 @@ import { ColorDot, ColorGrid } from './ColorGrid';
 import { IconButton } from './EditorTopBar';
 
 /**
- * The routine's card, live: its color, name, count and ▶. The dot swaps the
+ * The routine's card, live: its color, name and count. The dot swaps the
  * name for the colors until one is picked.
  */
 export const RoutineHeroCard = forwardRef<TextInput, {
@@ -18,13 +18,11 @@ export const RoutineHeroCard = forwardRef<TextInput, {
   colorKey: string;
   colorLabel: string;
   colorsOpen: boolean;
-  playDisabled: boolean;
   onChangeTitle: (title: string) => void;
   onTitleFocus: () => void;
   onOpenColors: () => void;
   onCloseColors: () => void;
   onPickColor: (key: string) => void;
-  onPlay: () => void;
   onTitleRowLayout: (event: LayoutChangeEvent) => void;
 }>(function RoutineHeroCard(props, ref) {
   const { colors } = props;
@@ -34,16 +32,15 @@ export const RoutineHeroCard = forwardRef<TextInput, {
       style={{
         paddingTop: 18,
         paddingHorizontal: 18,
-        paddingBottom: 14,
+        paddingBottom: 18,
         borderRadius: 24,
         backgroundColor: colors.fill,
         boxShadow: `0 2px 8px ${colors.shadow}`,
         gap: 4,
       }}
     >
-      <Text style={{ color: colors.ink, fontSize: 11, lineHeight: 13, fontWeight: '800', letterSpacing: 1.5 }}>
-        SHAPE THE ROUTINE
-      </Text>
+      {/* Room above the colors for their ✕. */}
+      {props.colorsOpen ? <View style={{ height: 13 }} /> : null}
       {props.colorsOpen ? (
         <IconButton
           label="Close colors"
@@ -97,31 +94,9 @@ export const RoutineHeroCard = forwardRef<TextInput, {
           </>
         )}
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <Text testID="hero-count" style={{ color: colors.ink, fontSize: 14, lineHeight: 16, fontWeight: '700' }}>
-          {props.countLine}
-        </Text>
-        <Pressable
-          testID="hero-play"
-          accessibilityRole="button"
-          accessibilityLabel="Save and start a run"
-          accessibilityState={{ disabled: props.playDisabled }}
-          disabled={props.playDisabled}
-          onPress={props.onPlay}
-          style={{
-            width: 52,
-            height: 52,
-            borderRadius: 26,
-            backgroundColor: colors.surface,
-            boxShadow: '0 3px 10px rgba(28, 48, 41, 0.16)',
-            alignItems: 'center',
-            justifyContent: 'center',
-            opacity: props.playDisabled ? 0.4 : 1,
-          }}
-        >
-          <Icon name="playFilled" color={colors.ink} size={22} />
-        </Pressable>
-      </View>
+      <Text testID="hero-count" style={{ color: colors.ink, fontSize: 14, lineHeight: 16, fontWeight: '700' }}>
+        {props.countLine}
+      </Text>
     </View>
   );
 });

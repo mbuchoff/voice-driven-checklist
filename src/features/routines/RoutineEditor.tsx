@@ -166,7 +166,7 @@ export function RoutineEditor({
   const dirty = isDirty(model, baseline);
   const wantsSave = model.isNew || dirty;
   const saveAllowed = canSave(model);
-  const playDisabled = !saveAllowed || !steps.some((step) => step.text.trim());
+  const canRun = !model.isNew && !dirty && steps.some((step) => step.text.trim());
   const colorLabel = routineColor(model.colorKey).name;
 
   const expireAllUndoRows = useCallback(() => {
@@ -384,18 +384,9 @@ export function RoutineEditor({
     }
   };
 
-  const play = async () => {
-    const settled = settle();
-    if (!canSave(settled) || busy || !onRun) return;
-    setBusy(true);
-    try {
-      const routine = settled.isNew || isDirty(settled, baseline)
-        ? await persist(settled)
-        : { ...initialRoutine!, colorKey: settled.colorKey };
-      onRun(routine);
-    } finally {
-      setBusy(false);
-    }
+  // ▶ only shows when nothing is unsaved, so the saved routine is what runs.
+  const play = () => {
+    if (initialRoutine && onRun) onRun(initialRoutine);
   };
 
   const back = () => {
@@ -486,13 +477,13 @@ export function RoutineEditor({
         colorLabel={colorLabel}
         colorKey={model.colorKey}
         colorsOpen={colorsOpen === 'bar'}
-        playDisabled={playDisabled}
+        canRun={canRun}
         onBack={back}
         onDelete={() => {
           settle();
           setSheet('delete');
         }}
-        onPlay={() => void play()}
+        onPlay={play}
         onToggleColors={() => setColorsOpen((current) => (current === 'bar' ? null : 'bar'))}
         onPickColor={(key) => {
           setModel((state) => setColor(state, key));
@@ -533,7 +524,6 @@ export function RoutineEditor({
             colorKey={model.colorKey}
             colorLabel={colorLabel}
             colorsOpen={colorsOpen === 'hero'}
-            playDisabled={playDisabled}
             onChangeTitle={(title) => setModel((state) => setTitle(state, title))}
             onTitleFocus={() => {
               setChips(null);
@@ -549,7 +539,6 @@ export function RoutineEditor({
               setModel((state) => setColor(state, key));
               setColorsOpen(null);
             }}
-            onPlay={() => void play()}
             onTitleRowLayout={(event) => {
               const { y, height } = event.nativeEvent.layout;
               titleRow.current = { y, height };

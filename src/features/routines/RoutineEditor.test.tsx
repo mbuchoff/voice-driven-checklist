@@ -437,25 +437,37 @@ describe('RoutineEditor', () => {
   });
 
   describe('play, color and TalkBack', () => {
-    it('saves changes and starts a run from ▶', async () => {
+    it('offers ▶ in the top bar for a saved routine, and starts a run from it', async () => {
       const database = await setupDb();
       const routine = await existing(database);
       const { onRun } = await renderEditor({ initialRoutine: routine }, { database });
-      fireEvent.changeText(screen.getByTestId('title-input'), 'Ready');
 
-      await act(async () => {
-        fireEvent.press(screen.getByTestId('hero-play'));
-      });
+      expect(screen.getAllByRole('button', { name: 'Start a run' })).toHaveLength(1);
+      fireEvent.press(screen.getByTestId('bar-play'));
 
-      await waitFor(() => expect(onRun).toHaveBeenCalledTimes(1));
-      expect(onRun.mock.calls[0][0]).toMatchObject({ id: routine.id, title: 'Ready' });
-      expect((await getRoutine(database, routine.id))?.title).toBe('Ready');
+      expect(onRun).toHaveBeenCalledWith(routine);
     });
 
-    it('disables ▶ until the routine has a step with words', async () => {
+    it('hides ▶ while there are unsaved changes, and when the routine can’t run', async () => {
+      const database = await setupDb();
+      const routine = await existing(database);
+      await renderEditor({ initialRoutine: routine }, { database });
+      fireEvent.changeText(screen.getByTestId('title-input'), 'Ready');
+      expect(screen.queryByRole('button', { name: 'Start a run' })).toBeNull();
+      fireEvent.changeText(screen.getByTestId('title-input'), 'Morning stretch');
+      expect(screen.getByRole('button', { name: 'Start a run' })).toBeOnTheScreen();
+      screen.unmount();
+
+      const empty = await existing(database, { steps: [] });
+      await renderEditor({ initialRoutine: empty }, { database });
+      expect(screen.queryByRole('button', { name: 'Start a run' })).toBeNull();
+      screen.unmount();
+
       await renderEditor();
       fireEvent.changeText(screen.getByTestId('title-input'), 'Night');
-      expect(screen.getByTestId('hero-play')).toBeDisabled();
+      fireEvent.press(screen.getByTestId('add-step'));
+      fireEvent.changeText(screen.getByTestId('item-text-0'), 'Lights off');
+      expect(screen.queryByRole('button', { name: 'Start a run' })).toBeNull();
     });
 
     it('saves the color picked on the card', async () => {

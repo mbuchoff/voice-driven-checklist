@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Animated, {
+  FadeIn,
+  FadeOut,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
@@ -66,7 +68,7 @@ export function EditorTopBar({
   colorLabel,
   colorKey,
   colorsOpen,
-  playDisabled,
+  canRun,
   onBack,
   onDelete,
   onPlay,
@@ -81,7 +83,8 @@ export function EditorTopBar({
   colorLabel: string;
   colorKey: string;
   colorsOpen: boolean;
-  playDisabled: boolean;
+  /** ▶ shows only for a saved routine with nothing unsaved that can run. */
+  canRun: boolean;
   onBack: () => void;
   onDelete: () => void;
   onPlay: () => void;
@@ -162,17 +165,20 @@ export function EditorTopBar({
             </Text>
           </Animated.View>
         </View>
-        <Animated.View pointerEvents={collapsed ? 'auto' : 'none'} style={popStyle}>
-          <IconButton
-            label="Save and start a run"
-            testID="bar-play"
-            disabled={playDisabled}
-            onPress={onPlay}
-            style={{ backgroundColor: colors.surface, boxShadow: '0 2px 6px rgba(28, 48, 41, 0.14)' }}
-          >
-            <Icon name="playFilled" color={colors.ink} size={18} />
-          </IconButton>
-        </Animated.View>
+        <View style={{ width: 44, height: 44 }}>
+          {canRun ? (
+            <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(75)}>
+              <IconButton
+                label="Start a run"
+                testID="bar-play"
+                onPress={onPlay}
+                style={{ backgroundColor: colors.surface, boxShadow: '0 2px 6px rgba(28, 48, 41, 0.14)' }}
+              >
+                <Icon name="playFilled" color={colors.ink} size={18} />
+              </IconButton>
+            </Animated.View>
+          ) : null}
+        </View>
         {isNew ? (
           <View style={{ width: 44, height: 44 }} />
         ) : (
