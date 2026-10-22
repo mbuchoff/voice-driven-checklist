@@ -626,9 +626,9 @@ scenario('timers: a timed routine moves on by itself, also with the app in the b
   grantRunPermissions();
   await tapLabel(driver, 'Start E2E Timed Routine');
   await waitForDisplayed(byId(driver, 'run-header'), 45_000);
-  await waitForDisplayed(byId(driver, 'run-countdown'));
-  // Both 5 s steps run out while the app is away; the voice run keeps going.
-  await driver.background(14);
+  // The first step's 20 s outlasts the run's start-up, so the rest of it and
+  // the 5 s step run out while the app is away; nothing here presses Next.
+  await driver.background(30);
   await waitForDisplayed(byId(driver, 'completion-screen'), 20_000);
   await byId(driver, 'completion-return').click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));

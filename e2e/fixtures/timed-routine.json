@@ -7,7 +7,7 @@
       "title": "E2E Timed Routine",
       "color": "teal-1",
       "items": [
-        { "text": "Breathe in", "timer": 5 },
+        { "text": "Breathe in", "timer": 20 },
         { "text": "Breathe out", "timer": 5 }
       ]
     }
