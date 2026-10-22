@@ -8,6 +8,7 @@ import {
 } from 'react';
 
 import { useDatabase } from '@/src/db/DatabaseProvider';
+import { rememberTime } from '@/src/features/routines/timers';
 
 import {
   DEFAULT_DEVICE_PREFERENCES,
@@ -23,6 +24,8 @@ type DevicePreferencesContextValue = {
   setTheme(theme: ThemePreference): Promise<void>;
   setSound(sound: SoundPreference): Promise<void>;
   dismissRoutineReorderHint(): Promise<void>;
+  /** Moves a timer length to the front of the ones used most recently. */
+  rememberTimerSeconds(seconds: number): Promise<void>;
 };
 
 const DevicePreferencesContext =
@@ -101,6 +104,17 @@ export function DevicePreferencesProvider({
           ...(current ?? DEFAULT_DEVICE_PREFERENCES),
           routineReorderHintDismissed: true,
         }));
+      },
+      async rememberTimerSeconds(seconds) {
+        const recent = rememberTime(
+          (preferences ?? DEFAULT_DEVICE_PREFERENCES).recentTimerSeconds,
+          seconds,
+        );
+        setPreferences((current) => ({
+          ...(current ?? DEFAULT_DEVICE_PREFERENCES),
+          recentTimerSeconds: recent,
+        }));
+        await store.saveRecentTimerSeconds(recent);
       },
     }),
     [preferences, store],

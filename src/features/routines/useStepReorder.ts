@@ -3,9 +3,7 @@ import {
   useRef,
   useState,
   type ComponentRef,
-  type Dispatch,
   type RefObject,
-  type SetStateAction,
 } from 'react';
 import {
   Keyboard,
@@ -17,23 +15,29 @@ import {
 } from 'react-native';
 import { Gesture, ScrollView } from 'react-native-gesture-handler';
 import {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 
-import { moveItem } from './reorder';
 import { getEdgeAutoscrollDelta as calculateEdgeAutoscrollDelta } from './edgeAutoscroll';
 
 export const STEP_REORDER_HOLD_MS = 350;
+/** How far a finger may drift (on either axis) while holding a step. */
+export const STEP_REORDER_HOLD_DRIFT = 12;
 export const STEP_REORDER_RELEASE_MS = 120;
-const EDGE_AUTOSCROLL_THRESHOLD = 56;
-const EDGE_AUTOSCROLL_MAX_SPEED = 480;
+/** Haptic when a held step lifts, and each time it passes another step. */
+export const STEP_PICKUP_VIBRATION_MS = 12;
+export const STEP_PASS_VIBRATION_MS = 8;
+const EDGE_AUTOSCROLL_THRESHOLD = 70;
+const EDGE_AUTOSCROLL_MAX_SPEED = 840;
 const MAX_AUTOSCROLL_FRAME_MS = 32;
-const REORDER_ROW_DURATION_MS = 190;
+const REORDER_ROW_DURATION_MS = 180;
 const REORDER_ROW_EASING = Easing.bezier(0.22, 0.75, 0.2, 1);
 
 export function getEdgeAutoscrollDelta(
@@ -67,8 +71,11 @@ type DragContext = {
 
 type StepReorderOptions = {
   items: ReorderItem[];
-  setItems: Dispatch<SetStateAction<ReorderItem[]>>;
+  /** Commits a finished drag. */
+  onMove: (from: number, to: number) => void;
   scrollRef: RefObject<ComponentRef<typeof ScrollView> | null>;
+  /** Called when a held step lifts (e.g. to close an open step). */
+  onDragStart?: () => void;
 };
 
 export function getDropTargetOffset(
@@ -145,8 +152,9 @@ function animateReorderRows() {
 
 export function useStepReorder({
   items,
-  setItems,
+  onMove,
   scrollRef,
+  onDragStart,
 }: StepReorderOptions) {
   const rowLayouts = useRef<(StepRowLayout | null)[]>([]);
   const dragRef = useRef<DragContext | null>(null);
@@ -232,6 +240,7 @@ export function useStepReorder({
     if (current.to === to) return;
     current.to = to;
     dragTarget.value = to;
+    Vibration.vibrate(STEP_PASS_VIBRATION_MS);
     animateReorderRows();
     setDrag(dragStateFrom(current));
   };
@@ -281,7 +290,8 @@ export function useStepReorder({
     if (!layout || dragRef.current) return;
 
     Keyboard.dismiss();
-    Vibration.vibrate(15);
+    Vibration.vibrate(STEP_PICKUP_VIBRATION_MS);
+    onDragStart?.();
     const current: DragContext = {
       localId: item.localId,
       text: item.text,
@@ -341,7 +351,7 @@ export function useStepReorder({
     );
     setDrag(null);
     setSettlingPreview(dragStateFrom(current));
-    setItems((previous) => moveItem(previous, current.from, current.to));
+    if (current.from !== current.to) onMove(current.from, current.to);
     dragOffset.value = withTiming(targetOffset, {
       duration: STEP_REORDER_RELEASE_MS,
       easing: REORDER_ROW_EASING,
@@ -376,14 +386,22 @@ export function useStepReorder({
   };
 
   const moveItemByAction = (index: number, delta: -1 | 1) => {
+    const to = index + delta;
+    if (to < 0 || to >= itemsRef.current.length) return;
     animateEditorRows();
-    setItems((previous) => moveItem(previous, index, index + delta));
+    onMove(index, to);
   };
 
-  const gestureFor = (item: ReorderItem, itemIndex: number) =>
-    Gesture.Pan()
-      .withTestId(`item-hold-gesture-${item.localId}-${itemIndex}`)
-      .activateAfterLongPress(STEP_REORDER_HOLD_MS)
+  const holdActivation = useSharedValue(0);
+  const holdStartX = useSharedValue(0);
+  const holdStartY = useSharedValue(0);
+
+  const dragHandlers = <T extends ReturnType<typeof Gesture.Pan>>(
+    gesture: T,
+    item: ReorderItem,
+    itemIndex: number,
+  ) =>
+    gesture
       .maxPointers(1)
       .shouldCancelWhenOutside(false)
       .blocksExternalGesture(scrollRef as never)
@@ -435,6 +453,7 @@ export function useStepReorder({
       })
       .onFinalize((_event, success) => {
         'worklet';
+        cancelAnimation(holdActivation);
         if (dragFrom.value !== itemIndex) return;
         if (!success) {
           scheduleOnRN(cancelDrag, item.localId);
@@ -447,6 +466,76 @@ export function useStepReorder({
           );
         }
       });
+
+  /**
+   * Holding a step for STEP_REORDER_HOLD_MS lifts it. The finger may drift
+   * up to STEP_REORDER_HOLD_DRIFT on either axis first; more than that lets
+   * the list scroll (or a sideways swipe take over) instead.
+   */
+  const gestureFor = (item: ReorderItem, itemIndex: number) =>
+    dragHandlers(
+      Gesture.Pan()
+        .withTestId(`item-hold-gesture-${item.localId}-${itemIndex}`)
+        .manualActivation(true)
+        .simultaneousWithExternalGesture(scrollRef as never)
+        .onTouchesDown((event, manager) => {
+          'worklet';
+          if (event.numberOfTouches !== 1 || dragActive.value) {
+            manager.fail();
+            return;
+          }
+          const touch = event.allTouches[0];
+          holdStartX.value = touch.absoluteX;
+          holdStartY.value = touch.absoluteY;
+          holdActivation.value = 0;
+          holdActivation.value = withDelay(
+            STEP_REORDER_HOLD_MS,
+            withTiming(1, { duration: 0 }, (finished) => {
+              if (finished) manager.activate();
+            }),
+          );
+        })
+        .onTouchesMove((event, manager) => {
+          'worklet';
+          if (dragActive.value) return;
+          const touch = event.allTouches[0];
+          if (!touch) return;
+          if (
+            Math.abs(touch.absoluteX - holdStartX.value) > STEP_REORDER_HOLD_DRIFT ||
+            Math.abs(touch.absoluteY - holdStartY.value) > STEP_REORDER_HOLD_DRIFT
+          ) {
+            cancelAnimation(holdActivation);
+            manager.fail();
+          }
+        })
+        .onTouchesUp((_event, manager) => {
+          'worklet';
+          if (!dragActive.value) {
+            cancelAnimation(holdActivation);
+            manager.fail();
+          }
+        }),
+      item,
+      itemIndex,
+    );
+
+  /** Dragging a step by its grip dots moves it straight away. */
+  const gripGestureFor = (item: ReorderItem, itemIndex: number) =>
+    dragHandlers(
+      Gesture.Pan()
+        .withTestId(`item-grip-gesture-${item.localId}-${itemIndex}`)
+        .manualActivation(true)
+        .onTouchesDown((event, manager) => {
+          'worklet';
+          if (event.numberOfTouches !== 1 || dragActive.value) {
+            manager.fail();
+            return;
+          }
+          manager.activate();
+        }),
+      item,
+      itemIndex,
+    );
 
   useEffect(
     () => () => {
@@ -475,6 +564,7 @@ export function useStepReorder({
     dragPreview,
     dragPreviewStyle,
     gestureFor,
+    gripGestureFor,
     moveItemByAction,
     onRowLayout,
     onScroll,

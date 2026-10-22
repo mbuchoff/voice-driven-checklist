@@ -13,7 +13,8 @@ import { createTestDatabase } from '@/src/test/createTestDatabase';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
 import { LibraryScreen } from './LibraryScreen';
-import { createRoutine } from './repository';
+import { createRoutine, deleteRoutine, listRoutines } from './repository';
+import { offerRoutineUndo } from './routineUndo';
 import { routineColorShades } from './routineColors';
 
 async function setupDb(): Promise<Database> {
@@ -23,6 +24,40 @@ async function setupDb(): Promise<Database> {
 }
 
 describe('LibraryScreen', () => {
+  it('offers UNDO after a routine is deleted, putting it back in its place', async () => {
+    const database = await setupDb();
+    const last = await createRoutine(database, { title: 'Last', steps: [{ text: 'a' }] });
+    const doomed = await createRoutine(database, { title: 'Doomed', steps: [{ text: 'b' }] });
+    await createRoutine(database, { title: 'First', steps: [{ text: 'c' }] });
+    offerRoutineUndo((await deleteRoutine(database, doomed.id))!);
+
+    await renderWithDatabase(
+      <LibraryScreen onCreate={jest.fn()} onEdit={jest.fn()} onStart={jest.fn()} />,
+      { database },
+    );
+    expect(await screen.findByText('“Doomed” deleted')).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole('button', { name: /undo/i }));
+
+    expect(await screen.findByTestId(`routine-card-${doomed.id}`)).toBeOnTheScreen();
+    expect((await listRoutines(database)).map((routine) => routine.title)).toEqual(['First', 'Doomed', 'Last']);
+    expect(screen.queryByText('“Doomed” deleted')).toBeNull();
+    expect(last.id).toBeTruthy();
+  });
+
+  it('ends the undo offer when the routines screen is left', async () => {
+    const database = await setupDb();
+    const doomed = await createRoutine(database, { title: 'Doomed', steps: [] });
+    offerRoutineUndo((await deleteRoutine(database, doomed.id))!);
+    const callbacks = { onCreate: jest.fn(), onEdit: jest.fn(), onStart: jest.fn() };
+    const view = await renderWithDatabase(<LibraryScreen {...callbacks} active />, { database });
+    expect(await screen.findByText('“Doomed” deleted')).toBeOnTheScreen();
+
+    view.rerender(<LibraryScreen {...callbacks} active={false} />);
+
+    await waitFor(() => expect(screen.queryByText('“Doomed” deleted')).toBeNull());
+  });
+
   it('paints each card in its routine’s stored color', async () => {
     const database = await setupDb();
     const slate = await createRoutine(database, {

@@ -3,10 +3,8 @@ import {
   act,
   fireEvent,
   screen,
-  waitFor,
-  within,
 } from '@testing-library/react-native';
-import { Alert, Keyboard, ScrollView, StyleSheet, Vibration } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet, Vibration } from 'react-native';
 import * as Reanimated from 'react-native-reanimated';
 
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
@@ -26,7 +24,12 @@ import {
   tapToEdit,
 } from './RoutineEditor.testSupport';
 import { createRoutine, getRoutine } from './repository';
-import type { Database } from '@/src/db/database';
+
+function deleteStepByAccessibility(index: number) {
+  fireEvent(screen.getByTestId(`item-label-${index}`), 'accessibilityAction', {
+    nativeEvent: { actionName: 'delete' },
+  });
+}
 
 describe('RoutineEditor', () => {
   afterEach(() => {
@@ -34,90 +37,6 @@ describe('RoutineEditor', () => {
     jest.restoreAllMocks();
   });
   describe('edit mode', () => {
-    it('deletes the persisted routine from the editor after confirmation', async () => {
-      const alert = jest.spyOn(Alert, 'alert');
-      const database = await setupDb();
-      const existing = await createRoutine(database, {
-        title: 'Original title',
-        steps: [{ text: 'Keep until confirmed' }],
-      });
-      const onDeleted = jest.fn();
-      await renderWithDatabase(
-        <RoutineEditor
-          initialRoutine={existing}
-          onSaved={jest.fn()}
-          onDeleted={onDeleted}
-          onCancel={jest.fn()}
-        />,
-        { database },
-      );
-      fireEvent.changeText(screen.getByTestId('title-input'), 'Unsaved title');
-
-      fireEvent.press(screen.getByTestId('routine-delete'));
-
-      expect(alert).toHaveBeenCalledTimes(1);
-      expect(alert.mock.calls[0][1]).toContain('Original title');
-      expect(alert.mock.calls[0][1]).not.toContain('Unsaved title');
-      const buttons = alert.mock.calls[0][2] ?? [];
-      buttons.find((button) => button.style === 'destructive')?.onPress?.();
-
-      await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1));
-      await expect(getRoutine(database, existing.id)).resolves.toBeNull();
-      expect(
-        within(screen.getByTestId('routine-editor-scroll')).getByTestId(
-          'routine-delete',
-        ),
-      ).toBeOnTheScreen();
-    });
-
-    it('keeps the unsaved editor state available when routine deletion fails', async () => {
-      const alert = jest.spyOn(Alert, 'alert');
-      const database = await setupDb();
-      const existing = await createRoutine(database, {
-        title: 'Stored title',
-        steps: [{ text: 'Stored step' }],
-      });
-      const failingDatabase: Database = {
-        ...database,
-        withTransactionAsync: (task) =>
-          database.withTransactionAsync((transaction) =>
-            task({
-              ...transaction,
-              async runAsync(sql, ...params) {
-                if (sql.includes('DELETE FROM routines')) {
-                  throw new Error('simulated delete failure');
-                }
-                return transaction.runAsync(sql, ...params);
-              },
-            })),
-      };
-      const onDeleted = jest.fn();
-      await renderWithDatabase(
-        <RoutineEditor
-          initialRoutine={existing}
-          onSaved={jest.fn()}
-          onDeleted={onDeleted}
-          onCancel={jest.fn()}
-        />,
-        { database: failingDatabase },
-      );
-      fireEvent.changeText(screen.getByTestId('title-input'), 'Unsaved title');
-
-      fireEvent.press(screen.getByTestId('routine-delete'));
-      const confirmButtons = alert.mock.calls[0][2] ?? [];
-      confirmButtons
-        .find((button) => button.style === 'destructive')
-        ?.onPress?.();
-
-      await waitFor(() => expect(alert).toHaveBeenCalledTimes(2));
-      expect(alert.mock.calls[1][0]).toMatch(/delete failed/i);
-      expect(screen.getByTestId('title-input').props.value).toBe('Unsaved title');
-      expect(onDeleted).not.toHaveBeenCalled();
-      await expect(getRoutine(database, existing.id)).resolves.toMatchObject({
-        id: existing.id,
-      });
-    });
-
     it('reveals a tapped existing step instead of scrolling to the routine end', async () => {
       jest
         .spyOn(global, 'requestAnimationFrame')
@@ -169,89 +88,40 @@ describe('RoutineEditor', () => {
       expect(scrollToEnd).not.toHaveBeenCalled();
     });
 
-    it('activates reordering from the whole row without a visible drag handle', async () => {
+    it('drags a step by its grip dots without waiting for a hold', async () => {
       const database = await setupDb();
       const existing = await createRoutine(database, {
-        title: 'hold row',
+        title: 'grip',
         steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
       });
       await renderWithDatabase(
-        <RoutineEditor
-          initialRoutine={existing}
-          onSaved={jest.fn()}
-          onCancel={jest.fn()}
-        />,
+        <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
-
       primeRowLayouts([50, 50, 50]);
+      const localId = screen.getByTestId('item-row-0').props.nativeID;
+      const grip = getByGestureTestId(`item-grip-gesture-${localId}-0`);
+      const manager = { activate: jest.fn(), fail: jest.fn() };
 
-      expect(screen.queryByTestId('item-drag-handle-0')).toBeNull();
-      expect(screen.getByTestId('item-row-0').props.accessibilityLabel).toMatch(
-        /hold.*reorder/i,
-      );
-
-      await dragRow(0, 25, 125);
-
-      expect(screen.getByTestId('item-text-2').props.value).toBe('a');
-    });
-    it('pre-fills the form from the initial routine and updates it on save', async () => {
-      const database = await setupDb();
-      const existing = await createRoutine(database, {
-        title: 'Original',
-        steps: [{ text: 'one' }, { text: 'two' }],
+      act(() => {
+        grip.handlers.onTouchesDown?.(
+          { numberOfTouches: 1, allTouches: [{ absoluteX: 10, absoluteY: 25 }] } as never,
+          manager as never,
+        );
       });
-      const onSaved = jest.fn();
-      await renderWithDatabase(
-        <RoutineEditor
-          initialRoutine={existing}
-          onSaved={onSaved}
-          onCancel={jest.fn()}
-        />,
-        { database },
-      );
+      expect(manager.activate).toHaveBeenCalledTimes(1);
 
-      expect(screen.getByTestId('title-input').props.value).toBe('Original');
-      expect(screen.getByTestId('item-text-0').props.value).toBe('one');
-      expect(screen.getByTestId('item-text-1').props.value).toBe('two');
-
-      fireEvent.changeText(screen.getByTestId('title-input'), 'Renamed');
-      tapToEdit(0);
-      fireEvent.changeText(screen.getByTestId('item-text-0'), 'uno');
-      fireEvent.press(screen.getByTestId('save'));
-
-      await screen.findByTestId('save');
-      const saved = onSaved.mock.calls[0][0];
-      expect(saved.id).toBe(existing.id);
-      expect(saved.title).toBe('Renamed');
-      expect(saved.steps.map((i: { text: string }) => i.text)).toEqual(['uno', 'two']);
-    });
-
-    it('removes an item and shifts positions contiguously after save', async () => {
-      const database = await setupDb();
-      const existing = await createRoutine(database, {
-        title: 'x',
-        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+      await act(async () => {
+        grip.handlers.onStart?.({ absoluteY: 25 } as never);
+        await Promise.resolve();
       });
-      const onSaved = jest.fn();
-      await renderWithDatabase(
-        <RoutineEditor
-          initialRoutine={existing}
-          onSaved={onSaved}
-          onCancel={jest.fn()}
-        />,
-        { database },
-      );
+      await act(async () => {
+        getByGestureTestId(`item-grip-gesture-${localId}-0`).handlers.onUpdate?.({ absoluteY: 125 } as never);
+        await flushGestureCommit();
+      });
+      await releaseRowDrag(getByGestureTestId(`item-grip-gesture-${localId}-0`));
 
-      fireEvent.press(screen.getByTestId('item-delete-1')); // remove 'b'
-      fireEvent.press(screen.getByTestId('save'));
-
-      await screen.findByTestId('save');
-      const reloaded = await getRoutine(database, existing.id);
-      expect(reloaded?.steps.map((i) => ({ text: i.text, order: i.order }))).toEqual([
-        { text: 'a', order: 0 },
-        { text: 'c', order: 1 },
-      ]);
+      expect(screen.getByTestId('item-label-2')).toHaveTextContent('a');
     });
 
     it('persists items reordered by holding and dragging a row', async () => {
@@ -345,7 +215,7 @@ describe('RoutineEditor', () => {
 
       await releaseRowDrag(gesture);
 
-      expect(screen.getByTestId('item-text-2').props.value).toBe('a');
+      expect(screen.getByTestId('item-label-2')).toHaveTextContent('a');
       expect(
         StyleSheet.flatten(screen.getByTestId('item-row-2').props.style)
           .opacity,
@@ -489,10 +359,10 @@ describe('RoutineEditor', () => {
       });
 
       expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('a');
-      expect(screen.getByTestId('item-text-0').props.value).toBe('a');
+      expect(screen.getByTestId('item-label-0')).toHaveTextContent('a');
 
       await releaseRowDrag(firstGesture);
-      expect(screen.getByTestId('item-text-2').props.value).toBe('a');
+      expect(screen.getByTestId('item-label-2')).toHaveTextContent('a');
     });
 
     it('allows another drag when the claimed row disappears before drag setup', async () => {
@@ -514,7 +384,7 @@ describe('RoutineEditor', () => {
       const removedRowGesture = rowGesture(0);
       act(() => {
         removedRowGesture.handlers.onStart?.({ absoluteY: 25 } as never);
-        fireEvent.press(screen.getByTestId('item-delete-0'));
+        deleteStepByAccessibility(0);
         removedRowGesture.handlers.onFinalize?.({} as never, false);
       });
       await act(async () => {
@@ -555,7 +425,9 @@ describe('RoutineEditor', () => {
         jest.runAllTicks();
       });
 
-      expect(vibrate).toHaveBeenCalledTimes(1);
+      // One pick-up (the second hold is refused); the other tick is the
+      // first step passing another.
+      expect(vibrate.mock.calls.filter(([ms]) => ms === 12)).toHaveLength(1);
     });
 
     it('forgets deleted row measurements before calculating the bottom slot', async () => {
@@ -578,7 +450,7 @@ describe('RoutineEditor', () => {
         { database },
       );
       primeRowLayouts([50, 50, 50, 50]);
-      fireEvent.press(screen.getByTestId('item-delete-3'));
+      deleteStepByAccessibility(3);
 
       const gesture = await beginRowDrag(0, 25, 180);
 
@@ -604,7 +476,7 @@ describe('RoutineEditor', () => {
       primeRowLayouts([50, 50, 50]);
       await dragRow(2, 125, 20);
 
-      expect(screen.getByTestId('item-text-0').props.value).toBe('c');
+      expect(screen.getByTestId('item-label-0')).toHaveTextContent('c');
 
       await beginRowDrag(0, 25, 25);
 
@@ -635,7 +507,7 @@ describe('RoutineEditor', () => {
 
       await dragRow(0, 25, 125);
 
-      expect(screen.getByTestId('item-text-2').props.value).toBe('c');
+      expect(screen.getByTestId('item-label-2')).toHaveTextContent('c');
 
       await beginRowDrag(2, 125, 125);
 
@@ -776,7 +648,7 @@ describe('RoutineEditor', () => {
       }
       await finishRowDrag(gesture);
 
-      expect(screen.getByTestId('item-text-1').props.value).toBe('a');
+      expect(screen.getByTestId('item-label-1')).toHaveTextContent('a');
       jest.restoreAllMocks();
     });
 
@@ -799,110 +671,72 @@ describe('RoutineEditor', () => {
       const gesture = await beginRowDrag(0, 25, 125);
       await cancelRowDrag(gesture);
 
-      expect(screen.getByTestId('item-text-0').props.value).toBe('a');
+      expect(screen.getByTestId('item-label-0')).toHaveTextContent('a');
       expect(screen.queryByTestId('item-drag-preview')).toBeNull();
     });
 
-    it('waits for a hold before disabling native scroll for the row drag', async () => {
+    it('lifts a held step, but lets a finger that drifts more than 12 dp scroll instead', async () => {
       const database = await setupDb();
       const existing = await createRoutine(database, {
         title: 'keep drag',
         steps: [{ text: 'a' }, { text: 'b' }],
       });
       await renderWithDatabase(
-        <RoutineEditor
-          initialRoutine={existing}
-          onSaved={jest.fn()}
-          onCancel={jest.fn()}
-        />,
+        <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
-
       fireEvent(screen.getByTestId('item-row-0'), 'layout', {
         nativeEvent: { layout: { y: 0, height: 50 } },
       });
-
       const localId = screen.getByTestId('item-row-0').props.nativeID;
       const gesture = getByGestureTestId(`item-hold-gesture-${localId}-0`);
-      expect(gesture.config.activateAfterLongPress).toBe(350);
+      const touch = (x: number, y: number) =>
+        ({ numberOfTouches: 1, allTouches: [{ absoluteX: x, absoluteY: y }] }) as never;
+
+      const drifting = { activate: jest.fn(), fail: jest.fn() };
+      act(() => {
+        gesture.handlers.onTouchesDown?.(touch(100, 25), drifting as never);
+        gesture.handlers.onTouchesMove?.(touch(112, 37), drifting as never);
+      });
+      expect(drifting.fail).not.toHaveBeenCalled();
+      act(() => {
+        gesture.handlers.onTouchesMove?.(touch(100, 38), drifting as never);
+      });
+      expect(drifting.fail).toHaveBeenCalledTimes(1);
+
       expect(screen.getByTestId('routine-editor-scroll').props.scrollEnabled).toBe(true);
-
       await beginRowDrag(0, 25, 25);
-
       expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
       expect(screen.getByTestId('routine-editor-scroll').props.scrollEnabled).toBe(false);
-
       await finishRowDrag(gesture);
     });
 
-    it('enters native text editing only after a quick tap on an idle step', async () => {
+    it('opens a step for typing after a quick tap, and closes it when it loses focus', async () => {
       const database = await setupDb();
       const existing = await createRoutine(database, {
         title: 'keep drag',
         steps: [{ text: 'hold this text' }],
       });
       await renderWithDatabase(
-        <RoutineEditor
-          initialRoutine={existing}
-          onSaved={jest.fn()}
-          onCancel={jest.fn()}
-        />,
+        <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
-
-      expect(screen.getByTestId('item-text-0').props.editable).toBe(false);
-      expect(screen.getByTestId('item-edit-0').props.pointerEvents).toBe(
-        'none',
-      );
+      expect(screen.queryByTestId('item-text-0')).toBeNull();
 
       const localId = screen.getByTestId('item-row-0').props.nativeID;
-      const rowGesture = getByGestureTestId(
-        `item-hold-gesture-${localId}-0`,
-      );
-      const editGesture = getByGestureTestId(
-        `item-edit-gesture-${localId}-0`,
-      );
-      expect(editGesture.config.maxDurationMs).toBeLessThan(
-        rowGesture.config.activateAfterLongPress as number,
-      );
-      expect(editGesture.config.requireToFail).toContain(
-        rowGesture.handlerTag,
-      );
+      const editGesture = getByGestureTestId(`item-edit-gesture-${localId}-0`);
+      expect(editGesture.config.maxDurationMs).toBeLessThan(350);
       act(() => {
         editGesture.handlers.onEnd?.({} as never, true);
       });
-      expect(screen.getByTestId('item-text-0').props.editable).toBe(true);
-      expect(screen.getByTestId('item-edit-0').props.pointerEvents).toBe(
-        'auto',
-      );
+      expect(screen.getByTestId('item-text-0').props.value).toBe('hold this text');
 
-      fireEvent(screen.getByTestId('item-text-0'), 'blur');
-      expect(screen.getByTestId('item-text-0').props.editable).toBe(false);
-    });
-
-    it('uses the whole row and accessible adjustments without visible move controls', async () => {
-      const database = await setupDb();
-      const existing = await createRoutine(database, {
-        title: 'x',
-        steps: [{ text: 'a' }, { text: 'b' }],
+      await act(async () => {
+        fireEvent(screen.getByTestId('item-text-0'), 'blur');
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
-      await renderWithDatabase(
-        <RoutineEditor
-          initialRoutine={existing}
-          onSaved={jest.fn()}
-          onCancel={jest.fn()}
-        />,
-        { database },
-      );
-
-      expect(screen.queryByTestId('item-drag-handle-0')).toBeNull();
-      expect(screen.getByLabelText(/reorder step 1/i).props.accessibilityActions).toEqual([
-        { name: 'decrement', label: 'Move up' },
-        { name: 'increment', label: 'Move down' },
-      ]);
-      expect(screen.getByLabelText(/reorder step 2/i)).toBeOnTheScreen();
-      expect(screen.queryByTestId('item-move-up-0')).toBeNull();
-      expect(screen.queryByTestId('item-move-down-1')).toBeNull();
+      expect(screen.queryByTestId('item-text-0')).toBeNull();
+      expect(screen.getByTestId('item-label-0')).toHaveTextContent('hold this text');
     });
   });
 });

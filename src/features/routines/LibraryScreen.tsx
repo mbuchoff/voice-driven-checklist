@@ -14,6 +14,9 @@ import Reanimated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { RoutineUndoToast } from './RoutineUndoToast';
+import { takeRoutineUndo } from './routineUndo';
 import { ScrollView as GestureScrollView } from 'react-native-gesture-handler';
 
 import { Icon } from '@/src/components/Icon';
@@ -23,7 +26,7 @@ import { useDevicePreferences } from '@/src/features/settings/DevicePreferencesP
 import { useTheme } from '@/src/theme/useTheme';
 
 import { moveItem } from './reorder';
-import { listRoutines, reorderRoutines } from './repository';
+import { listRoutines, reorderRoutines, restoreRoutine } from './repository';
 import {
   RoutineArrangeHint,
   shouldShowRoutineArrangeHint,
@@ -31,7 +34,7 @@ import {
 import { RoutineArrangeLesson } from './RoutineArrangeLesson';
 import { getRoutineGridMetrics } from './routineGrid';
 import { RoutineReorderGrid } from './RoutineReorderGrid';
-import type { LibraryRoutine } from './types';
+import type { DeletedRoutine, LibraryRoutine } from './types';
 import { useRoutineSelectionFeedback } from './useRoutineSelectionFeedback';
 
 // The scroll ref must expose a gesture-handler tag for a pending card hold to
@@ -153,6 +156,23 @@ export function LibraryScreen({
     refresh();
     return () => { loadRequest.current += 1; };
   }, [refresh, refreshKey]);
+
+  // A routine just deleted in its editor can be put back for a few seconds;
+  // leaving this screen ends the offer.
+  const [undoOffer, setUndoOffer] = useState<DeletedRoutine | null>(null);
+  useEffect(() => {
+    if (!active) {
+      setUndoOffer(null);
+      return;
+    }
+    const offered = takeRoutineUndo();
+    if (offered) setUndoOffer(offered);
+  }, [active, refreshKey]);
+  const undoDelete = useCallback(async (deleted: DeletedRoutine) => {
+    setUndoOffer(null);
+    await restoreRoutine(db, deleted);
+    refresh();
+  }, [db, refresh]);
 
   const layout = useMemo(
     () => getRoutineGridMetrics(gridWidth, items.length),
@@ -434,6 +454,15 @@ export function LibraryScreen({
           </>
         ) : null}
       </RoutineScrollView>
+      {undoOffer ? (
+        <RoutineUndoToast
+          key={undoOffer.routine.id}
+          theme={theme}
+          title={undoOffer.routine.title}
+          onUndo={() => void undoDelete(undoOffer)}
+          onExpire={() => setUndoOffer(null)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

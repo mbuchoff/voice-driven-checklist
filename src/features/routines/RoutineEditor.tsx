@@ -2,617 +2,912 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ComponentRef,
 } from 'react';
 import {
+  AccessibilityInfo,
+  BackHandler,
   Dimensions,
   Keyboard,
+  Platform,
   Pressable,
   Text,
   TextInput,
   View,
   type LayoutChangeEvent,
 } from 'react-native';
-import {
-  Gesture,
-  GestureDetector,
-  ScrollView,
-} from 'react-native-gesture-handler';
-import Animated from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView } from 'react-native-gesture-handler';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Icon } from '@/src/components/Icon';
-import { ScreenBackground } from '@/src/components/ScreenBackground';
-import { confirmAction, notify } from '@/src/components/confirm';
+import { notify } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
+import { useDevicePreferences } from '@/src/features/settings/DevicePreferencesProvider';
 import { useTheme } from '@/src/theme/useTheme';
 
+import { editorColors } from './editorColors';
+import { EditorTopBar } from './editor/EditorTopBar';
 import {
-  createRoutine,
-  deleteRoutine,
-  updateRoutine,
-} from './repository';
-import type { Routine } from './types';
+  EditorSheet,
+  SheetActions,
+  SheetBody,
+  SheetButton,
+  SheetTitle,
+} from './editor/EditorSheet';
+import { RoutineHeroCard } from './editor/RoutineHeroCard';
+import { DeletedStepRow, StepRow } from './editor/StepRow';
+import { StepTimerChips } from './editor/TimerChips';
+import { TimerPanel } from './editor/TimerPanel';
+import { createRoutine, deleteRoutine, updateRoutine } from './repository';
+import { moveItem } from './reorder';
 import {
-  STEP_REORDER_HOLD_MS,
-  animateEditorRows,
-  useStepReorder,
-  type ReorderItem,
-} from './useStepReorder';
+  addStep,
+  canSave,
+  countedStepCount,
+  createEditorState,
+  deleteStep,
+  editorSnapshot,
+  expireDeletedStep,
+  isDirty,
+  leaveOpenStep,
+  moveStep,
+  openStep,
+  pressEnter,
+  realSteps,
+  routineInput,
+  setColor,
+  setStepText,
+  setStepTimer,
+  setTitle,
+  timedTotal,
+  undoDeleteStep,
+  type EditorState,
+} from './routineEditorModel';
+import { routineColor } from './routineColors';
 import {
-  validateStepText,
-  validateRoutineTitle,
-} from './validation';
+  chipCandidates,
+  countLine,
+  initialStepper,
+  pressStepper,
+  type StepperState,
+} from './timers';
+import type { DeletedRoutine, Routine } from './types';
+import { useStepReorder } from './useStepReorder';
 
-type EditorItem = ReorderItem;
 const EDITOR_KEYBOARD_OFFSET = 24;
+/** A swiped-away step's UNDO stays this long (longer if TalkBack asks). */
+const STEP_UNDO_MS = 5000;
+const UNDO_CLOSE_UP_MS = 280;
 
 export type RoutineEditorProps = {
   initialRoutine?: Routine;
+  /** The color a new routine starts with. */
+  newColorKey?: string;
   onSaved: (saved: Routine) => void;
-  onDeleted?: () => void;
+  /** Leave without saving (nothing changed, or the changes were discarded). */
   onCancel: () => void;
+  onDeleted?: (deleted: DeletedRoutine) => void;
+  /** Start a run of the saved routine. */
+  onRun?: (routine: Routine) => void;
 };
 
 export function focusEditorInput(input: { focus: () => void } | null) {
   input?.focus();
 }
 
-function makeBlankItem(): EditorItem {
-  return { localId: uuidv4(), text: '' };
-}
-
-function initialItems(routine?: Routine): EditorItem[] {
-  if (routine && routine.steps.length > 0) {
-    return routine.steps.map((item) => ({
-      localId: uuidv4(),
-      text: item.text,
-    }));
-  }
-  return [makeBlankItem()];
-}
+type ChipsState = { stepId: string; candidates: number[] };
+type PanelState = {
+  stepId: string;
+  openedValue: number | null;
+  stepper: StepperState;
+  quickPicks: number[];
+};
+type Sheet = 'leave' | 'delete' | null;
 
 export function RoutineEditor({
   initialRoutine,
+  newColorKey,
   onSaved,
-  onDeleted,
   onCancel,
+  onDeleted,
+  onRun,
 }: RoutineEditorProps) {
   const database = useDatabase();
   const theme = useTheme();
-  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
-  const editorViewportTop = useRef(0);
-  const itemInputRefs = useRef<
-    Record<string, ComponentRef<typeof TextInput> | null>
-  >({});
-  const [title, setTitle] = useState(initialRoutine?.title ?? '');
-  const [items, setItems] = useState<EditorItem[]>(() =>
-    initialItems(initialRoutine),
+  const insets = useSafeAreaInsets();
+  const { preferences, rememberTimerSeconds } = useDevicePreferences();
+  const [model, setModel] = useState<EditorState>(() =>
+    createEditorState({ routine: initialRoutine, colorKey: newColorKey }),
   );
-  const [focusItemId, setFocusItemId] = useState<string | null>(null);
-  const [titleError, setTitleError] = useState<string | null>(null);
-  const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
+  const [baseline] = useState(() => editorSnapshot(model));
+  const modelRef = useRef(model);
+  modelRef.current = model;
+  const colors = useMemo(() => editorColors(theme, model.colorKey), [theme, model.colorKey]);
+
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const titleRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const inputRefs = useRef<Record<string, ComponentRef<typeof TextInput> | null>>({});
+  const viewportTop = useRef(0);
+  const viewportHeight = useRef(0);
+  const heroY = useRef(0);
+  const titleRow = useRef<{ y: number; height: number } | null>(null);
+  const sectionY = useRef(0);
+  const groupY = useRef(0);
+  const rowLayouts = useRef<Record<string, { y: number; height: number }>>({});
+  const scrollToId = useRef<string | null>(null);
+  const keepOpenOnBlur = useRef(false);
+  const undoTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const [chips, setChips] = useState<ChipsState | null>(null);
+  const [panel, setPanel] = useState<PanelState | null>(null);
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [colorsOpen, setColorsOpen] = useState<'hero' | 'bar' | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const [keyboardClearance, setKeyboardClearance] = useState(0);
-  const {
-    drag,
-    dragPreview,
-    dragPreviewStyle,
-    gestureFor,
-    moveItemByAction,
-    onRowLayout,
-    onScroll,
-    onViewportLayout,
-    setContentHeight,
-  } = useStepReorder({ items, setItems, scrollRef });
+  const [deletedHeights, setDeletedHeights] = useState<Record<string, number>>({});
+  const [closingRows, setClosingRows] = useState<Record<string, boolean>>({});
+  const [saveBarHeight, setSaveBarHeight] = useState(0);
+  const [busy, setBusy] = useState(false);
 
-  const scrollFocusedItemIntoView = useCallback(() => {
-    if (!focusItemId) return;
-    const input = itemInputRefs.current[focusItemId];
-    if (!input) return;
-    scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(
-      input,
-      editorViewportTop.current + EDITOR_KEYBOARD_OFFSET,
-      true,
-    );
-  }, [focusItemId]);
+  const steps = realSteps(model);
+  const counted = countedStepCount(model);
+  const summary = countLine(counted, timedTotal(model));
+  const dirty = isDirty(model, baseline);
+  const wantsSave = model.isNew || dirty;
+  const saveAllowed = canSave(model);
+  const playDisabled = !saveAllowed || !steps.some((step) => step.text.trim());
+  const colorLabel = routineColor(model.colorKey).name;
 
-  const handleViewportLayout = (event: LayoutChangeEvent) => {
-    editorViewportTop.current = event.nativeEvent.layout.y;
-    onViewportLayout(event);
-  };
+  const expireAllUndoRows = useCallback(() => {
+    for (const timer of Object.values(undoTimers.current)) clearTimeout(timer);
+    undoTimers.current = {};
+    setModel((state) => ({ ...state, rows: state.rows.filter((row) => row.kind === 'step') }));
+  }, []);
 
+  const reorder = useStepReorder({
+    items: steps.map(({ localId, text }) => ({ localId, text })),
+    onMove: (from, to) => setModel((state) => moveStep(state, from, to)),
+    scrollRef,
+    onDragStart: () => {
+      setChips(null);
+      expireAllUndoRows();
+      setModel((state) => leaveOpenStep(state));
+    },
+  });
+
+  // Keep the step being typed in above the keyboard.
   useEffect(() => {
     const shown = Keyboard.addListener('keyboardDidShow', (event) => {
-      const clearance = Math.max(
-        0,
-        Dimensions.get('screen').height - event.endCoordinates.screenY,
-      );
-      setKeyboardClearance(clearance);
+      setKeyboardClearance(Math.max(0, Dimensions.get('screen').height - event.endCoordinates.screenY));
     });
-    const hidden = Keyboard.addListener('keyboardDidHide', () => {
-      setKeyboardClearance(0);
-    });
+    const hidden = Keyboard.addListener('keyboardDidHide', () => setKeyboardClearance(0));
     return () => {
       shown.remove();
       hidden.remove();
     };
   }, []);
 
-  useEffect(() => {
-    if (!focusItemId) return;
-    focusEditorInput(itemInputRefs.current[focusItemId]);
-  }, [focusItemId]);
-
-  useEffect(() => {
-    if (!focusItemId || keyboardClearance <= 0) return;
-    const frame = requestAnimationFrame(scrollFocusedItemIntoView);
-    return () => cancelAnimationFrame(frame);
-  }, [focusItemId, keyboardClearance, scrollFocusedItemIntoView]);
-
-  const updateItemText = (localId: string, text: string) => {
-    setItems((current) =>
-      current.map((item) =>
-        item.localId === localId ? { ...item, text } : item,
-      ),
+  const scrollOpenStepIntoView = useCallback(() => {
+    const id = modelRef.current.openId;
+    const input = id ? inputRefs.current[id] : null;
+    if (!input) return;
+    scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(
+      input,
+      viewportTop.current + EDITOR_KEYBOARD_OFFSET,
+      true,
     );
+  }, []);
+
+  useEffect(() => {
+    if (!model.openId) return;
+    const frame = requestAnimationFrame(() => focusEditorInput(inputRefs.current[model.openId!]));
+    return () => cancelAnimationFrame(frame);
+  }, [model.openId]);
+
+  useEffect(() => {
+    if (!model.openId || keyboardClearance <= 0) return;
+    const frame = requestAnimationFrame(scrollOpenStepIntoView);
+    return () => cancelAnimationFrame(frame);
+  }, [model.openId, keyboardClearance, scrollOpenStepIntoView]);
+
+  // Chips only show under the open step.
+  useEffect(() => {
+    if (chips && chips.stepId !== model.openId) setChips(null);
+  }, [chips, model.openId]);
+
+  useEffect(() => {
+    if (!collapsed && colorsOpen === 'bar') setColorsOpen(null);
+  }, [collapsed, colorsOpen]);
+
+  useEffect(() => () => {
+    for (const timer of Object.values(undoTimers.current)) clearTimeout(timer);
+  }, []);
+
+  const settle = useCallback((): EditorState => {
+    const settled = leaveOpenStep(modelRef.current);
+    modelRef.current = settled;
+    setModel(settled);
+    return settled;
+  }, []);
+
+  const open = (id: string) => {
+    setColorsOpen(null);
+    setModel((state) => openStep(state, id));
   };
 
-  const addItem = () => {
-    const item = makeBlankItem();
-    setFocusItemId(item.localId);
-    setItems((current) => [...current, item]);
+  const add = () => {
+    const id = uuidv4();
+    setColorsOpen(null);
+    setChips(null);
+    scrollToId.current = id;
+    setModel((state) => addStep(state, id));
   };
 
-  const deleteItem = (localId: string) => {
-    animateEditorRows();
-    setItems((current) => current.filter((item) => item.localId !== localId));
-    setItemErrors((current) => {
-      const next = { ...current };
-      delete next[localId];
-      return next;
+  const finishEditing = () => {
+    Keyboard.dismiss();
+    setChips(null);
+    setModel((state) => leaveOpenStep(state));
+  };
+
+  const onStepBlur = (id: string) => {
+    if (keepOpenOnBlur.current) return;
+    setTimeout(() => {
+      if (keepOpenOnBlur.current) return;
+      const focused = inputRefs.current[id]?.isFocused?.();
+      if (!focused && modelRef.current.openId === id) {
+        setChips(null);
+        setModel((state) => (state.openId === id ? leaveOpenStep(state) : state));
+      }
+    }, 0);
+  };
+
+  const onClock = (id: string) => {
+    if (chips?.stepId === id && model.openId === id) {
+      setChips(null);
+      return;
+    }
+    const step = steps.find((candidate) => candidate.localId === id);
+    if (!step) return;
+    setColorsOpen(null);
+    setModel((state) => openStep(state, id));
+    setChips({ stepId: id, candidates: chipCandidates(step.timerSeconds, preferences.recentTimerSeconds) });
+  };
+
+  const pickChip = (id: string, seconds: number) => {
+    setModel((state) => setStepTimer(state, id, seconds));
+    void rememberTimerSeconds(seconds);
+    setChips(null);
+  };
+
+  const openPanel = (id: string) => {
+    const step = steps.find((candidate) => candidate.localId === id);
+    if (!step) return;
+    keepOpenOnBlur.current = true;
+    Keyboard.dismiss();
+    setChips(null);
+    setPanel({
+      stepId: id,
+      openedValue: step.timerSeconds,
+      stepper: initialStepper(),
+      quickPicks: chipCandidates(step.timerSeconds, preferences.recentTimerSeconds),
     });
   };
 
-  const renderDropTarget = (index: number) =>
+  const panelStep = panel ? steps.find((step) => step.localId === panel.stepId) : undefined;
+
+  const closePanel = () => {
+    if (!panel) return;
+    const value = panelStep?.timerSeconds ?? null;
+    if (value && value !== panel.openedValue) void rememberTimerSeconds(value);
+    setPanel(null);
+    const stepId = panel.stepId;
+    requestAnimationFrame(() => {
+      keepOpenOnBlur.current = false;
+      if (modelRef.current.openId === stepId) focusEditorInput(inputRefs.current[stepId]);
+    });
+  };
+
+  const stepPanel = (dir: -1 | 1) => {
+    if (!panel || !panelStep) return;
+    const next = pressStepper(panel.stepper, panelStep.timerSeconds, dir);
+    setPanel({ ...panel, stepper: next.state });
+    setModel((state) => setStepTimer(state, panel.stepId, next.value));
+  };
+
+  const pickPanelTime = (seconds: number | null) => {
+    if (!panel) return;
+    setPanel({ ...panel, stepper: initialStepper() });
+    setModel((state) => setStepTimer(state, panel.stepId, seconds));
+  };
+
+  const removeStep = (id: string, height: number) => {
+    setChips((current) => (current?.stepId === id ? null : current));
+    setDeletedHeights((current) => ({ ...current, [id]: height }));
+    setModel((state) => deleteStep(state, id));
+    void AccessibilityInfo.announceForAccessibility?.('Step deleted');
+    const startExpiry = (ms: number) => {
+      undoTimers.current[id] = setTimeout(() => {
+        setClosingRows((current) => ({ ...current, [id]: true }));
+        undoTimers.current[id] = setTimeout(() => {
+          delete undoTimers.current[id];
+          setModel((state) => expireDeletedStep(state, id));
+          setClosingRows((current) => {
+            const next = { ...current };
+            delete next[id];
+            return next;
+          });
+        }, UNDO_CLOSE_UP_MS);
+      }, ms);
+    };
+    if (Platform.OS === 'android' && AccessibilityInfo.getRecommendedTimeoutMillis) {
+      void AccessibilityInfo.getRecommendedTimeoutMillis(STEP_UNDO_MS).then(
+        (ms) => startExpiry(Math.max(STEP_UNDO_MS, ms)),
+        () => startExpiry(STEP_UNDO_MS),
+      );
+    } else {
+      startExpiry(STEP_UNDO_MS);
+    }
+  };
+
+  const undoRemove = (id: string) => {
+    clearTimeout(undoTimers.current[id]);
+    delete undoTimers.current[id];
+    setModel((state) => undoDeleteStep(state, id));
+  };
+
+  const persist = async (state: EditorState): Promise<Routine> => {
+    const input = routineInput(state);
+    return initialRoutine
+      ? updateRoutine(database, initialRoutine.id, input)
+      : createRoutine(database, input);
+  };
+
+  const save = async () => {
+    const settled = settle();
+    if (!canSave(settled) || busy) return;
+    setBusy(true);
+    try {
+      onSaved(await persist(settled));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const play = async () => {
+    const settled = settle();
+    if (!canSave(settled) || busy || !onRun) return;
+    setBusy(true);
+    try {
+      const routine = settled.isNew || isDirty(settled, baseline)
+        ? await persist(settled)
+        : { ...initialRoutine!, colorKey: settled.colorKey };
+      onRun(routine);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const back = () => {
+    const settled = settle();
+    setChips(null);
+    if (isDirty(settled, baseline)) setSheet('leave');
+    else onCancel();
+  };
+
+  const confirmDelete = async () => {
+    if (!initialRoutine || !onDeleted) return;
+    setSheet(null);
+    try {
+      const deleted = await deleteRoutine(database, initialRoutine.id);
+      if (deleted) onDeleted(deleted);
+      else onCancel();
+    } catch {
+      await notify('Delete failed', 'Your routine was not deleted. Try again.');
+    }
+  };
+
+  // Android Back: the keyboard closes first (by the system), then an open
+  // panel, sheet or color grid, then it works like the back arrow.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (panel) closePanel();
+      else if (sheet) setSheet(null);
+      else if (colorsOpen) setColorsOpen(null);
+      else back();
+      return true;
+    });
+    return () => subscription.remove();
+  });
+
+  const onScroll = (event: { nativeEvent: { contentOffset: { y: number } } }) => {
+    reorder.onScroll(event as never);
+    const y = event.nativeEvent.contentOffset.y;
+    // The bar folds once the name has scrolled up under it.
+    const row = titleRow.current;
+    setCollapsed(!!row && y > heroY.current + row.y + row.height);
+  };
+
+  const onRowLayout = (localId: string, index: number, event: LayoutChangeEvent) => {
+    reorder.onRowLayout(index, event);
+    const { y, height } = event.nativeEvent.layout;
+    rowLayouts.current[localId] = { y, height };
+    if (scrollToId.current === localId) {
+      scrollToId.current = null;
+      const target = sectionY.current + groupY.current + y + height / 2 - viewportHeight.current / 2;
+      scrollRef.current?.scrollTo({ y: Math.max(0, target), animated: true });
+    }
+  };
+
+  // While a step is dragged, the numbers follow it.
+  const drag = reorder.drag;
+  const numbers = useMemo(() => {
+    const order = drag ? moveItem(steps.map((step) => step.localId), drag.from, drag.to) : steps.map((step) => step.localId);
+    return Object.fromEntries(order.map((id, index) => [id, index + 1]));
+  }, [drag, steps]);
+
+  const fabVisible = !model.openId;
+  const fabBottom = (wantsSave ? saveBarHeight : insets.bottom) + 16;
+
+  let stepIndex = 0;
+  let dropIndex = 0;
+  const renderDropSlot = (index: number) =>
     drag?.to === index ? (
-      <Animated.View
-        key={`drop-target-${index}`}
+      <View
+        key={`drop-slot-${index}`}
         testID={`item-drop-target-${index}`}
-        style={[
-          {
-            height: drag.height,
-            borderRadius: 18,
-            borderWidth: 2,
-            borderStyle: 'dashed',
-            borderColor: theme.primary,
-            backgroundColor: theme.surfaceAlt,
-          },
-        ]}
+        style={{ height: drag.height, backgroundColor: colors.dragSlot }}
       />
     ) : null;
-
-  const handleSave = async () => {
-    const titleResult = validateRoutineTitle(title);
-    const nextItemErrors: Record<string, string> = {};
-    const validItems: { text: string }[] = [];
-    for (const item of items) {
-      const result = validateStepText(item.text);
-      if (!result.ok) nextItemErrors[item.localId] = result.error;
-      else validItems.push({ text: result.value });
-    }
-    setTitleError(titleResult.ok ? null : titleResult.error);
-    setItemErrors(nextItemErrors);
-    if (!titleResult.ok || Object.keys(nextItemErrors).length > 0) return;
-
-    const input = { title: titleResult.value, steps: validItems };
-    const saved = initialRoutine
-      ? await updateRoutine(database, initialRoutine.id, input)
-      : await createRoutine(database, input);
-    onSaved(saved);
-  };
-
-  const handleDelete = async () => {
-    if (!initialRoutine || !onDeleted) return;
-    const confirmed = await confirmAction({
-      title: 'Delete routine?',
-      message: `Delete “${initialRoutine.title}”? This cannot be undone.`,
-      confirmLabel: 'Delete',
-      destructive: true,
-    });
-    if (!confirmed) return;
-
-    try {
-      await deleteRoutine(database, initialRoutine.id);
-      onDeleted();
-    } catch {
-      await notify(
-        'Delete failed',
-        'Your routine was not deleted. Try again.',
-      );
-    }
-  };
 
   return (
     <SafeAreaView
       edges={['top', 'left', 'right']}
       testID="editor-safe-area"
-      style={{ flex: 1, backgroundColor: theme.background }}
+      style={{ flex: 1, backgroundColor: colors.tint }}
     >
-      <ScreenBackground variant="editor" />
-      <View
-        testID="editor-actions"
-        style={{
-          minHeight: 66,
-          paddingHorizontal: 20,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-          backgroundColor: theme.background,
-          flexDirection: 'row',
-          alignItems: 'center',
-          zIndex: 20,
-          elevation: 8,
+      <EditorTopBar
+        colors={colors}
+        collapsed={collapsed}
+        isNew={model.isNew}
+        title={model.title}
+        countLine={summary}
+        colorLabel={colorLabel}
+        colorKey={model.colorKey}
+        colorsOpen={colorsOpen === 'bar'}
+        playDisabled={playDisabled}
+        onBack={back}
+        onDelete={() => {
+          settle();
+          setSheet('delete');
         }}
-      >
-        <Pressable
-          accessibilityRole="button"
-          testID="cancel"
-          onPress={onCancel}
-          style={{ minWidth: 72, minHeight: 44, justifyContent: 'center' }}
-        >
-          <Text style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>Cancel</Text>
-        </Pressable>
-        <Text
-          style={{
-            color: theme.textMuted,
-            fontSize: 12,
-            letterSpacing: 1.5,
-            fontWeight: '700',
-            textAlign: 'center',
-            flex: 1,
-          }}
-        >
-          {initialRoutine ? 'EDIT ROUTINE' : 'NEW ROUTINE'}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          testID="save"
-          onPress={() => void handleSave()}
-          style={{
-            minWidth: 72,
-            minHeight: 44,
-            backgroundColor: theme.primary,
-            borderRadius: 13,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text style={{ color: theme.onPrimary, fontWeight: '700', fontSize: 13 }}>Save</Text>
-        </Pressable>
-      </View>
-
+        onPlay={() => void play()}
+        onToggleColors={() => setColorsOpen((current) => (current === 'bar' ? null : 'bar'))}
+        onPickColor={(key) => {
+          setModel((state) => setColor(state, key));
+          setColorsOpen(null);
+        }}
+      />
       <ScrollView
-          ref={scrollRef}
-          style={{ flex: 1, backgroundColor: 'transparent' }}
-          contentContainerStyle={{
-            padding: 20,
-            paddingBottom: 48 + keyboardClearance,
-            gap: 20,
-          }}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          scrollEnabled={!drag}
-          testID="routine-editor-scroll"
-          onLayout={handleViewportLayout}
-          onContentSizeChange={(_, height) => {
-            setContentHeight(height);
-            if (keyboardClearance > 0) scrollFocusedItemIntoView();
-          }}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
+        ref={scrollRef}
+        testID="routine-editor-scroll"
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingTop: 4,
+          paddingHorizontal: 16,
+          paddingBottom: 96 + keyboardClearance,
+          gap: 22,
+        }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="none"
+        scrollEnabled={!drag}
+        onLayout={(event) => {
+          viewportTop.current = event.nativeEvent.layout.y;
+          viewportHeight.current = event.nativeEvent.layout.height;
+          reorder.onViewportLayout(event);
+        }}
+        onContentSizeChange={(_, height) => {
+          reorder.setContentHeight(height);
+          if (keyboardClearance > 0) scrollOpenStepIntoView();
+        }}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      >
+        <View onLayout={(event) => { heroY.current = event.nativeEvent.layout.y; }}>
+          <RoutineHeroCard
+            ref={titleRef}
+            colors={colors}
+            title={model.title}
+            countLine={summary}
+            colorKey={model.colorKey}
+            colorLabel={colorLabel}
+            colorsOpen={colorsOpen === 'hero'}
+            playDisabled={playDisabled}
+            onChangeTitle={(title) => setModel((state) => setTitle(state, title))}
+            onTitleFocus={() => {
+              setChips(null);
+              setModel((state) => leaveOpenStep(state));
+            }}
+            onOpenColors={() => {
+              settle();
+              Keyboard.dismiss();
+              setColorsOpen('hero');
+            }}
+            onCloseColors={() => setColorsOpen(null)}
+            onPickColor={(key) => {
+              setModel((state) => setColor(state, key));
+              setColorsOpen(null);
+            }}
+            onPlay={() => void play()}
+            onTitleRowLayout={(event) => {
+              const { y, height } = event.nativeEvent.layout;
+              titleRow.current = { y, height };
+            }}
+          />
+        </View>
+
+        <View
+          style={{ gap: 10 }}
+          onLayout={(event) => { sectionY.current = event.nativeEvent.layout.y; }}
         >
-          <View style={{ gap: 3 }}>
-            <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '800', letterSpacing: 1.5 }}>
-              BUILD YOUR FLOW
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12, paddingHorizontal: 2 }}>
+            <Text accessibilityRole="header" style={{ flex: 1, color: colors.text, fontSize: 13, fontWeight: '700' }}>
+              Steps
             </Text>
-            <Text style={{ color: theme.text, fontSize: 34, lineHeight: 36, fontWeight: '700', letterSpacing: -1.7 }}>
-              Shape the routine
-            </Text>
-            <Text style={{ color: theme.textMuted, fontSize: 15, lineHeight: 20 }}>
-              Short works best, while longer steps should stay readable when you need them.
-            </Text>
+            <Text style={{ color: colors.muted2, fontSize: 12 }}>Tap to edit · swipe to delete</Text>
           </View>
 
-          <View style={{ gap: 7 }}>
-            <View style={{ flexDirection: 'row' }}>
-              <Text style={{ color: theme.text, fontWeight: '700', fontSize: 13, flex: 1 }}>Routine name</Text>
-              <Text style={{ color: theme.textFaint, fontSize: 12, fontWeight: '500' }}>Required</Text>
+          <View
+            onLayout={(event) => { groupY.current = event.nativeEvent.layout.y; }}
+            style={{
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 20,
+              backgroundColor: colors.surface,
+              boxShadow: `0 2px 6px ${colors.shadow}`,
+              overflow: 'hidden',
+            }}
+          >
+            {model.rows.length === 0 ? (
+              <View style={{ minHeight: 56, paddingHorizontal: 16, justifyContent: 'center' }}>
+                <Text style={{ color: colors.muted, fontSize: 15 }}>Tap + to add your first step</Text>
+              </View>
+            ) : null}
+            {model.rows.map((row, rowIndex) => {
+              if (row.kind === 'deleted') {
+                return (
+                  <DeletedStepRow
+                    key={row.localId}
+                    index={rowIndex}
+                    colors={colors}
+                    height={deletedHeights[row.localId] ?? 56}
+                    first={rowIndex === 0}
+                    closing={!!closingRows[row.localId]}
+                    onUndo={() => undoRemove(row.localId)}
+                  />
+                );
+              }
+              const index = stepIndex;
+              stepIndex += 1;
+              const isActive = drag?.localId === row.localId;
+              const slot = isActive ? null : renderDropSlot(dropIndex);
+              if (!isActive) dropIndex += 1;
+              const isOpen = model.openId === row.localId;
+              const chipsOpen = isOpen && chips?.stepId === row.localId;
+              return (
+                <Fragment key={row.localId}>
+                  {slot}
+                  <StepRow
+                    colors={colors}
+                    index={index}
+                    number={numbers[row.localId] ?? index + 1}
+                    localId={row.localId}
+                    text={row.text}
+                    timerSeconds={row.timerSeconds}
+                    open={isOpen}
+                    chipsOpen={chipsOpen}
+                    first={rowIndex === 0 && !slot}
+                    hidden={isActive}
+                    holdGesture={reorder.gestureFor({ localId: row.localId, text: row.text }, index)}
+                    gripGesture={reorder.gripGestureFor({ localId: row.localId, text: row.text }, index)}
+                    inputRef={(input) => { inputRefs.current[row.localId] = input; }}
+                    onLayout={(event) => onRowLayout(row.localId, index, event)}
+                    onOpen={() => open(row.localId)}
+                    onChangeText={(text) => setModel((state) => setStepText(state, row.localId, text))}
+                    onEnter={() => {
+                      const id = uuidv4();
+                      scrollToId.current = id;
+                      setModel((state) => pressEnter(state, id));
+                    }}
+                    onBlur={() => onStepBlur(row.localId)}
+                    onClock={() => onClock(row.localId)}
+                    onDone={finishEditing}
+                    onDelete={(height) => removeStep(row.localId, height)}
+                    onMoveEarlier={() => reorder.moveItemByAction(index, -1)}
+                    onMoveLater={() => reorder.moveItemByAction(index, 1)}
+                    chips={
+                      <StepTimerChips
+                        colors={colors}
+                        index={index}
+                        open={chipsOpen}
+                        candidates={chips?.stepId === row.localId ? chips.candidates : EMPTY}
+                        selected={row.timerSeconds}
+                        stepNumber={numbers[row.localId] ?? index + 1}
+                        onPick={(seconds) => pickChip(row.localId, seconds)}
+                        onMore={() => openPanel(row.localId)}
+                      />
+                    }
+                  />
+                </Fragment>
+              );
+            })}
+            {renderDropSlot(steps.length - 1)}
+          </View>
+
+          <Text style={{ color: colors.muted2, fontSize: 12, lineHeight: 17, paddingHorizontal: 4 }}>
+            Tap ✓ when you’re done with a step; your typing is kept either way.
+          </Text>
+        </View>
+        {reorder.dragPreview ? (
+          <DragPreview
+            colors={colors}
+            top={sectionY.current + groupY.current + reorder.dragPreview.top}
+            height={reorder.dragPreview.height}
+            number={reorder.dragPreview.to + 1}
+            text={reorder.dragPreview.text}
+            style={reorder.dragPreviewStyle}
+          />
+        ) : null}
+      </ScrollView>
+
+      <AddStepButton colors={colors} visible={fabVisible} bottom={fabBottom} onPress={add} />
+
+      {wantsSave ? (
+        <Animated.View
+          entering={FadeIn.duration(150)}
+          exiting={FadeOut.duration(75)}
+          onLayout={(event) => setSaveBarHeight(event.nativeEvent.layout.height)}
+          style={{
+            paddingTop: 12,
+            paddingHorizontal: 16,
+            paddingBottom: 16 + insets.bottom,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            backgroundColor: colors.tint,
+          }}
+        >
+          <Pressable
+            testID="save"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !saveAllowed }}
+            disabled={!saveAllowed}
+            onPress={() => void save()}
+            style={{
+              height: 54,
+              borderRadius: 17,
+              backgroundColor: colors.ink,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: saveAllowed ? 1 : 0.4,
+            }}
+          >
+            <Text style={{ color: colors.onInk, fontSize: 16, fontWeight: '700' }}>
+              {model.isNew ? 'Create routine' : 'Save changes'}
+            </Text>
+          </Pressable>
+        </Animated.View>
+      ) : null}
+
+      {panel && panelStep ? (
+        <TimerPanel
+          colors={colors}
+          stepNumber={numbers[panel.stepId] ?? 1}
+          stepText={panelStep.text}
+          value={panelStep.timerSeconds}
+          stepper={panel.stepper}
+          quickPicks={panel.quickPicks}
+          onStep={stepPanel}
+          onPick={(seconds) => pickPanelTime(seconds)}
+          onClear={() => pickPanelTime(null)}
+          onDone={closePanel}
+        />
+      ) : null}
+
+      {sheet === 'leave' ? (
+        <EditorSheet colors={colors} onDismiss={() => setSheet(null)} testID="leave-sheet">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <SheetTitle colors={colors}>
+                {model.isNew ? 'Create this routine?' : 'Save your changes?'}
+              </SheetTitle>
             </View>
-            <TextInput
-              testID="title-input"
-              value={title}
-              onChangeText={setTitle}
-              placeholder="e.g. Leaving home"
-              placeholderTextColor={theme.textMuted}
-              style={{
-                color: theme.text,
-                backgroundColor: theme.surface,
-                borderWidth: 1,
-                borderColor: titleError ? theme.danger : theme.inputBorder,
-                borderRadius: 17,
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-                minHeight: 58,
-                fontSize: 18,
-                fontWeight: '600',
+            <Pressable
+              testID="leave-keep-editing"
+              accessibilityRole="button"
+              accessibilityLabel="Keep editing"
+              onPress={() => setSheet(null)}
+              style={{ width: 44, height: 44, marginRight: -10, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Icon name="close" color={colors.muted} size={18} />
+            </Pressable>
+          </View>
+          <SheetBody colors={colors}>
+            {!model.isNew
+              ? 'You changed this routine. If you leave without saving, those changes are lost.'
+              : saveAllowed
+                ? 'It hasn’t been created yet.'
+                : 'It needs a name and at least one step before it can be created.'}
+          </SheetBody>
+          <SheetActions>
+            <SheetButton
+              colors={colors}
+              variant="discardSoft"
+              label="Discard"
+              testID="leave-discard"
+              onPress={() => {
+                setSheet(null);
+                onCancel();
               }}
             />
-            {titleError ? (
-              <Text testID="title-error" style={{ color: theme.danger }}>
-                {titleError}
-              </Text>
-            ) : null}
-          </View>
-
-          <View style={{ gap: 9 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={{ color: theme.text, fontWeight: '700', fontSize: 13, flex: 1 }}>
-                Steps · {items.length}
-              </Text>
-              <Text style={{ color: theme.textFaint, fontSize: 12, fontWeight: '500' }}>
-                Edit or reorder anytime
-              </Text>
-            </View>
-            <Text style={{ color: theme.textMuted, fontSize: 12 }}>
-              Tap a step to edit. Press and hold a row to reorder.
-            </Text>
-
-            {(() => {
-              let dropIndex = 0;
-              return items.map((item, index) => {
-                const error = itemErrors[item.localId];
-                const isActive = drag?.localId === item.localId;
-                const isEditing = focusItemId === item.localId;
-                const editGesture = Gesture.Tap()
-                  .withTestId(`item-edit-gesture-${item.localId}-${index}`)
-                  .maxDuration(STEP_REORDER_HOLD_MS - 1)
-                  .runOnJS(true)
-                  .onEnd((_event, success) => {
-                    if (success) setFocusItemId(item.localId);
-                  });
-                const rowInteraction = Gesture.Exclusive(
-                  gestureFor(item, index),
-                  editGesture,
-                );
-                const dropTarget = isActive
-                  ? null
-                  : renderDropTarget(dropIndex);
-                if (!isActive) dropIndex += 1;
-
-                return (
-                  <Fragment key={item.localId}>
-                    {dropTarget}
-                    <GestureDetector gesture={rowInteraction}>
-                      <Animated.View
-                        testID={`item-row-${index}`}
-                        nativeID={item.localId}
-                        accessibilityLabel={`Hold row ${index + 1} to reorder`}
-                        onLayout={(event) => onRowLayout(index, event)}
-                        style={{
-                          position: isActive ? 'absolute' : 'relative',
-                          opacity: isActive ? 0 : 1,
-                          minHeight: 64,
-                          borderWidth: 1,
-                          borderColor: error ? theme.danger : theme.border,
-                          borderRadius: 18,
-                          padding: 8,
-                          backgroundColor: theme.surface,
-                          boxShadow: `0 2px 6px ${theme.shadow}`,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 8,
-                        }}
-                      >
-                        <View
-                          accessibilityRole="adjustable"
-                          accessibilityLabel={`Reorder step ${index + 1}`}
-                          accessibilityActions={[
-                            { name: 'decrement', label: 'Move up' },
-                            { name: 'increment', label: 'Move down' },
-                          ]}
-                          onAccessibilityAction={(event) => {
-                            if (event.nativeEvent.actionName === 'decrement') {
-                              moveItemByAction(index, -1);
-                            }
-                            if (event.nativeEvent.actionName === 'increment') {
-                              moveItemByAction(index, 1);
-                            }
-                          }}
-                          style={{
-                            width: 30,
-                            height: 30,
-                            borderTopLeftRadius: 10,
-                            borderTopRightRadius: 10,
-                            borderBottomRightRadius: 10,
-                            borderBottomLeftRadius: 4,
-                            backgroundColor: theme.surfaceAlt,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <Text style={{ color: theme.primaryDark, fontWeight: '800', fontSize: 12 }}>{index + 1}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <View
-                            testID={`item-edit-${index}`}
-                            pointerEvents={isEditing ? 'auto' : 'none'}
-                          >
-                            <TextInput
-                              ref={(input) => {
-                                itemInputRefs.current[item.localId] = input;
-                              }}
-                              testID={`item-text-${index}`}
-                              value={item.text}
-                              multiline
-                              scrollEnabled={false}
-                              editable={isEditing}
-                              autoFocus={isEditing}
-                              onBlur={() => {
-                                setFocusItemId((current) =>
-                                  current === item.localId ? null : current,
-                                );
-                              }}
-                              onChangeText={(text) => updateItemText(item.localId, text)}
-                              placeholder={`Step ${index + 1}`}
-                              placeholderTextColor={theme.textMuted}
-                              textAlignVertical="center"
-                              style={{
-                                color: theme.text,
-                                minHeight: 44,
-                                paddingHorizontal: 6,
-                                paddingVertical: 8,
-                                fontSize: 16,
-                                lineHeight: 21,
-                              }}
-                            />
-                          </View>
-                          {error ? (
-                            <Text testID={`item-error-${index}`} style={{ color: theme.danger, paddingHorizontal: 6 }}>
-                              {error}
-                            </Text>
-                          ) : null}
-                        </View>
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={`Delete step ${index + 1}`}
-                          testID={`item-delete-${index}`}
-                          onPress={() => deleteItem(item.localId)}
-                          hitSlop={8}
-                          style={{ width: 34, height: 44, alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          <Icon
-                            name="trash"
-                            color={theme.textFaint}
-                            size={16}
-                            testID={`delete-step-icon-${index}`}
-                          />
-                        </Pressable>
-                      </Animated.View>
-                    </GestureDetector>
-                  </Fragment>
-                );
-              });
-            })()}
-
-            {renderDropTarget(items.length - 1)}
-
-            {dragPreview ? (
-              <Animated.View
-                testID="item-drag-preview"
-                pointerEvents="none"
-                style={[
-                  {
-                    position: 'absolute',
-                    top: dragPreview.top,
-                    left: 0,
-                    right: 0,
-                    minHeight: dragPreview.height,
-                    borderWidth: 2,
-                    borderColor: theme.primary,
-                    borderRadius: 18,
-                    padding: 10,
-                    backgroundColor: theme.surface,
-                    zIndex: 30,
-                    elevation: 12,
-                    boxShadow: `0 8px 18px ${theme.shadow}`,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 10,
-                  },
-                  dragPreviewStyle,
-                ]}
-              >
-                <View
-                  style={{
-                    width: 30,
-                    height: 30,
-                    borderTopLeftRadius: 10,
-                    borderTopRightRadius: 10,
-                    borderBottomRightRadius: 10,
-                    borderBottomLeftRadius: 4,
-                    backgroundColor: theme.surfaceAlt,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ color: theme.primaryDark, fontWeight: '800', fontSize: 12 }}>{dragPreview.from + 1}</Text>
-                </View>
-                <Text testID="item-drag-preview-text" style={{ color: theme.text, fontSize: 16, flex: 1 }}>
-                  {dragPreview.text}
-                </Text>
-              </Animated.View>
-            ) : null}
-
-            <Pressable
-              accessibilityRole="button"
-              testID="add-item"
-              onPress={addItem}
-              style={{
-                minHeight: 56,
-                borderWidth: 1,
-                borderColor: theme.textFaint,
-                borderStyle: 'dashed',
-                borderRadius: 17,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 8,
-                marginTop: 10,
-                backgroundColor: theme.surfaceSoft,
+            <SheetButton
+              colors={colors}
+              variant="strong"
+              label={model.isNew ? 'Create' : 'Save'}
+              testID="leave-save"
+              disabled={!saveAllowed}
+              onPress={() => {
+                setSheet(null);
+                void save();
               }}
-            >
-              <Icon name="plus" color={theme.primary} size={18} testID="add-step-icon" />
-              <Text style={{ color: theme.primary, fontWeight: '700', fontSize: 14 }}>Add another step</Text>
-            </Pressable>
-          </View>
-          {initialRoutine && onDeleted ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Delete ${initialRoutine.title}`}
-              testID="routine-delete"
-              onPress={() => void handleDelete()}
-              style={{
-                minHeight: 56,
-                borderWidth: 1,
-                borderColor: theme.danger,
-                borderRadius: 17,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 8,
-                backgroundColor: theme.accentSoft,
-              }}
-            >
-              <Icon
-                name="trash"
-                color={theme.danger}
-                size={18}
-                testID="delete-routine-icon"
-              />
-              <Text
-                style={{
-                  color: theme.danger,
-                  fontWeight: '700',
-                  fontSize: 14,
-                }}
-              >
-                Delete routine
-              </Text>
-            </Pressable>
-          ) : null}
-      </ScrollView>
+            />
+          </SheetActions>
+        </EditorSheet>
+      ) : null}
+
+      {sheet === 'delete' ? (
+        <EditorSheet colors={colors} onDismiss={() => setSheet(null)} testID="delete-sheet">
+          <SheetTitle colors={colors}>Delete this routine?</SheetTitle>
+          <SheetBody colors={colors}>
+            {`“${model.title.trim() || initialRoutine?.title || 'Untitled routine'}” and its steps will be gone.`}
+          </SheetBody>
+          <SheetActions>
+            <SheetButton colors={colors} variant="keep" label="Cancel" testID="delete-cancel" onPress={() => setSheet(null)} />
+            <SheetButton
+              colors={colors}
+              variant="discard"
+              label="Delete"
+              testID="delete-confirm"
+              onPress={() => void confirmDelete()}
+            />
+          </SheetActions>
+        </EditorSheet>
+      ) : null}
     </SafeAreaView>
+  );
+}
+
+const EMPTY: number[] = [];
+
+function DragPreview({
+  colors,
+  top,
+  height,
+  number,
+  text,
+  style,
+}: {
+  colors: ReturnType<typeof editorColors>;
+  top: number;
+  height: number;
+  number: number;
+  text: string;
+  style: object;
+}) {
+  return (
+    <Animated.View
+      testID="item-drag-preview"
+      pointerEvents="none"
+      style={[
+        {
+          position: 'absolute',
+          top,
+          left: 16,
+          right: 16,
+          minHeight: height,
+          paddingVertical: 6,
+          paddingHorizontal: 8,
+          borderRadius: 16,
+          backgroundColor: colors.fill,
+          boxShadow: '0 16px 34px rgba(28, 48, 41, 0.3)',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          zIndex: 30,
+          transform: [{ scale: 1.04 }],
+        },
+        style,
+      ]}
+    >
+      <View style={{ width: 24, marginLeft: -8, marginRight: -4, alignItems: 'center' }}>
+        <Icon name="grip" color={colors.muted2} size={22} />
+      </View>
+      <View
+        style={{
+          width: 30,
+          height: 30,
+          borderTopLeftRadius: 10,
+          borderTopRightRadius: 10,
+          borderBottomRightRadius: 10,
+          borderBottomLeftRadius: 4,
+          backgroundColor: colors.surface,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text style={{ color: colors.ink, fontSize: 12, fontWeight: '800' }}>{number}</Text>
+      </View>
+      <Text testID="item-drag-preview-text" style={{ flex: 1, color: colors.text, fontSize: 16, lineHeight: 21, paddingHorizontal: 6 }}>
+        {text}
+      </Text>
+    </Animated.View>
+  );
+}
+
+function AddStepButton({
+  colors,
+  visible,
+  bottom,
+  onPress,
+}: {
+  colors: ReturnType<typeof editorColors>;
+  visible: boolean;
+  bottom: number;
+  onPress: () => void;
+}) {
+  const shown = useSharedValue(visible ? 1 : 0);
+  useEffect(() => {
+    // It hides at once and comes back with a 200 ms grow.
+    shown.value = visible ? withTiming(1, { duration: 200 }) : 0;
+  }, [shown, visible]);
+  const style = useAnimatedStyle(() => ({
+    opacity: Math.min(1, shown.value * 1.25),
+    transform: [{ scale: 0.6 + 0.4 * shown.value }],
+  }));
+  return (
+    <Animated.View
+      pointerEvents={visible ? 'auto' : 'none'}
+      style={[{ position: 'absolute', right: 16, bottom, zIndex: 6 }, style]}
+    >
+      <Pressable
+        testID="add-step"
+        accessibilityRole="button"
+        accessibilityLabel="Add a step"
+        accessibilityElementsHidden={!visible}
+        importantForAccessibility={visible ? 'yes' : 'no-hide-descendants'}
+        onPress={onPress}
+        style={{
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: colors.ink,
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 6px 16px rgba(28, 48, 41, 0.3), 0 2px 4px rgba(28, 48, 41, 0.2)',
+        }}
+      >
+        <Icon name="plus" color={colors.onInk} size={24} strokeWidth={2.4} />
+      </Pressable>
+    </Animated.View>
   );
 }

@@ -5,6 +5,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { useDatabase } from '@/src/db/DatabaseProvider';
 import { RoutineEditor } from '@/src/features/routines/RoutineEditor';
 import { getRoutine } from '@/src/features/routines/repository';
+import { offerRoutineUndo } from '@/src/features/routines/routineUndo';
 import type { Routine } from '@/src/features/routines/types';
 
 export default function EditRoutineRoute() {
@@ -38,8 +39,12 @@ export default function EditRoutineRoute() {
     <RoutineEditor
       initialRoutine={state.routine}
       onSaved={() => router.back()}
-      onDeleted={() => router.dismissTo('/')}
+      onDeleted={(deleted) => {
+        offerRoutineUndo(deleted);
+        router.dismissTo('/');
+      }}
       onCancel={() => router.back()}
+      onRun={(routine) => router.replace({ pathname: '/run/[id]', params: { id: routine.id } })}
     />
   );
 }
