@@ -42,6 +42,7 @@ import {
   swipeHintAway,
   tapElementAt,
   tapLabel,
+  tapOkUntilClosed,
   tapText,
   visibleRoutineTitles,
   waitForDisplayed,
@@ -315,7 +316,7 @@ async function importFreshLibrary({ path = fixturePath, titles = expectedTitles 
   await importButton.click();
   await selectDocument(backupName);
   await waitForDisplayed(byText(driver, 'Import complete'), 30_000);
-  await tapText(driver, 'OK');
+  await tapOkUntilClosed(driver, 'Import complete');
   await returnFromSettings();
   assert.deepEqual(await collectRoutineTitles(driver), titles);
   await expectTopTitle(titles[0]);

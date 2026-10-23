@@ -58,6 +58,18 @@ export async function tapText(driver, text) {
   await element.click();
 }
 
+/** Taps OK until the dialog titled `title` closes; a tap can land while it is still opening. */
+export async function tapOkUntilClosed(driver, title, attempts = 3) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await tapText(driver, 'OK');
+    const closed = await byText(driver, title)
+      .waitForDisplayed({ reverse: true, timeout: 1_500 })
+      .catch(() => false);
+    if (closed) return;
+  }
+  throw new Error(`the "${title}" dialog stayed open`);
+}
+
 export async function tapElementAt(driver, element, { xRatio = 0.5, yRatio = 0.5 } = {}) {
   const rect = await elementRect(driver, element);
   adb(['shell', 'input', 'tap',
