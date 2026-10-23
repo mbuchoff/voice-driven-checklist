@@ -139,8 +139,9 @@ export function setStepTimer(state: EditorState, id: string, timerSeconds: numbe
   return updateStep(state, id, () => ({ timerSeconds }));
 }
 
+/** The name wraps on the card, but stays one line: pasted line breaks become spaces. */
 export function setTitle(state: EditorState, title: string): EditorState {
-  return { ...state, title };
+  return { ...state, title: title.replace(/\s*[\r\n]+\s*/g, ' ') };
 }
 
 export function setColor(state: EditorState, colorKey: string): EditorState {

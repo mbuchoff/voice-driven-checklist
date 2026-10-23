@@ -160,6 +160,11 @@ describe('routine editor model', () => {
       expect(canSave(setTitle(existing, '  '))).toBe(false);
     });
 
+    it('keeps a name on one line, turning pasted line breaks into spaces', () => {
+      const state = setTitle(createEditorState({ routine: saved }), 'End of day\nlockup\r\n for the building');
+      expect(state.title).toBe('End of day lockup for the building');
+    });
+
     it('saves trimmed words and timers, dropping steps without words', () => {
       let state = createEditorState({ routine: saved });
       state = setTitle(state, '  Evening stretch ');

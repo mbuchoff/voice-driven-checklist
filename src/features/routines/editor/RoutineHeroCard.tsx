@@ -70,6 +70,10 @@ export const RoutineHeroCard = forwardRef<TextInput, {
               onFocus={props.onTitleFocus}
               placeholder="Name this routine"
               placeholderTextColor={colors.muted2}
+              // A long name wraps instead of being cut off; Enter still means done.
+              multiline
+              scrollEnabled={false}
+              submitBehavior="blurAndSubmit"
               returnKeyType="done"
               style={{
                 flex: 1,
