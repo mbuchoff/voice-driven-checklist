@@ -35,6 +35,7 @@ URL options in the prototype other than the approved variant are rejected altern
   Nothing gets implemented without a row, and nothing is done until every row is verified or explicitly marked as an accepted difference.
 - **Take values from the prototype's source, not from screenshots:** CSS rules, JS constants, computed styles via `getComputedStyle`/`getBoundingClientRect`. Treat CSS px as dp. When the prototype computes something at runtime (text-measured chip fitting, folding thresholds), port the algorithm, not one result of it.
 - **Map browser mechanisms to native ones:** don't transliterate DOM tricks (SortableJS, `focusout`, `scrollIntoView`, CSS transitions, `color-mix`, `oklch()`). Use what the app already uses: react-native-gesture-handler, Reanimated and Worklets, `TextInput` focus APIs, the app's keyboard handling, and precomputed colors. Record each mapping in the ledger's notes.
+  - **Focus doesn't carry over.** In the browser, removing a focused field just drops focus. On Android, removing the focused `TextInput` hands focus to the first focusable view on screen: another text field (such as the routine name) or a button, with the keyboard left up. Call `Keyboard.dismiss()` before any change that closes, replaces or unmounts the focused field, then focus the next field if there is one.
 - **Inventory every existing test ID, accessibility label and dialog text** that the Appium suite (`e2e/tests/*.mjs`) and Jest tests rely on, before changing screens. Update the consumers in the same commit as the change.
 
 ## 2. Implement with /implement
@@ -59,7 +60,7 @@ Order of work:
   - When pairing is lost, ask the user for a fresh pairing code and port, plus the main "IP address & Port".
 - **Builds:** run Gradle with `LD_LIBRARY_PATH` pointing at an x86_64 `libz.so.1` (same entry).
   - **The e2e package** (`npm run e2e:android:build`, package `com.mbuchoff.voicechecklist.e2e`) is for Appium and quick device checks.
-  - **The normal package** is for the manual red and green passes and the upgrade check. Remove it afterwards: the user's real app isn't on this phone.
+  - **The normal package** is for the manual red and green passes and the upgrade check. Since 2026-10-23 it is also the owner's everyday app on this phone: update it in place (`adb install -r`, same signing key) only with the owner's OK, and never uninstall it or clear its data.
 - **Useful adb commands:**
   - `exec-out screencap -p` for screenshots
   - `logcat -v time ReactNativeJS:I '*:S'` for app logs
@@ -106,7 +107,15 @@ Check interaction fidelity on the phone too:
 - **Hold and drag timing:** compare `adb shell input swipe x y x y <ms>` just under and just over the hold time.
 - **Drift and swipe thresholds.**
 - **Animation lengths:** check them by eye against the prototype.
-- **Keyboard behavior.**
+- **Where focus goes:** for every way an edit ends or moves on, check focus with another text field fully on screen:
+  - the keyboard's Enter key, on an existing step, a blank new step and a new step with words
+  - the app's ✓
+  - tapping another step's words or its clock
+  - +
+  - opening a sheet or the color grid
+  - starting a drag
+
+  After each, read `adb shell dumpsys input_method` (`mServedView`, `mInputShown`) and the `focused="true"` node in `uiautomator dump`. Focus and the keyboard must end where the prototype puts them: on the newly opened step, or nowhere with the keyboard down. Checking only that the step closed misses this.
 - **Android Back order.**
 - **Haptics:** these need the user.
 
@@ -142,3 +151,4 @@ Improve this skill first, then fix the defect.
 - 2026-10-21, #39 spike: the first "next" cue after locking the phone was silent. The likely cause is `CueSoundPlayer.play` giving up when `seekTo(0)` takes longer than 300 ms on a cold audio output. Rule: anything audible is verified by the user listening, and corroborated by a logged cue result.
 - 2026-10-21, #39 spike: with the phone locked and no wake lock, JS timers stalled for up to 14.6 s. Rule: always verify time-based behavior with the phone locked and in forced deep idle, and measure lateness from logs.
 - 2026-10-21, #39 red pass: chained blind adb taps ran past the app onto the home screen, opening Google search and the Weather app. Screenshots captured personal photos and saved locations; they were deleted. Rule: guard every phone action on the foreground app, check the screen between steps, and search the file picker instead of browsing it.
+- 2026-10-23, #39, found by the owner after done: Enter on an open step, with the routine name on screen, focused the name and kept the keyboard up. The same cause broke Enter on a new step with words (the next step didn't stay open), tapping another step's words or clock while one was open, and Enter on a blank new step (keyboard stuck up). Android hands focus to the first focusable view when the focused `TextInput` unmounts; only ✓ dismissed the keyboard first. The phone check had confirmed the step closed, not where focus went. Rule: dismiss the keyboard before unmounting a focused field, and check focus after every way an edit ends.
