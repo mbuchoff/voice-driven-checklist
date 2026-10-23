@@ -181,41 +181,61 @@ describe('RoutineEditor', () => {
         expect(fields).toEqual(['item-text-2']);
         expect(screen.queryByTestId('item-row-2')).toBeNull();
       });
+    });
 
-      it('on Enter in a new step with words, before the next new step opens', async () => {
+    // Moving to another step keeps the keyboard up. The old step's field goes
+    // away before the new one takes focus, and Android focuses the name in
+    // between; that focus isn't the user's and mustn't close the new step.
+    describe('moves straight to another step, even when Android focuses the name on the way', () => {
+      const androidFocusesTheName = () => fireEvent(screen.getByTestId('title-input'), 'focus');
+
+      it('on Enter in a new step with words', async () => {
         await renderEditor();
         fireEvent.press(screen.getByTestId('add-step'));
         fireEvent.changeText(screen.getByTestId('item-text-0'), 'Stretch');
-        const fields = fieldsAtDismiss();
+        const dismiss = jest.spyOn(Keyboard, 'dismiss');
 
         fireEvent(screen.getByTestId('item-text-0'), 'submitEditing');
+        androidFocusesTheName();
 
-        expect(fields).toEqual(['item-text-0']);
         expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
+        expect(dismiss).not.toHaveBeenCalled();
       });
 
       it('when another step is tapped', async () => {
         const database = await setupDb();
         await renderEditor({ initialRoutine: await existing(database) }, { database });
         tapToEdit(0);
-        const fields = fieldsAtDismiss();
+        const dismiss = jest.spyOn(Keyboard, 'dismiss');
 
         tapToEdit(1);
+        androidFocusesTheName();
 
-        expect(fields).toEqual(['item-text-0']);
         expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
+        expect(dismiss).not.toHaveBeenCalled();
       });
 
       it('when another step’s clock is tapped', async () => {
         const database = await setupDb();
         await renderEditor({ initialRoutine: await existing(database) }, { database });
         tapToEdit(1);
-        const fields = fieldsAtDismiss();
+        const dismiss = jest.spyOn(Keyboard, 'dismiss');
 
         fireEvent.press(screen.getByTestId('item-clock-0'));
+        androidFocusesTheName();
 
-        expect(fields).toEqual(['item-text-1']);
         expect(screen.getByTestId('item-text-0')).toBeOnTheScreen();
+        expect(dismiss).not.toHaveBeenCalled();
+      });
+
+      it('still closes the open step when you tap the name yourself', async () => {
+        const database = await setupDb();
+        await renderEditor({ initialRoutine: await existing(database) }, { database });
+        tapToEdit(1);
+
+        fireEvent(screen.getByTestId('title-input'), 'focus');
+
+        expect(screen.queryByTestId('item-text-1')).toBeNull();
       });
     });
 

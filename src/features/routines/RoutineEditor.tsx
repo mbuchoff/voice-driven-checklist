@@ -89,6 +89,8 @@ import { useStepReorder } from './useStepReorder';
 const EDITOR_KEYBOARD_OFFSET = 24;
 /** A swiped-away step's UNDO stays this long (longer if TalkBack asks). */
 const STEP_UNDO_MS = 5000;
+/** The longest a move between steps takes before the new step has focus. */
+const MOVE_FOCUS_MS = 1000;
 const UNDO_CLOSE_UP_MS = 280;
 
 export type RoutineEditorProps = {
@@ -135,12 +137,19 @@ export function RoutineEditor({
   const modelRef = useRef(model);
   modelRef.current = model;
   // When the focused field disappears, Android hands focus to the next
-  // focusable view (often the name) and keeps the keyboard up. So let go of
-  // the keyboard while the open step's field is still there, unless the step
-  // staying open is `keepId`.
-  const releaseOpenStep = (keepId?: string) => {
-    const openId = modelRef.current.openId;
-    if (openId && openId !== keepId) Keyboard.dismiss();
+  // focusable view (often the name) and keeps the keyboard up. A step that
+  // closes lets go of the keyboard while its field is still there.
+  const releaseOpenStep = () => {
+    if (modelRef.current.openId) Keyboard.dismiss();
+  };
+  // Moving to another step keeps the keyboard up instead: the old step's
+  // field goes away before the new one takes focus, and the focus Android
+  // gives the name in between mustn't close the step being opened.
+  const movingToStep = useRef(false);
+  const moveFromOpenStep = () => {
+    if (!modelRef.current.openId) return;
+    movingToStep.current = true;
+    setTimeout(() => { movingToStep.current = false; }, MOVE_FOCUS_MS);
   };
   const colors = useMemo(() => editorColors(theme, model.colorKey), [theme, model.colorKey]);
 
@@ -262,13 +271,12 @@ export function RoutineEditor({
   }, []);
 
   const open = (id: string) => {
-    releaseOpenStep(id);
+    moveFromOpenStep();
     setColorsOpen(false);
     setModel((state) => openStep(state, id));
   };
 
   const add = () => {
-    releaseOpenStep();
     const id = uuidv4();
     setColorsOpen(false);
     setChips(null);
@@ -301,7 +309,7 @@ export function RoutineEditor({
     }
     const step = steps.find((candidate) => candidate.localId === id);
     if (!step) return;
-    releaseOpenStep(id);
+    if (model.openId !== id) moveFromOpenStep();
     setColorsOpen(false);
     setModel((state) => openStep(state, id));
     setChips({ stepId: id, candidates: chipCandidates(step.timerSeconds, preferences.recentTimerSeconds) });
@@ -543,6 +551,7 @@ export function RoutineEditor({
             colorsOpen={colorsOpen}
             onChangeTitle={(title) => setModel((state) => setTitle(state, title))}
             onTitleFocus={() => {
+              if (movingToStep.current) return;
               setChips(null);
               setModel((state) => leaveOpenStep(state));
             }}
@@ -632,11 +641,13 @@ export function RoutineEditor({
                     onOpen={() => open(row.localId)}
                     onChangeText={(text) => setModel((state) => setStepText(state, row.localId, text))}
                     onEnter={() => {
-                      releaseOpenStep();
                       const id = uuidv4();
+                      if (pressEnter(modelRef.current, id).openId) moveFromOpenStep();
+                      else releaseOpenStep();
                       scrollToId.current = id;
                       setModel((state) => pressEnter(state, id));
                     }}
+                    onFocus={() => { movingToStep.current = false; }}
                     onBlur={() => onStepBlur(row.localId)}
                     onClock={() => onClock(row.localId)}
                     onDone={finishEditing}
