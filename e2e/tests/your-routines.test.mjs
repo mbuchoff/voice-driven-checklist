@@ -37,7 +37,7 @@ import {
   scrollToTop,
   scrollBeforeHoldActivation,
   scrollViewport,
-  dragFromTo,
+  holdAndDragFromTo,
   swipeAcross,
   swipeHintAway,
   tapElementAt,
@@ -641,7 +641,7 @@ scenario('timers: a timed routine moves on by itself, also with the app in the b
   await waitForDisplayed(byId(driver, 'library-safe-area'));
 });
 
-scenario('editor-gestures: swipe delete with UNDO, Back asks to save, grip drag and color', { timeout: 6 * 60_000 }, async () => {
+scenario('editor-gestures: swipe delete with UNDO, Back asks to save, hold-drag and color', { timeout: 6 * 60_000 }, async () => {
   await importFreshLibrary();
   const steps = fixture.checklists[0].items.map(({ text }) => text);
   await openEditor(firstTitle);
@@ -662,13 +662,14 @@ scenario('editor-gestures: swipe delete with UNDO, Back asks to save, grip drag 
   await openEditor(firstTitle);
   await waitForDisplayed(byLabel(driver, `Edit step 1: ${steps[0]}`));
 
-  // Drag the first step by its grip below the third.
+  // Hold the first step until it lifts, then drag it below the third.
   const first = await elementRect(driver, byId(driver, 'item-row-0'));
   const third = await elementRect(driver, byId(driver, 'item-row-2'));
-  await dragFromTo(
+  const x = Math.round(first.x + first.width * 0.4);
+  await holdAndDragFromTo(
     driver,
-    { x: Math.round(first.x + 12), y: Math.round(first.y + first.height / 2) },
-    { x: Math.round(first.x + 12), y: Math.round(third.y + third.height * 0.8) },
+    { x, y: Math.round(first.y + first.height / 2) },
+    { x, y: Math.round(third.y + third.height * 0.8) },
   );
   await waitForDisplayed(byLabel(driver, `Edit step 3: ${steps[0]}`));
 

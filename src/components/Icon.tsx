@@ -10,7 +10,6 @@ export type IconName =
   | 'close'
   | 'download'
   | 'edit'
-  | 'grip'
   | 'mic'
   | 'minus'
   | 'moon'
@@ -93,14 +92,6 @@ function pathFor(name: IconName, color: string): ReactNode {
         <>
           <Path d="M12 20h9" />
           <Path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
-        </>
-      );
-    case 'grip':
-      return (
-        <>
-          {[6, 12, 18].flatMap((cy) => [9, 15].map((cx) => (
-            <Circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.6" fill={color} stroke="none" />
-          )))}
         </>
       );
     case 'minus':

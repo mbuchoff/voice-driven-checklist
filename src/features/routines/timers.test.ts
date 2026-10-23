@@ -4,7 +4,6 @@ import {
   fitChips,
   formatCountdownClock,
   formatTimerLong,
-  formatTimerShort,
   formatTimerWords,
   initialStepper,
   pressStepper,
@@ -15,13 +14,7 @@ import {
 } from './timers';
 
 describe('timer formats', () => {
-  it('uses short units on chips and clock labels', () => {
-    expect([30, 59, 60, 90, 120, 1215, 3600].map(formatTimerShort)).toEqual([
-      '30s', '59s', '1m', '1m 30s', '2m', '20m 15s', '60m',
-    ]);
-  });
-
-  it('uses long units in the timer panel and the routine total', () => {
+  it('shows minutes as "min" and seconds as "s"', () => {
     expect([45, 60, 90, 600, 3600].map(formatTimerLong)).toEqual([
       '45s', '1 min', '1 min 30s', '10 min', '60 min',
     ]);

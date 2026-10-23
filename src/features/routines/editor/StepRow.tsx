@@ -23,7 +23,7 @@ import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
 import { STEP_REORDER_HOLD_MS } from '../useStepReorder';
-import { formatTimerShort, formatTimerWords } from '../timers';
+import { formatTimerLong, formatTimerWords } from '../timers';
 
 /** A swipe starts after this much mostly-sideways movement. */
 const SWIPE_START = 8;
@@ -32,7 +32,7 @@ export const SWIPE_DELETE_SHARE = 0.4;
 const SWIPE_MS = 200;
 /** The row is removed once it has flown off. */
 const FLING_MS = 220;
-/** How fast the number, grip and ✓ move when a step opens or closes. */
+/** How fast the number and ✓ move when a step opens or closes. */
 const OPEN_MS = 220;
 /** Where an open step's words sit from the row's edge. */
 export const EDIT_INSET = 18;
@@ -50,7 +50,6 @@ export type StepRowProps = {
   first: boolean;
   hidden: boolean;
   holdGesture: GestureType;
-  gripGesture: GestureType;
   inputRef: (input: ComponentRef<typeof TextInput> | null) => void;
   onLayout: (event: LayoutChangeEvent) => void;
   onOpen: () => void;
@@ -69,7 +68,7 @@ export type StepRowProps = {
 export function StepRow(props: StepRowProps) {
   const {
     colors, index, number, localId, text, timerSeconds, open, chipsOpen, first,
-    hidden, holdGesture, gripGesture,
+    hidden, holdGesture,
   } = props;
   const rowWidth = useSharedValue(0);
   const rowHeight = useRef(0);
@@ -133,12 +132,6 @@ export function StepRow(props: StepRowProps) {
   // "Delete" shows on the side the row moves away from.
   const leftSide = useAnimatedStyle(() => ({ opacity: translateX.value > 0 ? 1 : 0 }));
   const rightSide = useAnimatedStyle(() => ({ opacity: translateX.value < 0 ? 1 : 0 }));
-  const gripStyle = useAnimatedStyle(() => ({
-    width: 24 * (1 - openProgress.value),
-    marginLeft: -8 * (1 - openProgress.value),
-    marginRight: -4 - 4 * openProgress.value,
-    opacity: 1 - openProgress.value,
-  }));
   const badgeSlotStyle = useAnimatedStyle(() => ({
     width: 30 * (1 - openProgress.value),
     marginRight: (EDIT_INSET - 22) * openProgress.value,
@@ -220,15 +213,6 @@ export function StepRow(props: StepRowProps) {
         ]}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <GestureDetector gesture={gripGesture}>
-            <Animated.View
-              accessible={false}
-              importantForAccessibility="no-hide-descendants"
-              style={[{ alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, gripStyle]}
-            >
-              <Icon name="grip" color={colors.muted2} size={22} />
-            </Animated.View>
-          </GestureDetector>
           <GestureDetector gesture={rowGesture}>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Animated.View
@@ -253,7 +237,7 @@ export function StepRow(props: StepRowProps) {
                     badgeStyle,
                   ]}
                 >
-                  <Text style={{ color: colors.ink, fontSize: 12, fontWeight: '800' }}>{number}</Text>
+                  <Text style={{ color: colors.ink, fontSize: 15, fontWeight: '800' }}>{number}</Text>
                 </Animated.View>
               </Animated.View>
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -277,8 +261,8 @@ export function StepRow(props: StepRowProps) {
                       color: colors.text,
                       paddingHorizontal: 6,
                       paddingVertical: 11,
-                      fontSize: 16,
-                      lineHeight: 21,
+                      fontSize: 20,
+                      lineHeight: 26,
                     }}
                   />
                 ) : (
@@ -304,8 +288,8 @@ export function StepRow(props: StepRowProps) {
                       color: text.trim() ? colors.text : colors.muted,
                       paddingHorizontal: 6,
                       paddingVertical: 11,
-                      fontSize: 16,
-                      lineHeight: 21,
+                      fontSize: 20,
+                      lineHeight: 26,
                     }}
                   >
                     {text.trim() || 'Tap to describe this step'}
@@ -322,7 +306,7 @@ export function StepRow(props: StepRowProps) {
             onPress={props.onClock}
             hitSlop={timed ? { top: 7, bottom: 7 } : undefined}
             style={{
-              height: timed ? 30 : 40,
+              height: timed ? 34 : 40,
               minWidth: timed ? 0 : 40,
               paddingHorizontal: 8,
               borderRadius: 20,
@@ -338,12 +322,12 @@ export function StepRow(props: StepRowProps) {
             <Icon
               name="clock"
               color={chipsOpen || timed ? colors.ink : colors.muted}
-              size={timed ? 13 : 16}
+              size={timed ? 15 : 18}
               strokeWidth={timed ? 2.5 : 2}
             />
             {timed ? (
-              <Text style={{ color: colors.ink, fontSize: 12, fontWeight: '800' }}>
-                {formatTimerShort(timerSeconds)}
+              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: '800' }}>
+                {formatTimerLong(timerSeconds)}
               </Text>
             ) : null}
           </Pressable>

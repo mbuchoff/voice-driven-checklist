@@ -92,40 +92,15 @@ describe('RoutineEditor', () => {
       expect(scrollToEnd).not.toHaveBeenCalled();
     });
 
-    it('drags a step by its grip dots without waiting for a hold', async () => {
+    it('says beside "Steps" that holding a step moves it', async () => {
       const database = await setupDb();
-      const existing = await createRoutine(database, {
-        title: 'grip',
-        steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
-      });
+      const existing = await createRoutine(database, { title: 'hint', steps: [{ text: 'a' }] });
       await renderWithDatabase(
         <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
-      primeRowLayouts([50, 50, 50]);
-      const localId = screen.getByTestId('item-row-0').props.nativeID;
-      const grip = getByGestureTestId(`item-grip-gesture-${localId}-0`);
-      const manager = { activate: jest.fn(), fail: jest.fn() };
 
-      act(() => {
-        grip.handlers.onTouchesDown?.(
-          { numberOfTouches: 1, allTouches: [{ absoluteX: 10, absoluteY: 25 }] } as never,
-          manager as never,
-        );
-      });
-      expect(manager.activate).toHaveBeenCalledTimes(1);
-
-      await act(async () => {
-        grip.handlers.onStart?.({ absoluteY: 25 } as never);
-        await Promise.resolve();
-      });
-      await act(async () => {
-        getByGestureTestId(`item-grip-gesture-${localId}-0`).handlers.onUpdate?.({ absoluteY: 125 } as never);
-        await flushGestureCommit();
-      });
-      await releaseRowDrag(getByGestureTestId(`item-grip-gesture-${localId}-0`));
-
-      expect(screen.getByTestId('item-label-2')).toHaveTextContent('a');
+      expect(screen.getByText(/hold to move/)).toBeOnTheScreen();
     });
 
     it('persists items reordered by holding and dragging a row', async () => {

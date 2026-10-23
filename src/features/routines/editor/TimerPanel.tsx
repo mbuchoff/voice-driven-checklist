@@ -74,7 +74,7 @@ function StepperButton({
       </Pressable>
       <Text
         accessible={false}
-        style={{ color: colors.muted, fontSize: 13, lineHeight: 16, fontWeight: '700', fontVariant: ['tabular-nums'] }}
+        style={{ color: colors.muted, fontSize: 15, lineHeight: 18, fontWeight: '700', fontVariant: ['tabular-nums'] }}
       >
         {stepCaption(stepper, dir)}
       </Text>
@@ -112,7 +112,7 @@ export function TimerPanel({
       <SheetTitle colors={colors}>Timer</SheetTitle>
       <Text
         numberOfLines={1}
-        style={{ color: colors.muted, fontSize: 14, lineHeight: 16, marginTop: -4, marginBottom: 6 }}
+        style={{ color: colors.muted, fontSize: 16, lineHeight: 19, marginTop: -4, marginBottom: 6 }}
       >
         {`Step ${stepNumber}: ${stepText}`}
       </Text>

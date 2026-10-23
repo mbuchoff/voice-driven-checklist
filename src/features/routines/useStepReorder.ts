@@ -519,24 +519,6 @@ export function useStepReorder({
       itemIndex,
     );
 
-  /** Dragging a step by its grip dots moves it straight away. */
-  const gripGestureFor = (item: ReorderItem, itemIndex: number) =>
-    dragHandlers(
-      Gesture.Pan()
-        .withTestId(`item-grip-gesture-${item.localId}-${itemIndex}`)
-        .manualActivation(true)
-        .onTouchesDown((event, manager) => {
-          'worklet';
-          if (event.numberOfTouches !== 1 || dragActive.value) {
-            manager.fail();
-            return;
-          }
-          manager.activate();
-        }),
-      item,
-      itemIndex,
-    );
-
   useEffect(
     () => () => {
       if (autoscrollFrame.current != null) {
@@ -564,7 +546,6 @@ export function useStepReorder({
     dragPreview,
     dragPreviewStyle,
     gestureFor,
-    gripGestureFor,
     moveItemByAction,
     onRowLayout,
     onScroll,

@@ -155,7 +155,7 @@ export function RoutineEditor({
   const [chips, setChips] = useState<ChipsState | null>(null);
   const [panel, setPanel] = useState<PanelState | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
-  const [colorsOpen, setColorsOpen] = useState<'hero' | 'bar' | null>(null);
+  const [colorsOpen, setColorsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [keyboardClearance, setKeyboardClearance] = useState(0);
   const [deletedHeights, setDeletedHeights] = useState<Record<string, number>>({});
@@ -238,10 +238,6 @@ export function RoutineEditor({
     if (chips && chips.stepId !== model.openId) setChips(null);
   }, [chips, model.openId]);
 
-  useEffect(() => {
-    if (!collapsed && colorsOpen === 'bar') setColorsOpen(null);
-  }, [collapsed, colorsOpen]);
-
   useEffect(() => () => {
     for (const timer of Object.values(undoTimers.current)) clearTimeout(timer);
   }, []);
@@ -254,13 +250,13 @@ export function RoutineEditor({
   }, []);
 
   const open = (id: string) => {
-    setColorsOpen(null);
+    setColorsOpen(false);
     setModel((state) => openStep(state, id));
   };
 
   const add = () => {
     const id = uuidv4();
-    setColorsOpen(null);
+    setColorsOpen(false);
     setChips(null);
     scrollToId.current = id;
     setModel((state) => addStep(state, id));
@@ -291,7 +287,7 @@ export function RoutineEditor({
     }
     const step = steps.find((candidate) => candidate.localId === id);
     if (!step) return;
-    setColorsOpen(null);
+    setColorsOpen(false);
     setModel((state) => openStep(state, id));
     setChips({ stepId: id, candidates: chipCandidates(step.timerSeconds, preferences.recentTimerSeconds) });
   };
@@ -427,7 +423,7 @@ export function RoutineEditor({
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (panel) closePanel();
       else if (sheet) setSheet(null);
-      else if (colorsOpen) setColorsOpen(null);
+      else if (colorsOpen) setColorsOpen(false);
       else back();
       return true;
     });
@@ -487,9 +483,6 @@ export function RoutineEditor({
         isNew={model.isNew}
         title={model.title}
         countLine={summary}
-        colorLabel={colorLabel}
-        colorKey={model.colorKey}
-        colorsOpen={colorsOpen === 'bar'}
         canRun={canRun}
         onBack={back}
         onDelete={() => {
@@ -497,11 +490,6 @@ export function RoutineEditor({
           setSheet('delete');
         }}
         onPlay={play}
-        onToggleColors={() => setColorsOpen((current) => (current === 'bar' ? null : 'bar'))}
-        onPickColor={(key) => {
-          setModel((state) => setColor(state, key));
-          setColorsOpen(null);
-        }}
       />
       <ScrollView
         ref={scrollRef}
@@ -536,7 +524,7 @@ export function RoutineEditor({
             countLine={summary}
             colorKey={model.colorKey}
             colorLabel={colorLabel}
-            colorsOpen={colorsOpen === 'hero'}
+            colorsOpen={colorsOpen}
             onChangeTitle={(title) => setModel((state) => setTitle(state, title))}
             onTitleFocus={() => {
               setChips(null);
@@ -545,12 +533,12 @@ export function RoutineEditor({
             onOpenColors={() => {
               settle();
               Keyboard.dismiss();
-              setColorsOpen('hero');
+              setColorsOpen(true);
             }}
-            onCloseColors={() => setColorsOpen(null)}
+            onCloseColors={() => setColorsOpen(false)}
             onPickColor={(key) => {
               setModel((state) => setColor(state, key));
-              setColorsOpen(null);
+              setColorsOpen(false);
             }}
             onTitleRowLayout={(event) => {
               const { y, height } = event.nativeEvent.layout;
@@ -564,10 +552,12 @@ export function RoutineEditor({
           onLayout={(event) => { sectionY.current = event.nativeEvent.layout.y; }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12, paddingHorizontal: 2 }}>
-            <Text accessibilityRole="header" style={{ flex: 1, color: colors.text, fontSize: 13, lineHeight: 15, fontWeight: '700' }}>
+            <Text accessibilityRole="header" style={{ flex: 1, color: colors.text, fontSize: 16, lineHeight: 19, fontWeight: '700' }}>
               Steps
             </Text>
-            <Text style={{ color: colors.muted2, fontSize: 12, lineHeight: 14 }}>Tap to edit · swipe to delete</Text>
+            <Text style={{ flexShrink: 1, color: colors.muted2, fontSize: 15, lineHeight: 18, textAlign: 'right' }}>
+              Tap to edit · hold to move · swipe to delete
+            </Text>
           </View>
 
           <View
@@ -622,7 +612,6 @@ export function RoutineEditor({
                     first={rowIndex === 0 && !slot}
                     hidden={isActive}
                     holdGesture={reorder.gestureFor({ localId: row.localId, text: row.text }, index)}
-                    gripGesture={reorder.gripGestureFor({ localId: row.localId, text: row.text }, index)}
                     inputRef={(input) => { inputRefs.current[row.localId] = input; }}
                     onLayout={(event) => onRowLayout(row.localId, index, event)}
                     onOpen={() => open(row.localId)}
@@ -657,7 +646,7 @@ export function RoutineEditor({
             {renderDropSlot(steps.length - 1)}
           </View>
 
-          <Text style={{ color: colors.muted2, fontSize: 12, lineHeight: 17, paddingHorizontal: 4 }}>
+          <Text style={{ color: colors.muted2, fontSize: 15, lineHeight: 20, paddingHorizontal: 4 }}>
             Tap ✓ when you’re done with a step; your typing is kept either way.
           </Text>
         </View>
@@ -841,9 +830,6 @@ function DragPreview({
         style,
       ]}
     >
-      <View style={{ width: 24, marginLeft: -8, marginRight: -4, alignItems: 'center' }}>
-        <Icon name="grip" color={colors.muted2} size={22} />
-      </View>
       <View
         style={{
           width: 30,
@@ -857,9 +843,9 @@ function DragPreview({
           justifyContent: 'center',
         }}
       >
-        <Text style={{ color: colors.ink, fontSize: 12, fontWeight: '800' }}>{number}</Text>
+        <Text style={{ color: colors.ink, fontSize: 15, fontWeight: '800' }}>{number}</Text>
       </View>
-      <Text testID="item-drag-preview-text" style={{ flex: 1, color: colors.text, fontSize: 16, lineHeight: 21, paddingHorizontal: 6 }}>
+      <Text testID="item-drag-preview-text" style={{ flex: 1, color: colors.text, fontSize: 20, lineHeight: 26, paddingHorizontal: 6 }}>
         {text}
       </Text>
     </Animated.View>

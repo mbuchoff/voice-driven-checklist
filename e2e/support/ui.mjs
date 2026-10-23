@@ -300,17 +300,17 @@ export async function swipeAcross(driver, element, { fromX = 0.85, toX = 0.1, du
   await driver.releaseActions();
 }
 
-/** Presses at `from`, then drags to `to` without waiting for a hold. */
-export async function dragFromTo(driver, from, to, { durationMs = 420 } = {}) {
+/** Holds at `from` until the step lifts, then drags it to `to`. */
+export async function holdAndDragFromTo(driver, from, to, { holdMs = 600, durationMs = 420 } = {}) {
   await driver.performActions([
     {
       type: 'pointer',
-      id: 'grip-drag',
+      id: 'step-hold-drag',
       parameters: { pointerType: 'touch' },
       actions: [
         { type: 'pointerMove', duration: 0, ...from },
         { type: 'pointerDown', button: 0 },
-        { type: 'pause', duration: 60 },
+        { type: 'pause', duration: holdMs },
         { type: 'pointerMove', duration: durationMs, ...to },
         { type: 'pause', duration: 120 },
         { type: 'pointerUp', button: 0 },

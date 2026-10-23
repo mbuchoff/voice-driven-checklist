@@ -7,14 +7,7 @@ export const TIMER_FILLERS = [30, 60, 120, 300];
 /** The panel's step sizes, coarsest first. */
 export const STEPPER_LEVELS = [60, 15, 5, 1];
 
-/** Chips and clock labels: 30s, 1m, 1m 30s. */
-export function formatTimerShort(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  const rest = seconds % 60;
-  return `${Math.floor(seconds / 60)}m${rest ? ` ${rest}s` : ''}`;
-}
-
-/** The timer panel's readout and the routine total: 1 min 30s. */
+/** Chips, step clocks, the timer panel's readout and the routine total: 1 min 30s. */
 export function formatTimerLong(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
   const rest = seconds % 60;

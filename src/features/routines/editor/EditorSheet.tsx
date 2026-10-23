@@ -83,7 +83,7 @@ export function SheetTitle({ colors, children }: { colors: EditorColors; childre
 
 export function SheetBody({ colors, children }: { colors: EditorColors; children: ReactNode }) {
   return (
-    <Text style={{ color: colors.muted, fontSize: 15, lineHeight: 21, marginBottom: 10 }}>
+    <Text style={{ color: colors.muted, fontSize: 17, lineHeight: 24, marginBottom: 10 }}>
       {children}
     </Text>
   );

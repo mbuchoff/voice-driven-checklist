@@ -12,7 +12,6 @@ import Animated, {
 import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
-import { ColorDot, ColorGrid } from './ColorGrid';
 
 const FOLD_MS = 180;
 
@@ -55,9 +54,10 @@ export function IconButton({
 }
 
 /**
- * Back, the title, and (for an existing routine) Delete. Once the name
- * scrolls under it, the bar folds into the card: it takes the routine's
- * color and shows its dot, title, count and ▶.
+ * Back, the title, ▶ when the routine can run, and (for an existing routine)
+ * Delete. Once the name scrolls under it, the bar folds into the card: it
+ * takes the routine's color and shows its title and count. The color dot
+ * stays on the card.
  */
 export function EditorTopBar({
   colors,
@@ -65,31 +65,21 @@ export function EditorTopBar({
   isNew,
   title,
   countLine,
-  colorLabel,
-  colorKey,
-  colorsOpen,
   canRun,
   onBack,
   onDelete,
   onPlay,
-  onToggleColors,
-  onPickColor,
 }: {
   colors: EditorColors;
   collapsed: boolean;
   isNew: boolean;
   title: string;
   countLine: string;
-  colorLabel: string;
-  colorKey: string;
-  colorsOpen: boolean;
   /** ▶ shows only for a saved routine with nothing unsaved that can run. */
   canRun: boolean;
   onBack: () => void;
   onDelete: () => void;
   onPlay: () => void;
-  onToggleColors: () => void;
-  onPickColor: (key: string) => void;
 }) {
   const fold = useSharedValue(collapsed ? 1 : 0);
   useEffect(() => {
@@ -102,10 +92,6 @@ export function EditorTopBar({
   const miniStyle = useAnimatedStyle(() => ({
     opacity: fold.value,
     transform: [{ translateY: interpolate(fold.value, [0, 1], [6, 0]) }],
-  }));
-  const popStyle = useAnimatedStyle(() => ({
-    opacity: fold.value,
-    transform: [{ scale: interpolate(fold.value, [0, 1], [0.8, 1]) }],
   }));
 
   return (
@@ -125,20 +111,8 @@ export function EditorTopBar({
         <IconButton label="Back" testID="editor-back" onPress={onBack}>
           <Icon name="arrowLeft" color={colors.text} size={22} />
         </IconButton>
-        <Animated.View
-          pointerEvents={collapsed ? 'auto' : 'none'}
-          style={[{ width: 44, height: 44 }, popStyle]}
-        >
-          <ColorDot
-            colors={colors}
-            size={24}
-            rim={2.5}
-            label={`Card color: ${colorLabel}. Change it`}
-            expanded={colorsOpen}
-            testID="bar-color-dot"
-            onPress={onToggleColors}
-          />
-        </Animated.View>
+        {/* Balances ▶ so the title stays centered. */}
+        <View style={{ width: 44, height: 44 }} />
         <View style={{ flex: 1, minWidth: 0, height: 44 }}>
           <Animated.View
             pointerEvents="none"
@@ -156,11 +130,11 @@ export function EditorTopBar({
           >
             <Text
               numberOfLines={1}
-              style={{ maxWidth: '100%', color: colors.text, fontSize: 16, lineHeight: 20, fontWeight: '800' }}
+              style={{ maxWidth: '100%', color: colors.text, fontSize: 19, lineHeight: 23, fontWeight: '800' }}
             >
               {title.trim() || 'Untitled routine'}
             </Text>
-            <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 12, lineHeight: 14, fontWeight: '700' }}>
+            <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 15, lineHeight: 18, fontWeight: '700' }}>
               {countLine}
             </Text>
           </Animated.View>
@@ -187,27 +161,6 @@ export function EditorTopBar({
           </IconButton>
         )}
       </View>
-      {collapsed && colorsOpen ? (
-        <View
-          testID="bar-color-strip"
-          style={{
-            position: 'absolute',
-            top: 60,
-            left: 0,
-            right: 0,
-            paddingTop: 6,
-            paddingHorizontal: 12,
-            paddingBottom: 10,
-            alignItems: 'center',
-            backgroundColor: colors.fill,
-            borderBottomLeftRadius: 18,
-            borderBottomRightRadius: 18,
-            boxShadow: `0 6px 12px ${colors.shadow}`,
-          }}
-        >
-          <ColorGrid colors={colors} selected={colorKey} onPick={onPickColor} columnSpace={52} />
-        </View>
-      ) : null}
     </View>
   );
 }

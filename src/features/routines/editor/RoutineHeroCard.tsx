@@ -94,7 +94,7 @@ export const RoutineHeroCard = forwardRef<TextInput, {
           </>
         )}
       </View>
-      <Text testID="hero-count" style={{ color: colors.ink, fontSize: 14, lineHeight: 16, fontWeight: '700' }}>
+      <Text testID="hero-count" style={{ color: colors.ink, fontSize: 17, lineHeight: 20, fontWeight: '700' }}>
         {props.countLine}
       </Text>
     </View>

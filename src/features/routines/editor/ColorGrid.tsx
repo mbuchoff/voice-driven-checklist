@@ -5,6 +5,9 @@ import { Icon } from '@/src/components/Icon';
 import type { EditorColors } from '../editorColors';
 import { ROUTINE_COLORS, ROUTINE_COLOR_COLUMNS, routineColorShades } from '../routineColors';
 
+/** The grid is at most this many dp per column wide. */
+const COLUMN_SPACE = 54;
+
 /**
  * The thirty routine colors as swatches in their deep shade, six to a row
  * (five neighboring hues and a neutral). The current color has a ring and ✓.
@@ -13,13 +16,10 @@ export function ColorGrid({
   colors,
   selected,
   onPick,
-  columnSpace = 54,
 }: {
   colors: EditorColors;
   selected: string;
   onPick: (key: string) => void;
-  /** The grid is at most this many dp per column wide. */
-  columnSpace?: number;
 }) {
   const rows = [];
   for (let start = 0; start < ROUTINE_COLORS.length; start += ROUTINE_COLOR_COLUMNS) {
@@ -29,7 +29,7 @@ export function ColorGrid({
     <View
       accessibilityRole="radiogroup"
       accessibilityLabel="Card color"
-      style={{ width: '100%', maxWidth: ROUTINE_COLOR_COLUMNS * columnSpace, gap: 2 }}
+      style={{ width: '100%', maxWidth: ROUTINE_COLOR_COLUMNS * COLUMN_SPACE, gap: 2 }}
     >
       {rows.map((row) => (
         <View key={row[0].key} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

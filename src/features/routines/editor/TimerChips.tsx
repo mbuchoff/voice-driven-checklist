@@ -10,7 +10,7 @@ import Animated, {
 import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
-import { fitChips, formatTimerShort, formatTimerWords } from '../timers';
+import { fitChips, formatTimerLong, formatTimerWords } from '../timers';
 
 type ChipLook = {
   minHeight: number;
@@ -19,11 +19,11 @@ type ChipLook = {
   gap: number;
 };
 
-/** The step's chips: snug (tighter) chips with a ⋯ at the end. */
-const STRIP_LOOK: ChipLook = { minHeight: 36, paddingHorizontal: 6, fontSize: 12, gap: 4 };
-/** The timer panel's quick picks: bigger, no ⋯. */
-const PANEL_LOOK: ChipLook = { minHeight: 44, paddingHorizontal: 10, fontSize: 13, gap: 6 };
-const MORE_WIDTH = 36;
+/** The step's chips: they stretch to fill their line, with a ⋯ at the end. */
+const STRIP_LOOK: ChipLook = { minHeight: 44, paddingHorizontal: 6, fontSize: 16, gap: 4 };
+/** The timer panel's quick picks: centered, no ⋯. */
+const PANEL_LOOK: ChipLook = { minHeight: 44, paddingHorizontal: 10, fontSize: 17, gap: 6 };
+const MORE_WIDTH = 44;
 const FOLD_MS = 220;
 /** The strip's chips line up with the open step's words (inset 18 − 8). */
 const STRIP_INSET = 10;
@@ -33,6 +33,7 @@ function Chip({
   look,
   seconds,
   checked,
+  grow,
   onPress,
   testID,
 }: {
@@ -40,6 +41,8 @@ function Chip({
   look: ChipLook;
   seconds: number;
   checked: boolean;
+  /** Takes a share of the line's spare width. */
+  grow?: boolean;
   onPress?: () => void;
   testID?: string;
 }) {
@@ -51,6 +54,7 @@ function Chip({
       accessibilityState={{ checked }}
       onPress={onPress}
       style={{
+        flexGrow: grow ? 1 : 0,
         minHeight: look.minHeight,
         paddingHorizontal: look.paddingHorizontal,
         borderWidth: 1,
@@ -65,7 +69,7 @@ function Chip({
         numberOfLines={1}
         style={{ color: checked ? colors.ink : colors.text, fontSize: look.fontSize, fontWeight: '700' }}
       >
-        {formatTimerShort(seconds)}
+        {formatTimerLong(seconds)}
       </Text>
     </Pressable>
   );
@@ -182,6 +186,7 @@ export function StepTimerChips({
               look={STRIP_LOOK}
               seconds={time}
               checked={selected === time}
+              grow
               onPress={() => onPick(time)}
             />
           ))}

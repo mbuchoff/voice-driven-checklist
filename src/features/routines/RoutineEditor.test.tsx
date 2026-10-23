@@ -233,7 +233,7 @@ describe('RoutineEditor', () => {
 
       pressBack();
       expect(screen.queryByTestId('timer-panel')).toBeNull();
-      expect(screen.getByTestId('item-clock-1')).toHaveTextContent('1m');
+      expect(screen.getByTestId('item-clock-1')).toHaveTextContent('1 min');
 
       pressBack();
       expect(screen.getByText('Save your changes?')).toBeOnTheScreen();
@@ -260,13 +260,13 @@ describe('RoutineEditor', () => {
       ]);
 
       fireEvent.press(screen.getByTestId('item-chip-1-90'));
-      expect(screen.getByTestId('item-clock-1')).toHaveTextContent('1m 30s');
+      expect(screen.getByTestId('item-clock-1')).toHaveTextContent('1 min 30s');
       expect(screen.getByTestId('hero-count')).toHaveTextContent('2 steps · 2 min timed');
 
       fireEvent.press(screen.getByTestId('item-clock-1'));
       layOutChips(1, [90, 30, 60, 120]);
       fireEvent.press(screen.getByTestId('item-chip-1-90'));
-      expect(screen.getByTestId('item-clock-1')).toHaveTextContent('1m 30s');
+      expect(screen.getByTestId('item-clock-1')).toHaveTextContent('1 min 30s');
       await expect(preferences.load()).resolves.toMatchObject({ recentTimerSeconds: [90] });
     });
 
@@ -328,7 +328,7 @@ describe('RoutineEditor', () => {
 
       fireEvent.press(screen.getByTestId('timer-done'));
       expect(screen.queryByTestId('timer-panel')).toBeNull();
-      expect(screen.getByTestId('item-clock-1')).toHaveTextContent('2m');
+      expect(screen.getByTestId('item-clock-1')).toHaveTextContent('2 min');
       await waitFor(async () => {
         await expect(preferences.load()).resolves.toMatchObject({ recentTimerSeconds: [120] });
       });
