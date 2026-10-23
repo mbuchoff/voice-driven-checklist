@@ -148,6 +148,13 @@ export function StepTimerChips({
   const [contentHeight, setContentHeight] = useState(0);
   const height = useSharedValue(0);
   const shown = open && times !== null;
+  // The times on show stay while the strip folds, so they fold away with ⋯
+  // instead of vanishing the moment it starts to close.
+  const [foldingTimes, setFoldingTimes] = useState<number[]>([]);
+  useEffect(() => {
+    if (shown && times) setFoldingTimes(times);
+  }, [shown, times]);
+  const visibleTimes = shown ? times : foldingTimes;
   useEffect(() => {
     height.value = withTiming(shown ? contentHeight : 0, { duration: FOLD_MS, easing: Easing.ease });
   }, [contentHeight, height, shown]);
@@ -178,7 +185,7 @@ export function StepTimerChips({
             gap: STRIP_LOOK.gap,
           }}
         >
-          {(times ?? []).map((time) => (
+          {(visibleTimes ?? []).map((time) => (
             <Chip
               key={time}
               testID={`item-chip-${index}-${time}`}

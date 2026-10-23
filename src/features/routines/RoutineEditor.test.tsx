@@ -413,6 +413,20 @@ describe('RoutineEditor', () => {
       await expect(preferences.load()).resolves.toMatchObject({ recentTimerSeconds: [90] });
     });
 
+    it('keeps the chips in place while they fold away', async () => {
+      const database = await setupDb();
+      await renderEditor({ initialRoutine: await existing(database) }, { database });
+      fireEvent.press(screen.getByTestId('item-clock-0'));
+      layOutChips(0, [30, 60, 120, 300]);
+
+      fireEvent.press(screen.getByTestId('item-clock-0'));
+
+      // Folding takes a moment; the times fold with ⋯ rather than vanishing.
+      expect(screen.getAllByTestId(/^item-chip-0-/, HIDDEN).map((chip) => chip.props.testID)).toEqual([
+        'item-chip-0-30', 'item-chip-0-60', 'item-chip-0-120', 'item-chip-0-300',
+      ]);
+    });
+
     it('keeps the step’s own time among its chips', async () => {
       const preferences = new MemoryDevicePreferenceStore({
         ...DEFAULT_DEVICE_PREFERENCES,
