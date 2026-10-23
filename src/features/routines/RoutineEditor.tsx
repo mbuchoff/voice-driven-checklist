@@ -134,6 +134,14 @@ export function RoutineEditor({
   const [baseline] = useState(() => editorSnapshot(model));
   const modelRef = useRef(model);
   modelRef.current = model;
+  // When the focused field disappears, Android hands focus to the next
+  // focusable view (often the name) and keeps the keyboard up. So let go of
+  // the keyboard while the open step's field is still there, unless the step
+  // staying open is `keepId`.
+  const releaseOpenStep = (keepId?: string) => {
+    const openId = modelRef.current.openId;
+    if (openId && openId !== keepId) Keyboard.dismiss();
+  };
   const colors = useMemo(() => editorColors(theme, model.colorKey), [theme, model.colorKey]);
 
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -183,6 +191,7 @@ export function RoutineEditor({
     onMove: (from, to) => setModel((state) => moveStep(state, from, to)),
     scrollRef,
     onDragStart: () => {
+      releaseOpenStep();
       setChips(null);
       expireAllUndoRows();
       setModel((state) => leaveOpenStep(state));
@@ -242,7 +251,10 @@ export function RoutineEditor({
     for (const timer of Object.values(undoTimers.current)) clearTimeout(timer);
   }, []);
 
+  // Before a sheet opens or the editor leaves: a native tap doesn't blur
+  // the field being typed in, so the keyboard would stay up over the sheet.
   const settle = useCallback((): EditorState => {
+    Keyboard.dismiss();
     const settled = leaveOpenStep(modelRef.current);
     modelRef.current = settled;
     setModel(settled);
@@ -250,11 +262,13 @@ export function RoutineEditor({
   }, []);
 
   const open = (id: string) => {
+    releaseOpenStep(id);
     setColorsOpen(false);
     setModel((state) => openStep(state, id));
   };
 
   const add = () => {
+    releaseOpenStep();
     const id = uuidv4();
     setColorsOpen(false);
     setChips(null);
@@ -287,6 +301,7 @@ export function RoutineEditor({
     }
     const step = steps.find((candidate) => candidate.localId === id);
     if (!step) return;
+    releaseOpenStep(id);
     setColorsOpen(false);
     setModel((state) => openStep(state, id));
     setChips({ stepId: id, candidates: chipCandidates(step.timerSeconds, preferences.recentTimerSeconds) });
@@ -394,6 +409,7 @@ export function RoutineEditor({
 
   // ▶ only shows when nothing is unsaved, so the saved routine is what runs.
   const play = () => {
+    Keyboard.dismiss();
     if (initialRoutine && onRun) onRun(initialRoutine);
   };
 
@@ -532,7 +548,6 @@ export function RoutineEditor({
             }}
             onOpenColors={() => {
               settle();
-              Keyboard.dismiss();
               setColorsOpen(true);
             }}
             onCloseColors={() => setColorsOpen(false)}
@@ -617,6 +632,7 @@ export function RoutineEditor({
                     onOpen={() => open(row.localId)}
                     onChangeText={(text) => setModel((state) => setStepText(state, row.localId, text))}
                     onEnter={() => {
+                      releaseOpenStep();
                       const id = uuidv4();
                       scrollToId.current = id;
                       setModel((state) => pressEnter(state, id));

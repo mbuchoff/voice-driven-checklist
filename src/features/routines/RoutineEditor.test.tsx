@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
-import { Alert, BackHandler, Platform } from 'react-native';
+import { Alert, BackHandler, Keyboard, Platform } from 'react-native';
 import { State } from 'react-native-gesture-handler';
 import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 
@@ -143,6 +143,129 @@ describe('RoutineEditor', () => {
       fireEvent(screen.getByTestId('item-text-1'), 'submitEditing');
       expect(screen.queryByTestId('item-row-1')).toBeNull();
       expect(screen.queryByTestId('item-text-0')).toBeNull();
+    });
+
+    // On Android, when the focused field disappears, focus jumps to the next
+    // focusable view (often the name) and the keyboard stays up. So the
+    // keyboard has to be let go of while the open step's field is still there.
+    describe('lets go of the keyboard before the open step’s field goes away', () => {
+      /** For each Keyboard.dismiss(), the step field that was still on screen. */
+      function fieldsAtDismiss() {
+        const fields: (string | null)[] = [];
+        jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {
+          fields.push(screen.queryAllByTestId(/^item-text-/)[0]?.props.testID ?? null);
+        });
+        return fields;
+      }
+
+      it('on Enter in an existing step', async () => {
+        const database = await setupDb();
+        await renderEditor({ initialRoutine: await existing(database) }, { database });
+        tapToEdit(1);
+        const fields = fieldsAtDismiss();
+
+        fireEvent(screen.getByTestId('item-text-1'), 'submitEditing');
+
+        expect(fields).toEqual(['item-text-1']);
+        expect(screen.queryByTestId('item-text-1')).toBeNull();
+      });
+
+      it('on Enter in a blank new step', async () => {
+        const database = await setupDb();
+        await renderEditor({ initialRoutine: await existing(database) }, { database });
+        fireEvent.press(screen.getByTestId('add-step'));
+        const fields = fieldsAtDismiss();
+
+        fireEvent(screen.getByTestId('item-text-2'), 'submitEditing');
+
+        expect(fields).toEqual(['item-text-2']);
+        expect(screen.queryByTestId('item-row-2')).toBeNull();
+      });
+
+      it('on Enter in a new step with words, before the next new step opens', async () => {
+        await renderEditor();
+        fireEvent.press(screen.getByTestId('add-step'));
+        fireEvent.changeText(screen.getByTestId('item-text-0'), 'Stretch');
+        const fields = fieldsAtDismiss();
+
+        fireEvent(screen.getByTestId('item-text-0'), 'submitEditing');
+
+        expect(fields).toEqual(['item-text-0']);
+        expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
+      });
+
+      it('when another step is tapped', async () => {
+        const database = await setupDb();
+        await renderEditor({ initialRoutine: await existing(database) }, { database });
+        tapToEdit(0);
+        const fields = fieldsAtDismiss();
+
+        tapToEdit(1);
+
+        expect(fields).toEqual(['item-text-0']);
+        expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
+      });
+
+      it('when another step’s clock is tapped', async () => {
+        const database = await setupDb();
+        await renderEditor({ initialRoutine: await existing(database) }, { database });
+        tapToEdit(1);
+        const fields = fieldsAtDismiss();
+
+        fireEvent.press(screen.getByTestId('item-clock-0'));
+
+        expect(fields).toEqual(['item-text-1']);
+        expect(screen.getByTestId('item-text-0')).toBeOnTheScreen();
+      });
+    });
+
+    // A native tap doesn't blur the field being typed in, so a sheet would
+    // open under the keyboard.
+    describe('lets go of the keyboard while typing the name, before', () => {
+      async function typingTheName() {
+        const database = await setupDb();
+        const routine = await existing(database);
+        const callbacks = await renderEditor({ initialRoutine: routine }, { database });
+        fireEvent(screen.getByTestId('title-input'), 'focus');
+        fireEvent.changeText(screen.getByTestId('title-input'), 'Morning stretch, longer');
+        return { dismiss: jest.spyOn(Keyboard, 'dismiss'), ...callbacks };
+      }
+
+      it('the back arrow asks to save', async () => {
+        const { dismiss } = await typingTheName();
+        fireEvent.press(screen.getByTestId('editor-back'));
+        expect(screen.getByText('Save your changes?')).toBeOnTheScreen();
+        expect(dismiss).toHaveBeenCalled();
+      });
+
+      it('the trash asks to delete', async () => {
+        const { dismiss } = await typingTheName();
+        fireEvent.press(screen.getByTestId('editor-delete'));
+        expect(screen.getByTestId('delete-sheet')).toBeOnTheScreen();
+        expect(dismiss).toHaveBeenCalled();
+      });
+
+      it('Save leaves the editor', async () => {
+        const { dismiss, onSaved } = await typingTheName();
+        await act(async () => {
+          fireEvent.press(screen.getByRole('button', { name: 'Save changes' }));
+        });
+        await waitFor(() => expect(onSaved).toHaveBeenCalled());
+        expect(dismiss).toHaveBeenCalled();
+      });
+    });
+
+    it('lets go of the keyboard before ▶ leaves for the run', async () => {
+      const database = await setupDb();
+      const routine = await existing(database);
+      const { onRun } = await renderEditor({ initialRoutine: routine }, { database });
+      tapToEdit(0);
+      const dismiss = jest.spyOn(Keyboard, 'dismiss');
+
+      fireEvent.press(screen.getByTestId('bar-play'));
+
+      expect(onRun).toHaveBeenCalled();
+      expect(dismiss).toHaveBeenCalled();
     });
 
     it('gives an emptied existing step back its words when it is closed', async () => {
