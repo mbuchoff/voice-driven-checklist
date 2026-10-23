@@ -35,7 +35,7 @@ URL options in the prototype other than the approved variant are rejected altern
   Nothing gets implemented without a row, and nothing is done until every row is verified or explicitly marked as an accepted difference.
 - **Take values from the prototype's source, not from screenshots:** CSS rules, JS constants, computed styles via `getComputedStyle`/`getBoundingClientRect`. Treat CSS px as dp. When the prototype computes something at runtime (text-measured chip fitting, folding thresholds), port the algorithm, not one result of it.
 - **Map browser mechanisms to native ones:** don't transliterate DOM tricks (SortableJS, `focusout`, `scrollIntoView`, CSS transitions, `color-mix`, `oklch()`). Use what the app already uses: react-native-gesture-handler, Reanimated and Worklets, `TextInput` focus APIs, the app's keyboard handling, and precomputed colors. Record each mapping in the ledger's notes.
-  - **Focus doesn't carry over.** In the browser, removing a focused field just drops focus. On Android, removing the focused `TextInput` hands focus to the first focusable view on screen: another text field (such as the routine name) or a button, with the keyboard left up. Call `Keyboard.dismiss()` before any change that closes, replaces or unmounts the focused field, then focus the next field if there is one.
+  - **Focus doesn't carry over.** In the browser, removing a focused field just drops focus. On Android, removing the focused `TextInput` hands focus to the first focusable view on screen: another text field (such as the routine name) or a button, with the keyboard left up. Call `Keyboard.dismiss()` before any change that closes, replaces or unmounts the focused field, then focus the next field if there is one. Likewise dismiss it before opening a sheet or leaving the screen, whichever field has focus: tapping a native button doesn't blur the field the way a browser click does.
 - **Inventory every existing test ID, accessibility label and dialog text** that the Appium suite (`e2e/tests/*.mjs`) and Jest tests rely on, before changing screens. Update the consumers in the same commit as the change.
 
 ## 2. Implement with /implement
@@ -107,12 +107,12 @@ Check interaction fidelity on the phone too:
 - **Hold and drag timing:** compare `adb shell input swipe x y x y <ms>` just under and just over the hold time.
 - **Drift and swipe thresholds.**
 - **Animation lengths:** check them by eye against the prototype.
-- **Where focus goes:** for every way an edit ends or moves on, check focus with another text field fully on screen:
+- **Where focus goes:** for every way an edit ends or moves on, check focus with another text field fully on screen. Start once from each field that can hold the keyboard (an open step, and the routine name):
   - the keyboard's Enter key, on an existing step, a blank new step and a new step with words
   - the app's ✓
   - tapping another step's words or its clock
   - +
-  - opening a sheet or the color grid
+  - opening a sheet or the color grid, including the top bar's back arrow and trash: the sheet must never sit under the keyboard
   - starting a drag
 
   After each, read `adb shell dumpsys input_method` (`mServedView`, `mInputShown`) and the `focused="true"` node in `uiautomator dump`. Focus and the keyboard must end where the prototype puts them: on the newly opened step, or nowhere with the keyboard down. Checking only that the step closed misses this.
@@ -152,3 +152,4 @@ Improve this skill first, then fix the defect.
 - 2026-10-21, #39 spike: with the phone locked and no wake lock, JS timers stalled for up to 14.6 s. Rule: always verify time-based behavior with the phone locked and in forced deep idle, and measure lateness from logs.
 - 2026-10-21, #39 red pass: chained blind adb taps ran past the app onto the home screen, opening Google search and the Weather app. Screenshots captured personal photos and saved locations; they were deleted. Rule: guard every phone action on the foreground app, check the screen between steps, and search the file picker instead of browsing it.
 - 2026-10-23, #39, found by the owner after done: Enter on an open step, with the routine name on screen, focused the name and kept the keyboard up. The same cause broke Enter on a new step with words (the next step didn't stay open), tapping another step's words or clock while one was open, and Enter on a blank new step (keyboard stuck up). Android hands focus to the first focusable view when the focused `TextInput` unmounts; only ✓ dismissed the keyboard first. The phone check had confirmed the step closed, not where focus went. Rule: dismiss the keyboard before unmounting a focused field, and check focus after every way an edit ends.
+- 2026-10-23, #39, found by the owner after done: with the keyboard up for the routine name, the top bar's back arrow opened "Save your changes?" under the keyboard (the trash's sheet too). A browser click on a button blurs the focused field; a native tap doesn't, and only a closing step dismissed the keyboard. Rule: dismiss the keyboard before opening a sheet or leaving, and run the focus checks starting from every field that can hold the keyboard.
