@@ -184,21 +184,59 @@ describe('RoutineEditor', () => {
       });
     });
 
+    /** For each focus request: the field asked, and the step fields then on screen. */
+    function focusRequests() {
+      const requests: { field: string; stepFields: string[] }[] = [];
+      jest.spyOn(TextInput.prototype, 'focus').mockImplementation(function (this: TextInput) {
+        requests.push({
+          field: (this.props as { testID?: string }).testID ?? '',
+          stepFields: screen.queryAllByTestId(/^item-text-/).map((field) => field.props.testID),
+        });
+      });
+      return requests;
+    }
+
+    // Android ignores a request to show the keyboard for a field it hasn't
+    // laid out yet, so a hidden holder that's already there takes focus during
+    // the tap, and the step's field takes it over once it exists.
+    describe('raises the keyboard during the tap that opens a step', () => {
+      it('on a step’s words', async () => {
+        const database = await setupDb();
+        await renderEditor({ initialRoutine: await existing(database) }, { database });
+        const requests = focusRequests();
+
+        tapToEdit(1);
+
+        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: [] });
+        expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
+      });
+
+      it('on a step’s time', async () => {
+        const database = await setupDb();
+        await renderEditor({ initialRoutine: await existing(database) }, { database });
+        const requests = focusRequests();
+
+        fireEvent.press(screen.getByTestId('item-clock-0'));
+
+        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: [] });
+      });
+
+      it('on +', async () => {
+        const database = await setupDb();
+        await renderEditor({ initialRoutine: await existing(database) }, { database });
+        const requests = focusRequests();
+
+        fireEvent.press(screen.getByTestId('add-step'));
+
+        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: [] });
+        expect(screen.getByTestId('item-text-2')).toBeOnTheScreen();
+      });
+    });
+
     // Moving to another step keeps the keyboard up. On Android, the moment the
     // focused field goes away, another field (the name) takes focus and shows
-    // it, so a hidden holder takes the keyboard while the old field is there.
+    // it, so the holder takes the keyboard while the old field is there.
     describe('hands the keyboard to another step without the name taking it on the way', () => {
-      /** For each focus request: the field asked, and the step fields then on screen. */
-      function focusRequests() {
-        const requests: { field: string; stepFields: string[] }[] = [];
-        jest.spyOn(TextInput.prototype, 'focus').mockImplementation(function (this: TextInput) {
-          requests.push({
-            field: (this.props as { testID?: string }).testID ?? '',
-            stepFields: screen.queryAllByTestId(/^item-text-/).map((field) => field.props.testID),
-          });
-        });
-        return requests;
-      }
 
       it('on Enter in a new step with words', async () => {
         await renderEditor();

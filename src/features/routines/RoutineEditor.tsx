@@ -141,13 +141,13 @@ export function RoutineEditor({
   const releaseOpenStep = () => {
     if (modelRef.current.openId) Keyboard.dismiss();
   };
-  // Moving to another step keeps the keyboard up instead. A hidden holder
-  // takes focus while the old step's field is still there, so the name never
-  // shows focus on the way, and the new step's field takes it from the holder.
+  // A tap that opens a step hands the keyboard to a hidden holder first, and
+  // the step's field takes it from the holder once it exists. Android ignores
+  // a request to show the keyboard for a field it hasn't laid out yet, and
+  // moving from another step this way keeps the keyboard up while the old
+  // field is still there, so the name never shows focus on the way.
   const keyboardHolderRef = useRef<ComponentRef<typeof TextInput>>(null);
-  const moveFromOpenStep = () => {
-    if (modelRef.current.openId) keyboardHolderRef.current?.focus();
-  };
+  const holdKeyboard = () => keyboardHolderRef.current?.focus();
   const colors = useMemo(() => editorColors(theme, model.colorKey), [theme, model.colorKey]);
 
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -274,13 +274,14 @@ export function RoutineEditor({
   }, []);
 
   const open = (id: string) => {
-    moveFromOpenStep();
+    holdKeyboard();
     setColorsOpen(false);
     setModel((state) => openStep(state, id));
   };
 
   const add = () => {
     const id = uuidv4();
+    holdKeyboard();
     setColorsOpen(false);
     scrollToId.current = id;
     setModel((state) => addStep(state, id));
@@ -620,7 +621,7 @@ export function RoutineEditor({
                     onChangeText={(text) => setModel((state) => setStepText(state, row.localId, text))}
                     onEnter={() => {
                       const id = uuidv4();
-                      if (pressEnter(modelRef.current, id).openId) moveFromOpenStep();
+                      if (pressEnter(modelRef.current, id).openId) holdKeyboard();
                       else releaseOpenStep();
                       scrollToId.current = id;
                       setModel((state) => pressEnter(state, id));
