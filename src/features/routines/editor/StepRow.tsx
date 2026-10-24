@@ -34,10 +34,15 @@ const SWIPE_MS = 200;
 const FLING_MS = 220;
 /** How fast the number and time move when a step opens or closes. */
 const OPEN_MS = 220;
-/** The time fades out a little faster than it makes room. */
-const TIME_FADE_MS = 160;
-/** The width the time shrinks from as it makes room, like the prototype's max-width. */
-const TIME_MAX_WIDTH = 160;
+/** The time badge's look, shared with the hidden copy that measures it. */
+const TIME_BADGE = {
+  height: 34,
+  paddingHorizontal: 8,
+  borderRadius: 20,
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+} as const;
 /** Where an open step's words sit from the row's edge. */
 export const EDIT_INSET = 18;
 
@@ -78,12 +83,11 @@ export function StepRow(props: StepRowProps) {
   const translateX = useSharedValue(0);
   const swipeDirection = useSharedValue(0);
   const openProgress = useSharedValue(open ? 1 : 0);
-  const timeOpacity = useSharedValue(open ? 0 : 1);
+  const timeWidth = useSharedValue(0);
 
   useEffect(() => {
     openProgress.value = withTiming(open ? 1 : 0, { duration: OPEN_MS, easing: Easing.ease });
-    timeOpacity.value = withTiming(open ? 0 : 1, { duration: TIME_FADE_MS, easing: Easing.ease });
-  }, [open, openProgress, timeOpacity]);
+  }, [open, openProgress]);
 
   const deleteRow = () => props.onDelete(rowHeight.current);
   const deleteAfterFling = () => {
@@ -146,13 +150,20 @@ export function StepRow(props: StepRowProps) {
     opacity: 1 - openProgress.value,
     transform: [{ scale: 1 - 0.8 * openProgress.value }],
   }));
-  // The time slides away while its step is open, giving the words its room
-  // (and the row's gap before it).
+  // The time shrinks away toward its right edge while its step is open, as
+  // the number does toward its left, and its place closes up (with the row's
+  // gap before it) to give the words its room.
+  const timeSlotStyle = useAnimatedStyle(() => {
+    const width = timeWidth.value;
+    return {
+      width: width > 0 ? width * (1 - openProgress.value) : openProgress.value > 0 ? 0 : undefined,
+      marginLeft: -8 * openProgress.value,
+    };
+  });
   const timeStyle = useAnimatedStyle(() => ({
-    maxWidth: TIME_MAX_WIDTH * (1 - openProgress.value),
-    paddingHorizontal: 8 * (1 - openProgress.value),
-    marginLeft: -8 * openProgress.value,
-    opacity: timeOpacity.value,
+    width: timeWidth.value > 0 ? timeWidth.value : undefined,
+    opacity: 1 - openProgress.value,
+    transform: [{ scale: 1 - 0.8 * openProgress.value }],
   }));
 
   return (
@@ -301,33 +312,39 @@ export function StepRow(props: StepRowProps) {
             </View>
           </GestureDetector>
           {timerSeconds ? (
-            <AnimatedPressable
-              testID={`item-clock-${index}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Timer for step ${number}: ${formatTimerWords(timerSeconds)}`}
-              accessibilityElementsHidden={open}
-              importantForAccessibility={open ? 'no-hide-descendants' : 'yes'}
-              pointerEvents={open ? 'none' : 'auto'}
-              onPress={props.onOpen}
-              hitSlop={{ top: 7, bottom: 7 }}
+            <Animated.View
               style={[
-                {
-                  height: 34,
-                  borderRadius: 20,
-                  overflow: 'hidden',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4,
-                  backgroundColor: colors.fill,
-                },
-                timeStyle,
+                { height: 34, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
+                timeSlotStyle,
               ]}
             >
-              <Icon name="clock" color={colors.ink} size={15} strokeWidth={2.5} />
-              <Text numberOfLines={1} ellipsizeMode="clip" style={{ color: colors.ink, fontSize: 15, fontWeight: '800' }}>
-                {formatTimerLong(timerSeconds)}
-              </Text>
-            </AnimatedPressable>
+              <View
+                pointerEvents="none"
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                onLayout={(event) => { timeWidth.value = event.nativeEvent.layout.width; }}
+                style={[TIME_BADGE, { position: 'absolute', opacity: 0 }]}
+              >
+                <TimeLabel colors={colors} seconds={timerSeconds} />
+              </View>
+              <AnimatedPressable
+                testID={`item-clock-${index}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Timer for step ${number}: ${formatTimerWords(timerSeconds)}`}
+                accessibilityElementsHidden={open}
+                importantForAccessibility={open ? 'no-hide-descendants' : 'yes'}
+                pointerEvents={open ? 'none' : 'auto'}
+                onPress={props.onOpen}
+                hitSlop={{ top: 7, bottom: 7 }}
+                style={[
+                  TIME_BADGE,
+                  { flexShrink: 0, backgroundColor: colors.fill, transformOrigin: 'right center' },
+                  timeStyle,
+                ]}
+              >
+                <TimeLabel colors={colors} seconds={timerSeconds} />
+              </AnimatedPressable>
+            </Animated.View>
           ) : null}
         </View>
         {props.chips}
@@ -348,6 +365,17 @@ export function StepRow(props: StepRowProps) {
         />
       ) : null}
     </View>
+  );
+}
+
+function TimeLabel({ colors, seconds }: { colors: EditorColors; seconds: number }) {
+  return (
+    <>
+      <Icon name="clock" color={colors.ink} size={15} strokeWidth={2.5} />
+      <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 15, fontWeight: '800' }}>
+        {formatTimerLong(seconds)}
+      </Text>
+    </>
   );
 }
 
