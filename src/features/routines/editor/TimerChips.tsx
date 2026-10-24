@@ -92,10 +92,11 @@ function useFittedChips(
   measureId: string,
   noTimer = false,
 ) {
+  // Widths are kept by time: a time's chip is as wide whichever set it's in,
+  // and a chip that stays on screen isn't laid out (or measured) again.
   const [widths, setWidths] = useState<Record<number, number>>({});
   const [noTimerWidth, setNoTimerWidth] = useState(0);
   const [room, setRoom] = useState(0);
-  useEffect(() => setWidths({}), [candidates]);
   const measured = candidates.every((time) => widths[time] != null) && room > 0
     && (!noTimer || noTimerWidth > 0);
   const times = useMemo(

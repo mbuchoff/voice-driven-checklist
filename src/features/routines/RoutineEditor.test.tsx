@@ -562,9 +562,9 @@ describe('RoutineEditor', () => {
 
       fireEvent.press(screen.getByTestId('timer-done'));
       expect(screen.queryByTestId('timer-panel')).toBeNull();
-      // Back to typing, with the step's times showing its new one.
+      // Back to typing, with the step's times showing its new one. They're the
+      // same four times, so the phone doesn't lay their chips out again.
       expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
-      layOutChips(1, [120, 30, 60, 300]);
       expect(within(screen.getByTestId('item-chips-1')).getByRole('radio', { name: '2 minutes' })).toBeChecked();
       await waitFor(async () => {
         await expect(preferences.load()).resolves.toMatchObject({ recentTimerSeconds: [120] });
