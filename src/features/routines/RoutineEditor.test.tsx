@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
-import { Alert, BackHandler, Keyboard, Platform } from 'react-native';
+import { Alert, BackHandler, Keyboard, Platform, TextInput } from 'react-native';
 import { State } from 'react-native-gesture-handler';
 import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 
@@ -183,21 +183,32 @@ describe('RoutineEditor', () => {
       });
     });
 
-    // Moving to another step keeps the keyboard up. The old step's field goes
-    // away before the new one takes focus, and Android focuses the name in
-    // between; that focus isn't the user's and mustn't close the new step.
-    describe('moves straight to another step, even when Android focuses the name on the way', () => {
-      const androidFocusesTheName = () => fireEvent(screen.getByTestId('title-input'), 'focus');
+    // Moving to another step keeps the keyboard up. On Android, the moment the
+    // focused field goes away, another field (the name) takes focus and shows
+    // it, so a hidden holder takes the keyboard while the old field is there.
+    describe('hands the keyboard to another step without the name taking it on the way', () => {
+      /** For each focus request: the field asked, and the step fields then on screen. */
+      function focusRequests() {
+        const requests: { field: string; stepFields: string[] }[] = [];
+        jest.spyOn(TextInput.prototype, 'focus').mockImplementation(function (this: TextInput) {
+          requests.push({
+            field: (this.props as { testID?: string }).testID ?? '',
+            stepFields: screen.queryAllByTestId(/^item-text-/).map((field) => field.props.testID),
+          });
+        });
+        return requests;
+      }
 
       it('on Enter in a new step with words', async () => {
         await renderEditor();
         fireEvent.press(screen.getByTestId('add-step'));
         fireEvent.changeText(screen.getByTestId('item-text-0'), 'Stretch');
+        const requests = focusRequests();
         const dismiss = jest.spyOn(Keyboard, 'dismiss');
 
         fireEvent(screen.getByTestId('item-text-0'), 'submitEditing');
-        androidFocusesTheName();
 
+        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: ['item-text-0'] });
         expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
         expect(dismiss).not.toHaveBeenCalled();
       });
@@ -206,26 +217,39 @@ describe('RoutineEditor', () => {
         const database = await setupDb();
         await renderEditor({ initialRoutine: await existing(database) }, { database });
         tapToEdit(0);
+        const requests = focusRequests();
         const dismiss = jest.spyOn(Keyboard, 'dismiss');
 
         tapToEdit(1);
-        androidFocusesTheName();
 
+        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: ['item-text-0'] });
         expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
         expect(dismiss).not.toHaveBeenCalled();
       });
 
-      it('when another step’s clock is tapped', async () => {
+      it('when another step’s time is tapped', async () => {
         const database = await setupDb();
         await renderEditor({ initialRoutine: await existing(database) }, { database });
         tapToEdit(1);
-        const dismiss = jest.spyOn(Keyboard, 'dismiss');
+        const requests = focusRequests();
 
         fireEvent.press(screen.getByTestId('item-clock-0'));
-        androidFocusesTheName();
 
+        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: ['item-text-1'] });
         expect(screen.getByTestId('item-text-0')).toBeOnTheScreen();
-        expect(dismiss).not.toHaveBeenCalled();
+      });
+
+      it('when another step is tapped while a blank new step goes away', async () => {
+        const database = await setupDb();
+        await renderEditor({ initialRoutine: await existing(database) }, { database });
+        fireEvent.press(screen.getByTestId('add-step'));
+        const requests = focusRequests();
+
+        tapToEdit(0);
+
+        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: ['item-text-2'] });
+        expect(screen.getByTestId('item-text-0')).toBeOnTheScreen();
+        expect(screen.queryByTestId('item-row-2')).toBeNull();
       });
 
       it('still closes the open step when you tap the name yourself', async () => {

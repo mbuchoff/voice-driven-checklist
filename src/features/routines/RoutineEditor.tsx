@@ -1,5 +1,6 @@
 import {
   Fragment,
+  forwardRef,
   useCallback,
   useEffect,
   useMemo,
@@ -89,8 +90,6 @@ import { useStepReorder } from './useStepReorder';
 const EDITOR_KEYBOARD_OFFSET = 24;
 /** A swiped-away step's UNDO stays this long (longer if TalkBack asks). */
 const STEP_UNDO_MS = 5000;
-/** The longest a move between steps takes before the new step has focus. */
-const MOVE_FOCUS_MS = 1000;
 const UNDO_CLOSE_UP_MS = 280;
 
 export type RoutineEditorProps = {
@@ -142,14 +141,12 @@ export function RoutineEditor({
   const releaseOpenStep = () => {
     if (modelRef.current.openId) Keyboard.dismiss();
   };
-  // Moving to another step keeps the keyboard up instead: the old step's
-  // field goes away before the new one takes focus, and the focus Android
-  // gives the name in between mustn't close the step being opened.
-  const movingToStep = useRef(false);
+  // Moving to another step keeps the keyboard up instead. A hidden holder
+  // takes focus while the old step's field is still there, so the name never
+  // shows focus on the way, and the new step's field takes it from the holder.
+  const keyboardHolderRef = useRef<ComponentRef<typeof TextInput>>(null);
   const moveFromOpenStep = () => {
-    if (!modelRef.current.openId) return;
-    movingToStep.current = true;
-    setTimeout(() => { movingToStep.current = false; }, MOVE_FOCUS_MS);
+    if (modelRef.current.openId) keyboardHolderRef.current?.focus();
   };
   const colors = useMemo(() => editorColors(theme, model.colorKey), [theme, model.colorKey]);
 
@@ -551,7 +548,6 @@ export function RoutineEditor({
             colorsOpen={colorsOpen}
             onChangeTitle={(title) => setModel((state) => setTitle(state, title))}
             onTitleFocus={() => {
-              if (movingToStep.current) return;
               setChips(null);
               setModel((state) => leaveOpenStep(state));
             }}
@@ -647,7 +643,6 @@ export function RoutineEditor({
                       scrollToId.current = id;
                       setModel((state) => pressEnter(state, id));
                     }}
-                    onFocus={() => { movingToStep.current = false; }}
                     onBlur={() => onStepBlur(row.localId)}
                     onClock={() => onClock(row.localId)}
                     onDone={finishEditing}
@@ -690,6 +685,7 @@ export function RoutineEditor({
       </ScrollView>
 
       <AddStepButton colors={colors} visible={fabVisible} bottom={fabBottom} onPress={add} />
+      <KeyboardHolder ref={keyboardHolderRef} />
 
       {wantsSave ? (
         <Animated.View
@@ -878,6 +874,29 @@ function DragPreview({
     </Animated.View>
   );
 }
+
+/**
+ * Holds the keyboard between one step's field and the next. It types like a
+ * step's field, so the keyboard doesn't change, and keeps nothing typed.
+ */
+const KeyboardHolder = forwardRef<TextInput>(function KeyboardHolder(_props, ref) {
+  return (
+    <TextInput
+      ref={ref}
+      testID="keyboard-holder"
+      value=""
+      multiline
+      submitBehavior="submit"
+      returnKeyType="done"
+      caretHidden
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+      style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1, padding: 0, opacity: 0 }}
+    />
+  );
+});
 
 function AddStepButton({
   colors,

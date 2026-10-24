@@ -55,7 +55,6 @@ export type StepRowProps = {
   onOpen: () => void;
   onChangeText: (text: string) => void;
   onEnter: () => void;
-  onFocus: () => void;
   onBlur: () => void;
   onClock: () => void;
   onDone: () => void;
@@ -254,7 +253,6 @@ export function StepRow(props: StepRowProps) {
                     returnKeyType="done"
                     onSubmitEditing={props.onEnter}
                     onChangeText={props.onChangeText}
-                    onFocus={props.onFocus}
                     onBlur={props.onBlur}
                     placeholder="Describe this step"
                     placeholderTextColor={colors.muted}
