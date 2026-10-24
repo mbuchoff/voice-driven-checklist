@@ -237,8 +237,10 @@ async function editLastStep() {
   await waitForDisplayed(byId(driver, 'timer-panel'));
   await byId(driver, 'timer-plus').click();
   await byId(driver, 'timer-done').click();
-  // Done returns to typing in the step; Save closes it and puts the keyboard away.
+  // Done returns to typing in the step. The Save bar sits under the keyboard;
+  // with the keyboard put away, Save closes the step and saves.
   await waitForDisplayed(byId(driver, 'item-text-9'));
+  await driver.hideKeyboard();
   await byId(driver, 'save').click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));
   await expectTopTitle(firstTitle);
@@ -538,6 +540,7 @@ scenario('create-delete: prepends a routine and deletes it from its editor', { t
   await byId(driver, 'add-step').click();
   await waitForDisplayed(byId(driver, 'item-text-0'));
   await byId(driver, 'item-text-0').setValue('Temporary step');
+  await driver.hideKeyboard();
   await byId(driver, 'save').click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));
   await expectTopTitle(temporaryTitle);
