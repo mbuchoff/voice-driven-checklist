@@ -19,7 +19,10 @@ type ChipLook = {
   gap: number;
 };
 
-/** The step's chips: they stretch to fill their line, with a ⋯ at the end. */
+/**
+ * The step's chips: "No timer", then the times, stretching to fill their line,
+ * with a ⋯ at the end.
+ */
 const STRIP_LOOK: ChipLook = { minHeight: 44, paddingHorizontal: 6, fontSize: 16, gap: 4 };
 /** The timer panel's quick picks: centered, no ⋯. */
 const PANEL_LOOK: ChipLook = { minHeight: 44, paddingHorizontal: 10, fontSize: 17, gap: 6 };
@@ -39,7 +42,8 @@ function Chip({
 }: {
   colors: EditorColors;
   look: ChipLook;
-  seconds: number;
+  /** A time, or null for "No timer". */
+  seconds: number | null;
   checked: boolean;
   /** Takes a share of the line's spare width. */
   grow?: boolean;
@@ -50,7 +54,7 @@ function Chip({
     <Pressable
       testID={testID}
       accessibilityRole="radio"
-      accessibilityLabel={formatTimerWords(seconds)}
+      accessibilityLabel={seconds ? formatTimerWords(seconds) : 'No timer'}
       accessibilityState={{ checked }}
       onPress={onPress}
       style={{
@@ -69,7 +73,7 @@ function Chip({
         numberOfLines={1}
         style={{ color: checked ? colors.ink : colors.text, fontSize: look.fontSize, fontWeight: '700' }}
       >
-        {formatTimerLong(seconds)}
+        {seconds ? formatTimerLong(seconds) : 'No timer'}
       </Text>
     </Pressable>
   );
@@ -79,24 +83,33 @@ function Chip({
  * Lays out candidate chips on one line: measures each chip and the room,
  * then keeps as many as fit (see fitChips). `candidates` should stay the
  * same array while the chips are showing, so the set doesn't change under
- * the finger.
+ * the finger. With `noTimer`, a "No timer" chip shares the line.
  */
 function useFittedChips(
   candidates: number[],
   look: ChipLook,
   moreWidth: number,
   measureId: string,
+  noTimer = false,
 ) {
   const [widths, setWidths] = useState<Record<number, number>>({});
+  const [noTimerWidth, setNoTimerWidth] = useState(0);
   const [room, setRoom] = useState(0);
   useEffect(() => setWidths({}), [candidates]);
-  const measured = candidates.every((time) => widths[time] != null) && room > 0;
+  const measured = candidates.every((time) => widths[time] != null) && room > 0
+    && (!noTimer || noTimerWidth > 0);
   const times = useMemo(
     () =>
       measured
-        ? fitChips(candidates, (time) => widths[time], room, look.gap, moreWidth)
+        ? fitChips(
+          candidates,
+          (time) => widths[time],
+          noTimer ? room - noTimerWidth - look.gap : room,
+          look.gap,
+          moreWidth,
+        )
         : null,
-    [candidates, look.gap, measured, moreWidth, room, widths],
+    [candidates, look.gap, measured, moreWidth, noTimer, noTimerWidth, room, widths],
   );
   const measurer = (colors: EditorColors) => (
     <View
@@ -117,12 +130,20 @@ function useFittedChips(
           <Chip colors={colors} look={look} seconds={time} checked={false} />
         </View>
       ))}
+      {noTimer ? (
+        <View
+          testID={`${measureId}-none`}
+          onLayout={(event) => setNoTimerWidth(event.nativeEvent.layout.width)}
+        >
+          <Chip colors={colors} look={look} seconds={null} checked={false} />
+        </View>
+      ) : null}
     </View>
   );
   return { times, measurer, setRoom };
 }
 
-/** A step's timer chips, folded open under the row by its clock. */
+/** An open step's timer chips, folded open under its words. */
 export function StepTimerChips({
   colors,
   open,
@@ -138,12 +159,12 @@ export function StepTimerChips({
   candidates: number[];
   selected: number | null;
   stepNumber: number;
-  onPick: (seconds: number) => void;
+  onPick: (seconds: number | null) => void;
   onMore: () => void;
   index: number;
 }) {
   const { times, measurer, setRoom } = useFittedChips(
-    candidates, STRIP_LOOK, MORE_WIDTH, `chip-measure-${index}`,
+    candidates, STRIP_LOOK, MORE_WIDTH, `chip-measure-${index}`, true,
   );
   const [contentHeight, setContentHeight] = useState(0);
   const height = useSharedValue(0);
@@ -185,6 +206,15 @@ export function StepTimerChips({
             gap: STRIP_LOOK.gap,
           }}
         >
+          <Chip
+            testID={`item-chip-${index}-none`}
+            colors={colors}
+            look={STRIP_LOOK}
+            seconds={null}
+            checked={!selected}
+            grow
+            onPress={() => onPick(null)}
+          />
           {(visibleTimes ?? []).map((time) => (
             <Chip
               key={time}

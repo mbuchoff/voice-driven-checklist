@@ -49,13 +49,14 @@ async function existing(database: Database, overrides: Partial<Parameters<typeof
 const HIDDEN = { includeHiddenElements: true };
 
 /** Jest doesn't lay out views; give the chip strip and its chips sizes. */
-function layOutChips(index: number, times: number[], chipWidth = 40, room = 330) {
+function layOutChips(index: number, times: number[], chipWidth = 40, room = 330, noTimerWidth = chipWidth) {
   fireEvent(screen.getByTestId(`chips-room-${index}`, HIDDEN), 'layout', {
     nativeEvent: { layout: { x: 0, y: 0, width: room + 10, height: 52 } },
   });
-  for (const time of times) {
-    fireEvent(screen.getByTestId(`chip-measure-${index}-${time}`, HIDDEN), 'layout', {
-      nativeEvent: { layout: { x: 0, y: 0, width: chipWidth, height: 36 } },
+  const widths: [string, number][] = [...times.map((time) => [String(time), chipWidth] as [string, number]), ['none', noTimerWidth]];
+  for (const [chip, width] of widths) {
+    fireEvent(screen.getByTestId(`chip-measure-${index}-${chip}`, HIDDEN), 'layout', {
+      nativeEvent: { layout: { x: 0, y: 0, width, height: 36 } },
     });
   }
 }
@@ -319,7 +320,7 @@ describe('RoutineEditor', () => {
 
       tapToEdit(1);
       fireEvent.changeText(screen.getByTestId('item-text-1'), '');
-      fireEvent.press(screen.getByTestId('item-done-1'));
+      fireEvent(screen.getByTestId('item-text-1'), 'submitEditing');
 
       expect(screen.getByTestId('item-label-1')).toHaveTextContent('Breathe');
       expect(screen.queryByTestId('save')).toBeNull();
@@ -391,7 +392,7 @@ describe('RoutineEditor', () => {
         back.mock.calls.findLast(([event]) => event === 'hardwareBackPress')![1]();
       });
 
-      fireEvent.press(screen.getByTestId('item-clock-1'));
+      tapToEdit(1);
       layOutChips(1, [30, 60, 120, 300]);
       fireEvent.press(screen.getByTestId('item-more-1'));
       expect(screen.getByTestId('timer-panel')).toBeOnTheScreen();
@@ -400,7 +401,7 @@ describe('RoutineEditor', () => {
 
       pressBack();
       expect(screen.queryByTestId('timer-panel')).toBeNull();
-      expect(screen.getByTestId('item-clock-1')).toHaveTextContent('1 min');
+      expect(screen.getByTestId('hero-count')).toHaveTextContent('2 steps · 1 min 30s timed');
 
       pressBack();
       expect(screen.getByText('Save your changes?')).toBeOnTheScreen();
@@ -411,7 +412,10 @@ describe('RoutineEditor', () => {
   });
 
   describe('timers', () => {
-    it('sets a timer from a chip, keeps it when its chip is tapped again, and remembers the time', async () => {
+    const chipLabels = (index: number) =>
+      within(screen.getByTestId(`item-chips-${index}`)).getAllByRole('radio').map((chip) => chip.props.accessibilityLabel);
+
+    it('shows an open step’s times under its words: No timer, then the times, then ⋯', async () => {
       const preferences = new MemoryDevicePreferenceStore({
         ...DEFAULT_DEVICE_PREFERENCES,
         recentTimerSeconds: [90],
@@ -419,35 +423,82 @@ describe('RoutineEditor', () => {
       const database = await setupDb();
       await renderEditor({ initialRoutine: await existing(database) }, { database, preferences });
 
-      fireEvent.press(screen.getByTestId('item-clock-1'));
+      tapToEdit(1);
       layOutChips(1, [90, 30, 60, 120]);
-      const chips = within(screen.getByTestId('item-chips-1'));
-      expect(chips.getAllByRole('radio').map((chip) => chip.props.accessibilityLabel)).toEqual([
-        '30 seconds', '1 minute', '1 minute 30 seconds', '2 minutes',
+
+      expect(chipLabels(1)).toEqual([
+        'No timer', '30 seconds', '1 minute', '1 minute 30 seconds', '2 minutes',
       ]);
+      expect(within(screen.getByTestId('item-chips-1')).getByRole('radio', { name: 'No timer' })).toBeChecked();
+      expect(screen.getByTestId('item-more-1')).toHaveProp('accessibilityLabel', 'More timer lengths');
+    });
 
-      fireEvent.press(screen.getByTestId('item-chip-1-90'));
-      expect(screen.getByTestId('item-clock-1')).toHaveTextContent('1 min 30s');
-      expect(screen.getByTestId('hero-count')).toHaveTextContent('2 steps · 2 min timed');
+    it('shows the times on a new step too', async () => {
+      await renderEditor();
+      fireEvent.press(screen.getByTestId('add-step'));
+      layOutChips(0, [30, 60, 120, 300]);
 
-      fireEvent.press(screen.getByTestId('item-clock-1'));
+      expect(chipLabels(0)).toEqual(['No timer', '30 seconds', '1 minute', '2 minutes', '5 minutes']);
+    });
+
+    it('sets a timer from a chip, keeps the step open with its times, and remembers the time', async () => {
+      const preferences = new MemoryDevicePreferenceStore({
+        ...DEFAULT_DEVICE_PREFERENCES,
+        recentTimerSeconds: [90],
+      });
+      const database = await setupDb();
+      await renderEditor({ initialRoutine: await existing(database) }, { database, preferences });
+      tapToEdit(1);
       layOutChips(1, [90, 30, 60, 120]);
+
       fireEvent.press(screen.getByTestId('item-chip-1-90'));
-      expect(screen.getByTestId('item-clock-1')).toHaveTextContent('1 min 30s');
+      expect(screen.getByTestId('hero-count')).toHaveTextContent('2 steps · 2 min timed');
+      expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
+      const chips = within(screen.getByTestId('item-chips-1'));
+      expect(chips.getByRole('radio', { name: '1 minute 30 seconds' })).toBeChecked();
+
+      // Tapping the chosen time again keeps it.
+      fireEvent.press(screen.getByTestId('item-chip-1-90'));
+      expect(screen.getByTestId('hero-count')).toHaveTextContent('2 steps · 2 min timed');
       await expect(preferences.load()).resolves.toMatchObject({ recentTimerSeconds: [90] });
     });
 
-    it('keeps the chips in place while they fold away', async () => {
+    it('takes a timer off with No timer', async () => {
       const database = await setupDb();
       await renderEditor({ initialRoutine: await existing(database) }, { database });
+      tapToEdit(0);
+      layOutChips(0, [30, 60, 120, 300]);
+
+      fireEvent.press(screen.getByTestId('item-chip-0-none'));
+
+      expect(screen.getByTestId('hero-count')).toHaveTextContent(/^2 steps$/);
+      expect(within(screen.getByTestId('item-chips-0')).getByRole('radio', { name: 'No timer' })).toBeChecked();
+      expect(screen.getByTestId('item-text-0')).toBeOnTheScreen();
+    });
+
+    it('opens a timed step from its time, like its words', async () => {
+      const database = await setupDb();
+      await renderEditor({ initialRoutine: await existing(database) }, { database });
+
       fireEvent.press(screen.getByTestId('item-clock-0'));
       layOutChips(0, [30, 60, 120, 300]);
 
-      fireEvent.press(screen.getByTestId('item-clock-0'));
+      expect(screen.getByTestId('item-text-0')).toBeOnTheScreen();
+      expect(chipLabels(0)).toContain('30 seconds');
+    });
 
-      // Folding takes a moment; the times fold with ⋯ rather than vanishing.
+    it('keeps the chips in place while they fold away with their step', async () => {
+      const database = await setupDb();
+      await renderEditor({ initialRoutine: await existing(database) }, { database });
+      tapToEdit(0);
+      layOutChips(0, [30, 60, 120, 300]);
+
+      fireEvent(screen.getByTestId('item-text-0'), 'submitEditing');
+
+      // Folding takes a moment; the chips fold with ⋯ rather than vanishing.
+      expect(screen.queryByTestId('item-text-0')).toBeNull();
       expect(screen.getAllByTestId(/^item-chip-0-/, HIDDEN).map((chip) => chip.props.testID)).toEqual([
-        'item-chip-0-30', 'item-chip-0-60', 'item-chip-0-120', 'item-chip-0-300',
+        'item-chip-0-none', 'item-chip-0-30', 'item-chip-0-60', 'item-chip-0-120', 'item-chip-0-300',
       ]);
     });
 
@@ -459,7 +510,7 @@ describe('RoutineEditor', () => {
       const database = await setupDb();
       await renderEditor({ initialRoutine: await existing(database) }, { database, preferences });
 
-      fireEvent.press(screen.getByTestId('item-clock-0'));
+      tapToEdit(0);
       layOutChips(0, [30, 600, 700, 800]);
 
       expect(screen.getByTestId('item-chip-0-30')).toBeOnTheScreen();
@@ -474,11 +525,13 @@ describe('RoutineEditor', () => {
       const database = await setupDb();
       await renderEditor({ initialRoutine: await existing(database) }, { database, preferences });
 
-      fireEvent.press(screen.getByTestId('item-clock-1'));
-      // Four 62 dp chips, three 4 dp gaps and ⋯ (36 + 4) need 300 dp.
-      layOutChips(1, [1215, 1335, 1455, 1545], 62, 299);
+      tapToEdit(1);
+      // No timer (70 + 4), four 62 dp chips with three 4 dp gaps, and ⋯ (44 + 4)
+      // need 382 dp.
+      layOutChips(1, [1215, 1335, 1455, 1545], 62, 381, 70);
 
-      expect(within(screen.getByTestId('item-chips-1')).getAllByRole('radio')).toHaveLength(3);
+      expect(chipLabels(1)).toHaveLength(4);
+      expect(chipLabels(1)[0]).toBe('No timer');
       expect(screen.queryByTestId('item-chip-1-1545')).toBeNull();
     });
 
@@ -486,7 +539,7 @@ describe('RoutineEditor', () => {
       const preferences = new MemoryDevicePreferenceStore();
       const database = await setupDb();
       await renderEditor({ initialRoutine: await existing(database) }, { database, preferences });
-      fireEvent.press(screen.getByTestId('item-clock-1'));
+      tapToEdit(1);
       layOutChips(1, [30, 60, 120, 300]);
       fireEvent.press(screen.getByTestId('item-more-1'));
       layOutPanelChips([30, 60, 120, 300]);
@@ -509,7 +562,10 @@ describe('RoutineEditor', () => {
 
       fireEvent.press(screen.getByTestId('timer-done'));
       expect(screen.queryByTestId('timer-panel')).toBeNull();
-      expect(screen.getByTestId('item-clock-1')).toHaveTextContent('2 min');
+      // Back to typing, with the step's times showing its new one.
+      expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
+      layOutChips(1, [120, 30, 60, 300]);
+      expect(within(screen.getByTestId('item-chips-1')).getByRole('radio', { name: '2 minutes' })).toBeChecked();
       await waitFor(async () => {
         await expect(preferences.load()).resolves.toMatchObject({ recentTimerSeconds: [120] });
       });
@@ -518,7 +574,7 @@ describe('RoutineEditor', () => {
     it('lets minus take a timer to Off', async () => {
       const database = await setupDb();
       await renderEditor({ initialRoutine: await existing(database) }, { database });
-      fireEvent.press(screen.getByTestId('item-clock-0'));
+      tapToEdit(0);
       layOutChips(0, [30, 60, 120, 300]);
       fireEvent.press(screen.getByTestId('item-more-0'));
 

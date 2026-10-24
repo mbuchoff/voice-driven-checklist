@@ -32,8 +32,12 @@ export const SWIPE_DELETE_SHARE = 0.4;
 const SWIPE_MS = 200;
 /** The row is removed once it has flown off. */
 const FLING_MS = 220;
-/** How fast the number and ✓ move when a step opens or closes. */
+/** How fast the number and time move when a step opens or closes. */
 const OPEN_MS = 220;
+/** The time fades out a little faster than it makes room. */
+const TIME_FADE_MS = 160;
+/** The width the time shrinks from as it makes room, like the prototype's max-width. */
+const TIME_MAX_WIDTH = 160;
 /** Where an open step's words sit from the row's edge. */
 export const EDIT_INSET = 18;
 
@@ -46,7 +50,6 @@ export type StepRowProps = {
   text: string;
   timerSeconds: number | null;
   open: boolean;
-  chipsOpen: boolean;
   first: boolean;
   hidden: boolean;
   holdGesture: GestureType;
@@ -56,18 +59,18 @@ export type StepRowProps = {
   onChangeText: (text: string) => void;
   onEnter: () => void;
   onBlur: () => void;
-  onClock: () => void;
-  onDone: () => void;
   onDelete: (height: number) => void;
   onMoveEarlier: () => void;
   onMoveLater: () => void;
-  /** The step's timer chips, folded open under the row by its clock. */
+  /** The step's timer chips, folded open under its words while it's open. */
   chips: ReactNode;
 };
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 export function StepRow(props: StepRowProps) {
   const {
-    colors, index, number, localId, text, timerSeconds, open, chipsOpen, first,
+    colors, index, number, localId, text, timerSeconds, open, first,
     hidden, holdGesture,
   } = props;
   const rowWidth = useSharedValue(0);
@@ -75,10 +78,12 @@ export function StepRow(props: StepRowProps) {
   const translateX = useSharedValue(0);
   const swipeDirection = useSharedValue(0);
   const openProgress = useSharedValue(open ? 1 : 0);
+  const timeOpacity = useSharedValue(open ? 0 : 1);
 
   useEffect(() => {
     openProgress.value = withTiming(open ? 1 : 0, { duration: OPEN_MS, easing: Easing.ease });
-  }, [open, openProgress]);
+    timeOpacity.value = withTiming(open ? 0 : 1, { duration: TIME_FADE_MS, easing: Easing.ease });
+  }, [open, openProgress, timeOpacity]);
 
   const deleteRow = () => props.onDelete(rowHeight.current);
   const deleteAfterFling = () => {
@@ -141,17 +146,14 @@ export function StepRow(props: StepRowProps) {
     opacity: 1 - openProgress.value,
     transform: [{ scale: 1 - 0.8 * openProgress.value }],
   }));
-  const checkStyle = useAnimatedStyle(() => ({
-    width: 40 * openProgress.value,
-    marginLeft: -8 * (1 - openProgress.value),
-    opacity: openProgress.value,
-    transform: [{ scale: 0.5 + 0.5 * openProgress.value }],
+  // The time slides away while its step is open, giving the words its room
+  // (and the row's gap before it).
+  const timeStyle = useAnimatedStyle(() => ({
+    maxWidth: TIME_MAX_WIDTH * (1 - openProgress.value),
+    paddingHorizontal: 8 * (1 - openProgress.value),
+    marginLeft: -8 * openProgress.value,
+    opacity: timeOpacity.value,
   }));
-
-  const timed = !!timerSeconds;
-  const clockLabel = timed
-    ? `Timer for step ${number}: ${formatTimerWords(timerSeconds)}`
-    : `Add a timer to step ${number}`;
 
   return (
     <View
@@ -298,60 +300,35 @@ export function StepRow(props: StepRowProps) {
               </View>
             </View>
           </GestureDetector>
-          <Pressable
-            testID={`item-clock-${index}`}
-            accessibilityRole="button"
-            accessibilityLabel={clockLabel}
-            accessibilityState={{ expanded: chipsOpen }}
-            onPress={props.onClock}
-            hitSlop={timed ? { top: 7, bottom: 7 } : undefined}
-            style={{
-              height: timed ? 34 : 40,
-              minWidth: timed ? 0 : 40,
-              paddingHorizontal: 8,
-              borderRadius: 20,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
-              backgroundColor: chipsOpen ? colors.surface : timed ? colors.fill : 'transparent',
-              borderWidth: chipsOpen ? 1.5 : 0,
-              borderColor: colors.ink,
-            }}
-          >
-            <Icon
-              name="clock"
-              color={chipsOpen || timed ? colors.ink : colors.muted}
-              size={timed ? 15 : 18}
-              strokeWidth={timed ? 2.5 : 2}
-            />
-            {timed ? (
-              <Text style={{ color: colors.ink, fontSize: 15, fontWeight: '800' }}>
+          {timerSeconds ? (
+            <AnimatedPressable
+              testID={`item-clock-${index}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Timer for step ${number}: ${formatTimerWords(timerSeconds)}`}
+              accessibilityElementsHidden={open}
+              importantForAccessibility={open ? 'no-hide-descendants' : 'yes'}
+              pointerEvents={open ? 'none' : 'auto'}
+              onPress={props.onOpen}
+              hitSlop={{ top: 7, bottom: 7 }}
+              style={[
+                {
+                  height: 34,
+                  borderRadius: 20,
+                  overflow: 'hidden',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  backgroundColor: colors.fill,
+                },
+                timeStyle,
+              ]}
+            >
+              <Icon name="clock" color={colors.ink} size={15} strokeWidth={2.5} />
+              <Text numberOfLines={1} ellipsizeMode="clip" style={{ color: colors.ink, fontSize: 15, fontWeight: '800' }}>
                 {formatTimerLong(timerSeconds)}
               </Text>
-            ) : null}
-          </Pressable>
-          <Animated.View style={[{ height: 40, overflow: 'hidden' }, checkStyle]}>
-            <Pressable
-              testID={`item-done-${index}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Done editing step ${number}`}
-              accessibilityElementsHidden={!open}
-              importantForAccessibility={open ? 'yes' : 'no-hide-descendants'}
-              disabled={!open}
-              onPress={props.onDone}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                backgroundColor: colors.ink,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Icon name="check" color={colors.onInk} size={18} strokeWidth={2.6} />
-            </Pressable>
-          </Animated.View>
+            </AnimatedPressable>
+          ) : null}
         </View>
         {props.chips}
       </Animated.View>

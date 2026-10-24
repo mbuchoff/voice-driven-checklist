@@ -198,7 +198,6 @@ export function RoutineEditor({
     scrollRef,
     onDragStart: () => {
       releaseOpenStep();
-      setChips(null);
       expireAllUndoRows();
       setModel((state) => leaveOpenStep(state));
     },
@@ -248,10 +247,17 @@ export function RoutineEditor({
     return () => cancelAnimationFrame(frame);
   }, [model.openId, keyboardClearance, scrollOpenStepIntoView]);
 
-  // Chips only show under the open step.
+  // An open step shows its times, which stay the same while it's open so
+  // they don't change under the finger.
+  const recentTimes = useRef(preferences.recentTimerSeconds);
+  recentTimes.current = preferences.recentTimerSeconds;
+  const chipsFor = useCallback((id: string | null): ChipsState | null => {
+    const step = id ? realSteps(modelRef.current).find((candidate) => candidate.localId === id) : undefined;
+    return step ? { stepId: step.localId, candidates: chipCandidates(step.timerSeconds, recentTimes.current) } : null;
+  }, []);
   useEffect(() => {
-    if (chips && chips.stepId !== model.openId) setChips(null);
-  }, [chips, model.openId]);
+    setChips(chipsFor(model.openId));
+  }, [chipsFor, model.openId]);
 
   useEffect(() => () => {
     for (const timer of Object.values(undoTimers.current)) clearTimeout(timer);
@@ -276,15 +282,8 @@ export function RoutineEditor({
   const add = () => {
     const id = uuidv4();
     setColorsOpen(false);
-    setChips(null);
     scrollToId.current = id;
     setModel((state) => addStep(state, id));
-  };
-
-  const finishEditing = () => {
-    Keyboard.dismiss();
-    setChips(null);
-    setModel((state) => leaveOpenStep(state));
   };
 
   const onStepBlur = (id: string) => {
@@ -293,29 +292,15 @@ export function RoutineEditor({
       if (keepOpenOnBlur.current) return;
       const focused = inputRefs.current[id]?.isFocused?.();
       if (!focused && modelRef.current.openId === id) {
-        setChips(null);
         setModel((state) => (state.openId === id ? leaveOpenStep(state) : state));
       }
     }, 0);
   };
 
-  const onClock = (id: string) => {
-    if (chips?.stepId === id && model.openId === id) {
-      setChips(null);
-      return;
-    }
-    const step = steps.find((candidate) => candidate.localId === id);
-    if (!step) return;
-    if (model.openId !== id) moveFromOpenStep();
-    setColorsOpen(false);
-    setModel((state) => openStep(state, id));
-    setChips({ stepId: id, candidates: chipCandidates(step.timerSeconds, preferences.recentTimerSeconds) });
-  };
-
-  const pickChip = (id: string, seconds: number) => {
+  // The times stay while the step is open; "No timer" isn't remembered.
+  const pickChip = (id: string, seconds: number | null) => {
     setModel((state) => setStepTimer(state, id, seconds));
-    void rememberTimerSeconds(seconds);
-    setChips(null);
+    if (seconds) void rememberTimerSeconds(seconds);
   };
 
   const openPanel = (id: string) => {
@@ -340,6 +325,8 @@ export function RoutineEditor({
     if (value && value !== panel.openedValue) void rememberTimerSeconds(value);
     setPanel(null);
     const stepId = panel.stepId;
+    // Back to typing, with the step's times again, its new one among them.
+    if (modelRef.current.openId === stepId) setChips(chipsFor(stepId));
     requestAnimationFrame(() => {
       keepOpenOnBlur.current = false;
       if (modelRef.current.openId === stepId) focusEditorInput(inputRefs.current[stepId]);
@@ -420,7 +407,6 @@ export function RoutineEditor({
 
   const back = () => {
     const settled = settle();
-    setChips(null);
     if (isDirty(settled, baseline)) setSheet('leave');
     else onCancel();
   };
@@ -547,10 +533,7 @@ export function RoutineEditor({
             colorLabel={colorLabel}
             colorsOpen={colorsOpen}
             onChangeTitle={(title) => setModel((state) => setTitle(state, title))}
-            onTitleFocus={() => {
-              setChips(null);
-              setModel((state) => leaveOpenStep(state));
-            }}
+            onTitleFocus={() => setModel((state) => leaveOpenStep(state))}
             onOpenColors={() => {
               settle();
               setColorsOpen(true);
@@ -628,7 +611,6 @@ export function RoutineEditor({
                     text={row.text}
                     timerSeconds={row.timerSeconds}
                     open={isOpen}
-                    chipsOpen={chipsOpen}
                     first={rowIndex === 0 && !slot}
                     hidden={isActive}
                     holdGesture={reorder.gestureFor({ localId: row.localId, text: row.text }, index)}
@@ -644,8 +626,6 @@ export function RoutineEditor({
                       setModel((state) => pressEnter(state, id));
                     }}
                     onBlur={() => onStepBlur(row.localId)}
-                    onClock={() => onClock(row.localId)}
-                    onDone={finishEditing}
                     onDelete={(height) => removeStep(row.localId, height)}
                     onMoveEarlier={() => reorder.moveItemByAction(index, -1)}
                     onMoveLater={() => reorder.moveItemByAction(index, 1)}
@@ -669,7 +649,7 @@ export function RoutineEditor({
           </View>
 
           <Text style={{ color: colors.muted2, fontSize: 15, lineHeight: 20, paddingHorizontal: 4 }}>
-            Tap ✓ when you’re done with a step; your typing is kept either way.
+            Press ✓ on the keyboard when you’re done with a step; your typing is kept either way.
           </Text>
         </View>
         {reorder.dragPreview ? (

@@ -225,22 +225,20 @@ async function editLastStep() {
     inputRect.y + inputRect.height <= windowRect.height,
     'focused editor row should remain above the resized keyboard viewport',
   );
-  // A timer from the step's chips, and one from the timer panel.
-  // Chips open under the step and the list scrolls them above the keyboard;
-  // tap them once they've stopped moving.
-  await byId(driver, 'item-clock-10').click();
-  const thirtySeconds = await waitForDisplayed(byLabel(driver, '30 seconds'));
+  // A timer from the open step's chips, and one from the timer panel.
+  // The times show under the open step and the list scrolls them above the
+  // keyboard; tap them once they've stopped moving.
+  const thirtySeconds = await waitForDisplayed(byId(driver, 'item-chip-10-30'));
   await (await waitForSettled(driver, thirtySeconds)).click();
-  await byId(driver, 'item-clock-9').click();
+  // The step stays open; tapping the step above moves to it, times and all.
+  await (await scrollToLabel(driver, `Edit step 10: ${fixture.checklists[0].items[9].text}`)).click();
   const more = await waitForDisplayed(byId(driver, 'item-more-9'));
   await (await waitForSettled(driver, more)).click();
   await waitForDisplayed(byId(driver, 'timer-panel'));
   await byId(driver, 'timer-plus').click();
   await byId(driver, 'timer-done').click();
-  // Done returns to typing in the step; ✓ closes it and puts the keyboard away.
-  await waitForDisplayed(byId(driver, 'item-done-9'));
-  await byId(driver, 'item-done-9').click();
-  await waitForDisplayed(byId(driver, 'save'));
+  // Done returns to typing in the step; Save closes it and puts the keyboard away.
+  await waitForDisplayed(byId(driver, 'item-text-9'));
   await byId(driver, 'save').click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));
   await expectTopTitle(firstTitle);
@@ -540,7 +538,6 @@ scenario('create-delete: prepends a routine and deletes it from its editor', { t
   await byId(driver, 'add-step').click();
   await waitForDisplayed(byId(driver, 'item-text-0'));
   await byId(driver, 'item-text-0').setValue('Temporary step');
-  await tapLabel(driver, 'Done editing step 1');
   await byId(driver, 'save').click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));
   await expectTopTitle(temporaryTitle);
