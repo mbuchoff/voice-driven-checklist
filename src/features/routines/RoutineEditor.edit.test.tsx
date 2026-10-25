@@ -10,7 +10,7 @@ import * as Reanimated from 'react-native-reanimated';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
 import { RoutineEditor } from './RoutineEditor';
-import { STEP_MAKE_ROOM, STEP_MAKE_ROOM_MS } from './useStepReorder';
+import { STEP_MAKE_ROOM, STEP_MAKE_ROOM_MS } from './motion';
 import {
   beginRowDrag,
   cancelRowDrag,

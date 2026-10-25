@@ -10,7 +10,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import type { EditorColors } from '../editorColors';
 import { useUndoTimeout } from '../useUndoTimeout';
-import { CSS_EASE } from './motion';
+import { CSS_EASE } from '../motion';
 
 /** A swiped-away step's UNDO stays this long (longer if TalkBack asks). */
 export const STEP_UNDO_MS = 5000;

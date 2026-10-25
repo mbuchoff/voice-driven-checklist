@@ -16,8 +16,6 @@ import {
 import { Gesture, ScrollView } from 'react-native-gesture-handler';
 import {
   cancelAnimation,
-  Easing,
-  LinearTransition,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -27,6 +25,7 @@ import {
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 
 import { getEdgeAutoscrollDelta as calculateEdgeAutoscrollDelta } from './edgeAutoscroll';
+import { QUICK_THEN_GENTLE, STEP_MAKE_ROOM_MS } from './motion';
 
 export const STEP_REORDER_HOLD_MS = 350;
 /** How far a finger may drift (on either axis) while holding a step. */
@@ -38,14 +37,6 @@ export const STEP_PASS_VIBRATION_MS = 8;
 const EDGE_AUTOSCROLL_THRESHOLD = 70;
 const EDGE_AUTOSCROLL_MAX_SPEED = 840;
 const MAX_AUTOSCROLL_FRAME_MS = 32;
-const REORDER_ROW_EASING = Easing.bezier(0.22, 0.75, 0.2, 1);
-/**
- * How the steps a dragged step passes, and its slot, glide to make room:
- * 26D's spring. A layout transition starts in the same commit that moves a
- * step, so a drop's new order lands without a stray frame.
- */
-export const STEP_MAKE_ROOM_MS = 340;
-export const STEP_MAKE_ROOM = LinearTransition.duration(STEP_MAKE_ROOM_MS).easing(Easing.bezier(0.34, 1.4, 0.5, 1));
 
 export function getEdgeAutoscrollDelta(
   distanceIntoEdge: number,
@@ -442,13 +433,13 @@ export function useStepReorder({
     if (current.from !== current.to) onMove(current.from, current.to);
     dragOffset.value = withTiming(targetOffset, {
       duration: STEP_REORDER_RELEASE_MS,
-      easing: REORDER_ROW_EASING,
+      easing: QUICK_THEN_GENTLE,
     });
     dragPreviewOpacity.value = withTiming(
       0,
       {
         duration: STEP_REORDER_RELEASE_MS,
-        easing: REORDER_ROW_EASING,
+        easing: QUICK_THEN_GENTLE,
       },
       (finished) => {
         releaseDragClaim(

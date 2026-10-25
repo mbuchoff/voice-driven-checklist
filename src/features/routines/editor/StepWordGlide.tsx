@@ -11,7 +11,7 @@ import Animated, {
 
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { cssEase } from './motion';
+import { cssEase, quickThenGentle } from '../motion';
 import { OPEN_BOX_SHIFT, STEP_TEXT_BOX, STEP_WORDS, TEXT_PAD } from './stepRowMetrics';
 import {
   fadeThrough,
@@ -23,8 +23,6 @@ import {
   type WordSpot,
 } from './wordGlidePlan';
 
-/** Round 27's "quick, then gentle" for the words (the box's height uses CSS's ease). */
-const QUICK_THEN_GENTLE = Easing.bezierFn(0.22, 0.75, 0.2, 1);
 
 type Lefts = (number | undefined)[];
 export type Glide = { plan: WordMove[]; after: WordSpot[]; linePitch: number; fromHeight: number; toHeight: number; length: number };
@@ -282,7 +280,7 @@ function GlidingWord({
   clock: SharedValue<number>;
 }) {
   const style = useAnimatedStyle(() => {
-    const p = wordProgress(clock.value, index, QUICK_THEN_GENTLE);
+    const p = wordProgress(clock.value, index, quickThenGentle);
     if (move.kind === 'slide') {
       return {
         opacity: 1,

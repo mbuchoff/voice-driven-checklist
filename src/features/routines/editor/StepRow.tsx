@@ -6,8 +6,8 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
-import { STEP_MAKE_ROOM, STEP_REORDER_HOLD_MS } from '../useStepReorder';
-import { CSS_EASE, STEP_OPEN_MS } from './motion';
+import { CSS_EASE, STEP_MAKE_ROOM, STEP_OPEN_MS } from '../motion';
+import { STEP_REORDER_HOLD_MS } from '../useStepReorder';
 import { NumberBadge } from './NumberBadge';
 import {
   BADGE_SIZE,

@@ -1,7 +1,8 @@
 import { Pressable, Text } from 'react-native';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
 import type { EditorColors } from '../editorColors';
+import { FADE_IN, FADE_OUT } from '../motion';
 
 /** "Create routine" or "Save changes", shown while saving would change something. */
 export function SaveBar({
@@ -21,8 +22,8 @@ export function SaveBar({
 }) {
   return (
     <Animated.View
-      entering={FadeIn.duration(150)}
-      exiting={FadeOut.duration(75)}
+      entering={FADE_IN}
+      exiting={FADE_OUT}
       onLayout={(event) => onHeight(event.nativeEvent.layout.height)}
       style={{
         paddingTop: 12,

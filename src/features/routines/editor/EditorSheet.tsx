@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react';
 import { Pressable, Text, View, type ViewStyle } from 'react-native';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { EditorColors } from '../editorColors';
+import { FADE_IN, FADE_OUT } from '../motion';
 
 // Sheets fade in over 150 ms and out over 75 ms, like the prototype's.
-const ENTER = FadeIn.duration(150);
-const EXIT = FadeOut.duration(75);
 
 /** A bottom sheet over a dimmed screen; tapping the dim area calls onDismiss. */
 export function EditorSheet({
@@ -26,7 +25,7 @@ export function EditorSheet({
   const insets = useSafeAreaInsets();
   return (
     <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 30 }}>
-      <Animated.View entering={ENTER} exiting={EXIT} style={{ flex: 1 }}>
+      <Animated.View entering={FADE_IN} exiting={FADE_OUT} style={{ flex: 1 }}>
         <Pressable
           testID={testID ? `${testID}-scrim` : undefined}
           accessible={false}
@@ -35,8 +34,8 @@ export function EditorSheet({
         />
       </Animated.View>
       <Animated.View
-        entering={ENTER}
-        exiting={EXIT}
+        entering={FADE_IN}
+        exiting={FADE_OUT}
         testID={testID}
         accessibilityViewIsModal
         accessibilityLabel={accessibilityLabel}

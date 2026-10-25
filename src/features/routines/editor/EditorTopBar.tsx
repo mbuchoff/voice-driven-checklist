@@ -1,8 +1,6 @@
 import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import Animated, {
-  FadeIn,
-  FadeOut,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
@@ -12,6 +10,7 @@ import Animated, {
 import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
+import { FADE_IN, FADE_OUT } from '../motion';
 import { IconButton } from './controls';
 
 const FOLD_MS = 180;
@@ -105,7 +104,7 @@ export function EditorTopBar({
         </View>
         <View style={{ width: 44, height: 44 }}>
           {canRun ? (
-            <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(75)}>
+            <Animated.View entering={FADE_IN} exiting={FADE_OUT}>
               <IconButton
                 label="Start a run"
                 testID="bar-play"

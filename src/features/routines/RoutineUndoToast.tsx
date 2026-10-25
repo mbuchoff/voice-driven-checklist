@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { AccessibilityInfo, Pressable, Text } from 'react-native';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Palette } from '@/src/theme/palette';
 
+import { FADE_IN, FADE_OUT } from './motion';
 import { useUndoTimeout } from './useUndoTimeout';
 
 /** How long UNDO is offered (longer if Android's accessibility timeout asks). */
@@ -40,8 +41,8 @@ export function RoutineUndoToast({
   return (
     <Animated.View
       testID="routine-undo-toast"
-      entering={FadeIn.duration(150)}
-      exiting={FadeOut.duration(75)}
+      entering={FADE_IN}
+      exiting={FADE_OUT}
       accessibilityLiveRegion="polite"
       style={{
         position: 'absolute',

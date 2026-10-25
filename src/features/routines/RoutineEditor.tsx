@@ -39,7 +39,6 @@ import { RoutineHeroCard } from './editor/RoutineHeroCard';
 import { DeletedStepRow } from './editor/DeletedStepRow';
 import { StepRow } from './editor/StepRow';
 import { KeyboardHolder, useStepFocus } from './editor/stepFocus';
-import { CHIP_FOLD_MS, STEP_OPEN_MS } from './editor/motion';
 import { chipStripRoom } from './editor/stepRowMetrics';
 import { StepTimerChips, useChipWidths } from './editor/TimerChips';
 import { TimerPanel } from './editor/TimerPanel';
@@ -86,7 +85,8 @@ import {
 } from './timers';
 import type { DeletedRoutine, Routine } from './types';
 import { scrollToKeepAboveKeyboard } from './keepAboveKeyboard';
-import { STEP_MAKE_ROOM, useStepReorder } from './useStepReorder';
+import { CHIP_FOLD_MS, STEP_MAKE_ROOM, STEP_OPEN_MS } from './motion';
+import { useStepReorder } from './useStepReorder';
 
 const EDITOR_KEYBOARD_OFFSET = 24;
 const NO_CANDIDATES: number[] = [];

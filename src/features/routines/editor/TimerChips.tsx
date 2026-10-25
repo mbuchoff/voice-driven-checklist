@@ -11,7 +11,7 @@ import { Icon } from '@/src/components/Icon';
 import type { EditorColors } from '../editorColors';
 import { formatTimerLong, formatTimerWords } from '../timerFormat';
 import { fitChips } from '../timers';
-import { CHIP_FOLD_MS, CSS_EASE } from './motion';
+import { CHIP_FOLD_MS, CSS_EASE } from '../motion';
 import { CHIP_STRIP_INSET } from './stepRowMetrics';
 
 type ChipLook = {

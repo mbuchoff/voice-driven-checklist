@@ -53,6 +53,7 @@ import {
 import type { LibraryRoutine } from './types';
 import { mapRoutineSlots, useRoutineDragState, type RoutineDragState, type SlotMap } from './useRoutineDragState';
 import { useRoutinePressGuard } from './useRoutinePressGuard';
+import { QUICK_THEN_GENTLE } from './motion';
 
 const CARD_MOVE_DURATION_MS = 190;
 const RELEASE_DURATION_MS = 220;
@@ -60,7 +61,6 @@ const SWAY_RESPONSE_MS = 72;
 const MAX_TILT_DEGREES = 9;
 const SETTLE_DELAY_MS = 80;
 const PRESS_SUPPRESSION_MS = 400;
-const MOVE_EASING = Easing.bezier(0.22, 0.75, 0.2, 1);
 function displaceSlots(
   initialSlots: SlotMap,
   from: number,
@@ -177,7 +177,7 @@ function RoutinePosition({
             ? startX.value + dragX.value
             : withTiming(destination.x, {
                 duration: CARD_MOVE_DURATION_MS,
-                easing: MOVE_EASING,
+                easing: QUICK_THEN_GENTLE,
               }),
         },
         {
@@ -187,7 +187,7 @@ function RoutinePosition({
               dragScrollDelta.value
             : withTiming(destination.y, {
                 duration: CARD_MOVE_DURATION_MS,
-                easing: MOVE_EASING,
+                easing: QUICK_THEN_GENTLE,
               }),
         },
         { scale: active ? dragLift.value : 1 },
