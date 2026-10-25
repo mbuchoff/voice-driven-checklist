@@ -1,6 +1,5 @@
 import {
   Fragment,
-  forwardRef,
   useCallback,
   useEffect,
   useMemo,
@@ -49,6 +48,7 @@ import {
 import { RoutineHeroCard } from './editor/RoutineHeroCard';
 import { DeletedStepRow, StepRow } from './editor/StepRow';
 import { NumberBadge } from './editor/NumberBadge';
+import { KeyboardHolder, useStepFocus } from './editor/stepFocus';
 import { STEP_WORDS, TEXT_PAD } from './editor/stepRowMetrics';
 import { StepTimerChips } from './editor/TimerChips';
 import { TimerPanel } from './editor/TimerPanel';
@@ -114,10 +114,6 @@ export type RoutineEditorProps = {
   onCancel: () => void;
 };
 
-export function focusEditorInput(input: { focus: () => void } | null) {
-  input?.focus();
-}
-
 type PanelState = {
   stepId: string;
   openedValue: number | null;
@@ -131,30 +127,28 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { preferences, rememberTimerSeconds } = useDevicePreferences();
-  const [model, setModel] = useState<EditorState>(() =>
-    createEditorState(mode),
-  );
+  const [model, setModel] = useState<EditorState>(() => createEditorState(mode));
   const [baseline] = useState(() => editorSnapshot(model));
+  // Every change goes through `update`, so this is always the latest model,
+  // even before it renders.
   const modelRef = useRef(model);
-  modelRef.current = model;
-  // When the focused field disappears, Android hands focus to the next
-  // focusable view (often the name) and keeps the keyboard up. A step that
-  // closes lets go of the keyboard while its field is still there.
-  const releaseOpenStep = () => {
-    if (modelRef.current.openId) Keyboard.dismiss();
+  const update = (change: (state: EditorState) => EditorState): EditorState => {
+    const next = change(modelRef.current);
+    modelRef.current = next;
+    setModel(next);
+    return next;
   };
-  // A tap that opens a step hands the keyboard to a hidden holder first, and
-  // the step's field takes it from the holder once it exists. Android ignores
-  // a request to show the keyboard for a field it hasn't laid out yet, and
-  // moving from another step this way keeps the keyboard up while the old
-  // field is still there, so the name never shows focus on the way.
-  const keyboardHolderRef = useRef<ComponentRef<typeof TextInput>>(null);
-  const holdKeyboard = () => keyboardHolderRef.current?.focus();
+  const focus = useStepFocus(model.openId);
+  /** A tap or Enter: the model changes and the keyboard follows the open step. */
+  const updateAndHandOff = (change: (state: EditorState) => EditorState) => {
+    const from = modelRef.current.openId;
+    focus.handOff(from, update(change).openId);
+  };
+  const recent = preferences.recentTimerSeconds;
   const colors = useMemo(() => editorColors(theme, model.colorKey), [theme, model.colorKey]);
 
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const titleRef = useRef<ComponentRef<typeof TextInput>>(null);
-  const inputRefs = useRef<Record<string, ComponentRef<typeof TextInput> | null>>({});
   const viewportTop = useRef(0);
   const scrollY = useRef(0);
   const keyboardTop = useRef<number | null>(null);
@@ -165,7 +159,6 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const groupY = useRef(0);
   const rowLayouts = useRef<Record<string, { y: number; height: number }>>({});
   const scrollToId = useRef<string | null>(null);
-  const keepOpenOnBlur = useRef(false);
 
   const [panel, setPanel] = useState<PanelState | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
@@ -185,12 +178,12 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
 
   const reorder = useStepReorder({
     items: steps.map(({ localId, text }) => ({ localId, text })),
-    onMove: (from, to) => setModel((state) => moveStep(state, from, to)),
+    onMove: (from, to) => update((state) => moveStep(state, from, to)),
     scrollRef,
     onDragStart: () => {
+      // The keyboard has already been let go of.
       const reshapes = !!modelRef.current.openId || modelRef.current.rows.some((row) => row.kind === 'deleted');
-      releaseOpenStep();
-      setModel((state) => leaveOpenStep(expireDeletedSteps(state)));
+      update((state) => leaveOpenStep(expireDeletedSteps(state)));
       return reshapes;
     },
   });
@@ -228,12 +221,6 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   }, []);
 
   useEffect(() => {
-    if (!model.openId) return;
-    const frame = requestAnimationFrame(() => focusEditorInput(inputRefs.current[model.openId!]));
-    return () => cancelAnimationFrame(frame);
-  }, [model.openId]);
-
-  useEffect(() => {
     if (!model.openId || keyboardClearance <= 0) return;
     const frame = requestAnimationFrame(scrollOpenStepIntoView);
     return () => cancelAnimationFrame(frame);
@@ -241,55 +228,47 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
 
   // Before a sheet opens or the editor leaves: a native tap doesn't blur
   // the field being typed in, so the keyboard would stay up over the sheet.
-  const settle = useCallback((): EditorState => {
+  const settle = (): EditorState => {
     Keyboard.dismiss();
-    const settled = leaveOpenStep(modelRef.current);
-    modelRef.current = settled;
-    setModel(settled);
-    return settled;
-  }, []);
+    return update(leaveOpenStep);
+  };
 
   const open = (id: string) => {
-    holdKeyboard();
     setColorsOpen(false);
-    setModel((state) => openStep(state, id, preferences.recentTimerSeconds));
+    updateAndHandOff((state) => openStep(state, id, recent));
   };
 
   const add = () => {
     const id = uuidv4();
-    holdKeyboard();
     setColorsOpen(false);
     scrollToId.current = id;
-    setModel((state) => addStep(state, id, preferences.recentTimerSeconds));
+    updateAndHandOff((state) => addStep(state, id, recent));
   };
 
-  const onStepBlur = (id: string) => {
-    if (keepOpenOnBlur.current) return;
-    setTimeout(() => {
-      if (keepOpenOnBlur.current) return;
-      const focused = inputRefs.current[id]?.isFocused?.();
-      if (!focused && modelRef.current.openId === id) {
-        setModel((state) => (state.openId === id ? leaveOpenStep(state) : state));
-      }
-    }, 0);
+  const enter = () => {
+    const id = uuidv4();
+    scrollToId.current = id;
+    updateAndHandOff((state) => pressEnter(state, id, recent));
   };
+
+  const onStepBlur = (id: string) =>
+    focus.fieldBlurred(id, () => update((state) => (state.openId === id ? leaveOpenStep(state) : state)));
 
   // The times stay while the step is open; "No timer" isn't remembered.
   const pickChip = (id: string, seconds: number | null) => {
-    setModel((state) => setStepTimer(state, id, seconds));
+    update((state) => setStepTimer(state, id, seconds));
     if (seconds) void rememberTimerSeconds(seconds);
   };
 
   const openPanel = (id: string) => {
     const step = steps.find((candidate) => candidate.localId === id);
     if (!step) return;
-    keepOpenOnBlur.current = true;
-    Keyboard.dismiss();
+    focus.putTypingAside();
     setPanel({
       stepId: id,
       openedValue: step.timerSeconds,
       stepper: initialStepper(),
-      quickPicks: chipCandidates(step.timerSeconds, preferences.recentTimerSeconds),
+      quickPicks: chipCandidates(step.timerSeconds, recent),
     });
   };
 
@@ -302,18 +281,15 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
     setPanel(null);
     const stepId = panel.stepId;
     // Back to typing, with the step's times again, its new one among them.
-    setModel((state) => refreshOpenCandidates(state, preferences.recentTimerSeconds));
-    requestAnimationFrame(() => {
-      keepOpenOnBlur.current = false;
-      if (modelRef.current.openId === stepId) focusEditorInput(inputRefs.current[stepId]);
-    });
+    update((state) => refreshOpenCandidates(state, recent));
+    focus.resumeTyping(stepId);
   };
 
   const stepPanel = (dir: -1 | 1) => {
     if (!panel || !panelStep) return;
     const next = pressStepper(panel.stepper, panelStep.timerSeconds, dir);
     setPanel({ ...panel, stepper: next.state });
-    setModel((state) => setStepTimer(state, panel.stepId, next.value));
+    update((state) => setStepTimer(state, panel.stepId, next.value));
   };
 
   // Picking the time the step already has does nothing (the stepper keeps
@@ -321,11 +297,11 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const pickPanelTime = (seconds: number | null) => {
     if (!panel || seconds === (panelStep?.timerSeconds ?? null)) return;
     setPanel({ ...panel, stepper: initialStepper() });
-    setModel((state) => setStepTimer(state, panel.stepId, seconds));
+    update((state) => setStepTimer(state, panel.stepId, seconds));
   };
 
   const removeStep = (id: string, height: number) => {
-    setModel((state) => deleteStep(state, id, height));
+    update((state) => deleteStep(state, id, height));
     void AccessibilityInfo.announceForAccessibility?.('Step deleted');
   };
 
@@ -483,15 +459,15 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
             colorKey={model.colorKey}
             colorLabel={colorLabel}
             colorsOpen={colorsOpen}
-            onChangeTitle={(title) => setModel((state) => setTitle(state, title))}
-            onTitleFocus={() => setModel((state) => leaveOpenStep(state))}
+            onChangeTitle={(title) => update((state) => setTitle(state, title))}
+            onTitleFocus={() => update(leaveOpenStep)}
             onOpenColors={() => {
               settle();
               setColorsOpen(true);
             }}
             onCloseColors={() => setColorsOpen(false)}
             onPickColor={(key) => {
-              setModel((state) => setColor(state, key));
+              update((state) => setColor(state, key));
               setColorsOpen(false);
             }}
             onTitleRowLayout={(event) => {
@@ -539,8 +515,8 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
                     colors={colors}
                     height={row.height}
                     first={rowIndex === 0}
-                    onUndo={() => setModel((state) => undoDeleteStep(state, row.localId))}
-                    onExpired={() => setModel((state) => expireDeletedStep(state, row.localId))}
+                    onUndo={() => update((state) => undoDeleteStep(state, row.localId))}
+                    onExpired={() => update((state) => expireDeletedStep(state, row.localId))}
                   />
                 );
               }
@@ -557,7 +533,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
               const chipsOpen = isOpen && !panel;
               const candidates = isOpen
                 ? model.openCandidates
-                : chipCandidates(row.timerSeconds, preferences.recentTimerSeconds);
+                : chipCandidates(row.timerSeconds, recent);
               return (
                 <Fragment key={row.localId}>
                   {slot}
@@ -573,17 +549,11 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
                     hidden={isActive}
                     makesRoom={!!drag && !isActive}
                     holdGesture={reorder.gestureFor({ localId: row.localId, text: row.text }, index)}
-                    inputRef={(input) => { inputRefs.current[row.localId] = input; }}
+                    inputRef={focus.fieldRef(row.localId)}
                     onLayout={(event) => onRowLayout(row.localId, index, event)}
                     onOpen={() => open(row.localId)}
-                    onChangeText={(text) => setModel((state) => setStepText(state, row.localId, text))}
-                    onEnter={() => {
-                      const id = uuidv4();
-                      if (pressEnter(modelRef.current, id, preferences.recentTimerSeconds).openId) holdKeyboard();
-                      else releaseOpenStep();
-                      scrollToId.current = id;
-                      setModel((state) => pressEnter(state, id, preferences.recentTimerSeconds));
-                    }}
+                    onChangeText={(text) => update((state) => setStepText(state, row.localId, text))}
+                    onEnter={enter}
                     onBlur={() => onStepBlur(row.localId)}
                     onDelete={(height) => removeStep(row.localId, height)}
                     onMoveEarlier={() => reorder.moveItemByAction(index, -1)}
@@ -624,7 +594,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
       </ScrollView>
 
       <AddStepButton colors={colors} visible={fabVisible} bottom={fabBottom} onPress={add} />
-      <KeyboardHolder ref={keyboardHolderRef} />
+      <KeyboardHolder ref={focus.holderRef} />
 
       {wantsSave ? (
         <Animated.View
@@ -800,29 +770,6 @@ function DragPreview({
     </Animated.View>
   );
 }
-
-/**
- * Holds the keyboard between one step's field and the next. It types like a
- * step's field, so the keyboard doesn't change, and keeps nothing typed.
- */
-const KeyboardHolder = forwardRef<TextInput>(function KeyboardHolder(_props, ref) {
-  return (
-    <TextInput
-      ref={ref}
-      testID="keyboard-holder"
-      value=""
-      multiline
-      submitBehavior="submit"
-      returnKeyType="done"
-      caretHidden
-      accessible={false}
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      pointerEvents="none"
-      style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1, padding: 0, opacity: 0 }}
-    />
-  );
-});
 
 function AddStepButton({
   colors,

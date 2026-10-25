@@ -11,7 +11,7 @@ import {
 } from '@/src/features/settings/preferences';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
-import { RoutineEditor, focusEditorInput } from './RoutineEditor';
+import { RoutineEditor } from './RoutineEditor';
 import { setupEditorDatabase as setupDb, tapToEdit } from './RoutineEditor.testSupport';
 import { createRoutine, getRoutine } from './repository';
 import type { Routine } from './types';
@@ -84,12 +84,6 @@ function layOutPanelChips(times: number[]) {
 describe('RoutineEditor', () => {
   afterEach(() => {
     jest.restoreAllMocks();
-  });
-
-  it('requests native focus when a step opens', () => {
-    const focus = jest.fn();
-    focusEditorInput({ focus });
-    expect(focus).toHaveBeenCalledTimes(1);
   });
 
   describe('a new routine', () => {
@@ -240,6 +234,36 @@ describe('RoutineEditor', () => {
         expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: [] });
         expect(screen.getByTestId('step-text-2')).toBeOnTheScreen();
       });
+    });
+
+    it('gives the keyboard to the opened step’s field once it’s there', async () => {
+      const database = await setupDb();
+      await renderEditor({ initialRoutine: await existing(database) }, { database });
+      const requests = focusRequests();
+
+      tapToEdit(1);
+      await act(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+
+      expect(requests.map(({ field }) => field)).toEqual(['keyboard-holder', 'step-text-1']);
+    });
+
+    it('keeps a step open while the timer panel is up, and goes back to typing in it after', async () => {
+      const database = await setupDb();
+      await renderEditor({ initialRoutine: await existing(database) }, { database });
+      tapToEdit(1);
+      layOutChips(1, [30, 60, 120, 300]);
+      fireEvent.press(screen.getByTestId('step-more-1'));
+      // Its field lets go of the keyboard for the panel.
+      fireEvent(screen.getByTestId('step-text-1'), 'blur');
+      await act(() => new Promise((resolve) => setTimeout(resolve, 10)));
+      expect(screen.getByTestId('step-text-1')).toBeOnTheScreen();
+      const requests = focusRequests();
+
+      fireEvent.press(screen.getByTestId('timer-done'));
+      await act(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+
+      expect(screen.getByTestId('step-text-1')).toBeOnTheScreen();
+      expect(requests.map(({ field }) => field)).toContain('step-text-1');
     });
 
     // Moving to another step keeps the keyboard up. On Android, the moment the
