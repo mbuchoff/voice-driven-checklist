@@ -169,6 +169,8 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const titleRow = useRef<{ y: number; height: number } | null>(null);
   const sectionY = useRef(0);
   const groupY = useRef(0);
+  // By step id, to keep the open step above the keyboard; the reorder hook
+  // keeps its own by position, for aiming drags.
   const rowLayouts = useRef<Record<string, { y: number; height: number }>>({});
   /** Where a point `y` down the steps' card sits in the scrolled content. */
   const contentYOfStepsCard = (y: number) => sectionY.current + groupY.current + y;
