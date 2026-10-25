@@ -10,6 +10,7 @@ import * as Reanimated from 'react-native-reanimated';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
 import { RoutineEditor } from './RoutineEditor';
+import { STEP_MAKE_ROOM } from './useStepReorder';
 import {
   beginRowDrag,
   cancelRowDrag,
@@ -128,6 +129,46 @@ describe('RoutineEditor', () => {
       expect(reloaded?.steps.map((i) => i.text)).toEqual(['b', 'c', 'a']);
     });
 
+    describe('the steps a dragged step passes', () => {
+      async function threeSteps() {
+        const database = await setupDb();
+        const existing = await createRoutine(database, {
+          title: 'make room',
+          steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
+        });
+        await renderWithDatabase(
+          <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
+          { database },
+        );
+        primeRowLayouts([50, 50, 50]);
+      }
+      const glide = (testID: string) => screen.getByTestId(testID).props.layout;
+
+      it('glide out of its way with the drag’s spring, its slot too, but not the dragged step', async () => {
+        await threeSteps();
+
+        const gesture = await beginRowDrag(0, 25, 125);
+
+        expect(glide('item-row-1')).toBeDefined();
+        expect(glide('item-row-1')).toBe(STEP_MAKE_ROOM);
+        expect(glide('item-row-2')).toBe(STEP_MAKE_ROOM);
+        expect(glide('item-drop-target-2')).toBe(STEP_MAKE_ROOM);
+        // Otherwise it would fly to where it lands.
+        expect(glide('item-row-0')).toBeUndefined();
+        await cancelRowDrag(gesture);
+      });
+
+      it('move without gliding once the drop has landed', async () => {
+        await threeSteps();
+        const gesture = await beginRowDrag(0, 25, 125);
+
+        await finishRowDrag(gesture);
+
+        expect(['item-label-0', 'item-label-1', 'item-label-2'].map((id) => screen.getByTestId(id).props.children)).toEqual(['b', 'c', 'a']);
+        expect([0, 1, 2].map((index) => glide(`item-row-${index}`))).toEqual([undefined, undefined, undefined]);
+      });
+    });
+
     it('shows a floating preview and insertion target while dragging', async () => {
       const database = await setupDb();
       const existing = await createRoutine(database, {
@@ -153,10 +194,7 @@ describe('RoutineEditor', () => {
         StyleSheet.flatten(screen.getByTestId('item-drop-target-0').props.style)
           .height,
       ).toBe(50);
-      expect(
-        StyleSheet.flatten(screen.getByTestId('item-row-0').props.style)
-          .position,
-      ).toBe('absolute');
+      // The held step is unseen; its slot stands in for it.
       expect(
         StyleSheet.flatten(screen.getByTestId('item-row-0').props.style)
           .opacity,
@@ -165,10 +203,6 @@ describe('RoutineEditor', () => {
       await finishRowDrag(gesture);
 
       expect(screen.queryByTestId('item-drag-preview')).toBeNull();
-      expect(
-        StyleSheet.flatten(screen.getByTestId('item-row-2').props.style)
-          .position,
-      ).toBe('relative');
       expect(screen.getByTestId('item-row-2')).toBeOnTheScreen();
     });
 

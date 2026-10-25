@@ -85,7 +85,7 @@ import {
 } from './timers';
 import type { DeletedRoutine, Routine } from './types';
 import { scrollToKeepAboveKeyboard } from './keepAboveKeyboard';
-import { useStepReorder } from './useStepReorder';
+import { STEP_MAKE_ROOM, useStepReorder } from './useStepReorder';
 
 const EDITOR_KEYBOARD_OFFSET = 24;
 /** A swiped-away step's UNDO stays this long (longer if TalkBack asks). */
@@ -470,11 +470,14 @@ export function RoutineEditor({
 
   let stepIndex = 0;
   let dropIndex = 0;
+  // One slot that moves along (and glides, like the steps) as the dragged
+  // step passes others.
   const renderDropSlot = (index: number) =>
     drag?.to === index ? (
-      <View
-        key={`drop-slot-${index}`}
+      <Animated.View
+        key="drop-slot"
         testID={`item-drop-target-${index}`}
+        layout={STEP_MAKE_ROOM}
         style={{ height: drag.height, backgroundColor: colors.dragSlot }}
       />
     ) : null;
@@ -614,6 +617,7 @@ export function RoutineEditor({
                     open={isOpen}
                     first={rowIndex === 0 && !slot}
                     hidden={isActive}
+                    makesRoom={!!drag && !isActive}
                     holdGesture={reorder.gestureFor({ localId: row.localId, text: row.text }, index)}
                     inputRef={(input) => { inputRefs.current[row.localId] = input; }}
                     onLayout={(event) => onRowLayout(row.localId, index, event)}

@@ -22,7 +22,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
-import { STEP_REORDER_HOLD_MS } from '../useStepReorder';
+import { STEP_MAKE_ROOM, STEP_REORDER_HOLD_MS } from '../useStepReorder';
 import { formatTimerLong, formatTimerWords } from '../timers';
 
 /** A swipe starts after this much mostly-sideways movement. */
@@ -56,7 +56,13 @@ export type StepRowProps = {
   timerSeconds: number | null;
   open: boolean;
   first: boolean;
+  /** The step being dragged: its slot stands in for it while it's held. */
   hidden: boolean;
+  /**
+   * Another step is being dragged: this one glides when it moves to make
+   * room. Never the dragged step, which would otherwise fly to where it lands.
+   */
+  makesRoom: boolean;
   holdGesture: GestureType;
   inputRef: (input: ComponentRef<typeof TextInput> | null) => void;
   onLayout: (event: LayoutChangeEvent) => void;
@@ -76,7 +82,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 export function StepRow(props: StepRowProps) {
   const {
     colors, index, number, localId, text, timerSeconds, open, first,
-    hidden, holdGesture,
+    hidden, holdGesture, makesRoom,
   } = props;
   const rowWidth = useSharedValue(0);
   const rowHeight = useRef(0);
@@ -138,6 +144,7 @@ export function StepRow(props: StepRowProps) {
   const rowGesture = Gesture.Race(swipe, holdGesture, tap);
 
   const frontStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
+
   // "Delete" shows on the side the row moves away from.
   const leftSide = useAnimatedStyle(() => ({ opacity: translateX.value > 0 ? 1 : 0 }));
   const rightSide = useAnimatedStyle(() => ({ opacity: translateX.value < 0 ? 1 : 0 }));
@@ -167,7 +174,7 @@ export function StepRow(props: StepRowProps) {
   }));
 
   return (
-    <View
+    <Animated.View
       testID={`item-row-${index}`}
       nativeID={localId}
       onLayout={(event) => {
@@ -175,6 +182,7 @@ export function StepRow(props: StepRowProps) {
         rowWidth.value = event.nativeEvent.layout.width;
         props.onLayout(event);
       }}
+      layout={makesRoom ? STEP_MAKE_ROOM : undefined}
       style={{
         position: hidden ? 'absolute' : 'relative',
         opacity: hidden ? 0 : 1,
@@ -364,7 +372,7 @@ export function StepRow(props: StepRowProps) {
           }}
         />
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 

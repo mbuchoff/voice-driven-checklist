@@ -7,7 +7,6 @@ import {
 } from 'react';
 import {
   Keyboard,
-  LayoutAnimation,
   Vibration,
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -17,6 +16,7 @@ import { Gesture, ScrollView } from 'react-native-gesture-handler';
 import {
   cancelAnimation,
   Easing,
+  LinearTransition,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -37,8 +37,14 @@ export const STEP_PASS_VIBRATION_MS = 8;
 const EDGE_AUTOSCROLL_THRESHOLD = 70;
 const EDGE_AUTOSCROLL_MAX_SPEED = 840;
 const MAX_AUTOSCROLL_FRAME_MS = 32;
-const REORDER_ROW_DURATION_MS = 180;
 const REORDER_ROW_EASING = Easing.bezier(0.22, 0.75, 0.2, 1);
+/**
+ * How the steps a dragged step passes, and its slot, glide to make room:
+ * 26D's spring. A layout transition starts in the same commit that moves a
+ * step, so a drop's new order lands without a stray frame.
+ */
+export const STEP_MAKE_ROOM_MS = 340;
+export const STEP_MAKE_ROOM = LinearTransition.duration(STEP_MAKE_ROOM_MS).easing(Easing.bezier(0.34, 1.4, 0.5, 1));
 
 export function getEdgeAutoscrollDelta(
   distanceIntoEdge: number,
@@ -134,22 +140,6 @@ function releaseDragClaim(
   nearEdge.value = 0;
 }
 
-export function animateEditorRows() {
-  LayoutAnimation.configureNext({
-    duration: 160,
-    create: { type: LayoutAnimation.Types.easeInEaseOut, property: 'opacity' },
-    update: { type: LayoutAnimation.Types.easeInEaseOut },
-    delete: { type: LayoutAnimation.Types.easeInEaseOut, property: 'opacity' },
-  });
-}
-
-function animateReorderRows() {
-  LayoutAnimation.configureNext({
-    duration: REORDER_ROW_DURATION_MS,
-    update: { type: LayoutAnimation.Types.easeInEaseOut },
-  });
-}
-
 export function useStepReorder({
   items,
   onMove,
@@ -241,7 +231,6 @@ export function useStepReorder({
     current.to = to;
     dragTarget.value = to;
     Vibration.vibrate(STEP_PASS_VIBRATION_MS);
-    animateReorderRows();
     setDrag(dragStateFrom(current));
   };
 
@@ -381,14 +370,12 @@ export function useStepReorder({
     if (dragRef.current?.localId !== localId) return;
     dragRef.current = null;
     cancelEdgeAutoscroll();
-    animateEditorRows();
     setDrag(null);
   };
 
   const moveItemByAction = (index: number, delta: -1 | 1) => {
     const to = index + delta;
     if (to < 0 || to >= itemsRef.current.length) return;
-    animateEditorRows();
     onMove(index, to);
   };
 
