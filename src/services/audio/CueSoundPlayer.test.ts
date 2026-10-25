@@ -35,6 +35,17 @@ function createdPlayers() {
   );
 }
 
+// Every player a test makes is released after it, with its cues' watchdogs.
+const made: CueSoundPlayer[] = [];
+function newCues() {
+  const cues = new CueSoundPlayer();
+  made.push(cues);
+  return cues;
+}
+afterEach(() => {
+  made.splice(0).forEach((cues) => cues.release());
+});
+
 describe('CueSoundPlayer', () => {
   beforeEach(() => {
     mockedCreateAudioPlayer.mockReset();
@@ -42,7 +53,7 @@ describe('CueSoundPlayer', () => {
   });
 
   it('plays the requested cue from the chosen family', async () => {
-    const cues = new CueSoundPlayer();
+    const cues = newCues();
     cues.setFamily('wood');
 
     await expect(cues.play('previous')).resolves.toBe(true);
@@ -54,7 +65,7 @@ describe('CueSoundPlayer', () => {
   });
 
   it('plays every cue on a new player, so none is left over from before the phone locked', async () => {
-    const cues = new CueSoundPlayer();
+    const cues = newCues();
     cues.setFamily('chime');
 
     await cues.play('next');
@@ -66,8 +77,23 @@ describe('CueSoundPlayer', () => {
     expect(second.play).toHaveBeenCalledTimes(1);
   });
 
+  it('lets go of a cue’s watchdog once it has finished', async () => {
+    jest.useFakeTimers();
+    try {
+      const cues = newCues();
+      cues.setFamily('ping');
+      await cues.play('repeat');
+
+      createdPlayers()[0].finish();
+
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('frees a cue’s player once it has finished', async () => {
-    const cues = new CueSoundPlayer();
+    const cues = newCues();
     cues.setFamily('ping');
 
     await cues.play('repeat');
@@ -79,7 +105,7 @@ describe('CueSoundPlayer', () => {
   });
 
   it('cuts off a cue that is still sounding when the next one starts', async () => {
-    const cues = new CueSoundPlayer();
+    const cues = newCues();
     cues.setFamily('ping');
 
     await cues.play('next');
@@ -91,7 +117,7 @@ describe('CueSoundPlayer', () => {
   });
 
   it('keeps Quiet silent and stops a cue that is sounding', async () => {
-    const cues = new CueSoundPlayer();
+    const cues = newCues();
     cues.setFamily('ping');
     await cues.play('next');
 
@@ -103,7 +129,7 @@ describe('CueSoundPlayer', () => {
   });
 
   it('plays nothing once released', async () => {
-    const cues = new CueSoundPlayer();
+    const cues = newCues();
     cues.setFamily('chime');
     await cues.play('next');
 
@@ -127,7 +153,7 @@ describe('CueSoundPlayer', () => {
     });
 
     it('each cue as the player reports it: playing, then finished', async () => {
-      const cues = new CueSoundPlayer();
+      const cues = newCues();
       cues.setFamily('chime');
       await cues.play('next');
       const [player] = createdPlayers();
@@ -141,7 +167,7 @@ describe('CueSoundPlayer', () => {
 
     it('a cue that never reports its end as timed out', async () => {
       jest.useFakeTimers();
-      const cues = new CueSoundPlayer();
+      const cues = newCues();
       cues.setFamily('wood');
       await cues.play('repeat');
 
@@ -151,7 +177,7 @@ describe('CueSoundPlayer', () => {
     });
 
     it('a cue that fails to play as failed', async () => {
-      const cues = new CueSoundPlayer();
+      const cues = newCues();
       cues.setFamily('chime');
       mockedCreateAudioPlayer.mockImplementationOnce(() => {
         throw new Error('audio unavailable');
@@ -164,7 +190,7 @@ describe('CueSoundPlayer', () => {
   });
 
   it('swallows audio failures so run controls remain usable', async () => {
-    const cues = new CueSoundPlayer();
+    const cues = newCues();
     cues.setFamily('chime');
     mockedCreateAudioPlayer.mockImplementationOnce(() => {
       throw new Error('audio unavailable');

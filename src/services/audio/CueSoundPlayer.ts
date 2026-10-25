@@ -31,7 +31,9 @@ const CUE_MAX_MS = 3000;
 
 export class CueSoundPlayer {
   private family: SoundPreference | null = null;
-  private sounding = new Set<AudioPlayer>();
+  // Each sounding cue's player, with the watchdog that frees it if it never
+  // reports its end.
+  private sounding = new Map<AudioPlayer, ReturnType<typeof setTimeout>>();
 
   /** The sound family cues play from (Quiet plays none). */
   setFamily(family: SoundPreference): void {
@@ -54,7 +56,10 @@ export class CueSoundPlayer {
     try {
       const created = createAudioPlayer(SOURCES[family][action]);
       player = created;
-      this.sounding.add(created);
+      this.sounding.set(created, setTimeout(() => {
+        console.warn(`[cue] ${action} timed out`);
+        this.free(created);
+      }, CUE_MAX_MS));
       let playing = false;
       created.addListener('playbackStatusUpdate', (status) => {
         if (status.playing && !playing) {
@@ -66,11 +71,6 @@ export class CueSoundPlayer {
           this.free(created);
         }
       });
-      setTimeout(() => {
-        if (!this.sounding.has(created)) return;
-        console.warn(`[cue] ${action} timed out`);
-        this.free(created);
-      }, CUE_MAX_MS);
       created.play();
       console.info(`[cue] ${action} requested`);
       return true;
@@ -88,11 +88,14 @@ export class CueSoundPlayer {
   }
 
   private stopSounding(): void {
-    for (const player of [...this.sounding]) this.free(player);
+    for (const player of [...this.sounding.keys()]) this.free(player);
   }
 
   private free(player: AudioPlayer): void {
-    if (!this.sounding.delete(player)) return;
+    const watchdog = this.sounding.get(player);
+    if (watchdog === undefined) return;
+    clearTimeout(watchdog);
+    this.sounding.delete(player);
     try {
       player.release();
     } catch {
