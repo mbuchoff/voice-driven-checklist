@@ -8,6 +8,12 @@ export const RUN_TRANSITION_CONFIG = {
   easing: RUN_TRANSITION_EASING,
 };
 
+/** A running countdown: 1:45. */
+export function formatCountdownClock(seconds: number): string {
+  const whole = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
 export type RunStepStatus = 'past' | 'current' | 'upcoming';
 export type RunStepBackgroundStatus = Exclude<RunStepStatus, 'current'>;
 

@@ -6,6 +6,6 @@ export function createSnapshot(routine: Routine): RoutineRunSnapshot {
   return {
     routineId: routine.id,
     routineTitle: routine.title,
-    steps: routine.steps.map((item) => ({ ...item })),
+    steps: routine.steps.map((step) => ({ ...step })),
   };
 }

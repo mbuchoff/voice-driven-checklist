@@ -13,7 +13,6 @@ import {
   Keyboard,
   Platform,
   Text,
-  TextInput,
   View,
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -39,6 +38,7 @@ import { RoutineHeroCard } from './editor/RoutineHeroCard';
 import { DeletedStepRow } from './editor/DeletedStepRow';
 import { StepRow } from './editor/StepRow';
 import { KeyboardHolder, useStepFocus } from './editor/stepFocus';
+import { LIST_PAD_X } from './editor/stepRowMetrics';
 import { ChipSizesProvider, StepTimerChips } from './editor/TimerChips';
 import { TimerPanel } from './editor/TimerPanel';
 import { glideLength } from './editor/wordGlidePlan';
@@ -76,7 +76,6 @@ import {
   type EditorRow,
   type EditorState,
 } from './routineEditorModel';
-import { routineColor } from './routineColors';
 import { countLine } from './timerFormat';
 import type { DeletedRoutine, Routine } from './types';
 import { scrollToKeepAboveKeyboard } from './keepAboveKeyboard';
@@ -168,7 +167,6 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const colors = useMemo(() => editorColors(theme, model.colorKey), [theme, model.colorKey]);
 
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
-  const titleRef = useRef<ComponentRef<typeof TextInput>>(null);
   const keyboardTop = useRef<number | null>(null);
   const heroY = useRef(0);
   const titleRow = useRef<{ y: number; height: number } | null>(null);
@@ -193,7 +191,6 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const wantsSave = needsSave(model, baseline);
   const saveAllowed = canSave(model);
   const runnable = canRun(model, baseline);
-  const colorLabel = routineColor(model.colorKey).name;
 
   const reorder = useStepReorder({
     items: steps.map(({ localId, text }) => ({ localId, text })),
@@ -443,7 +440,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
           style={{ flex: 1 }}
           contentContainerStyle={{
             paddingTop: 4,
-            paddingHorizontal: 16,
+            paddingHorizontal: LIST_PAD_X,
             paddingBottom: 96 + keyboardClearance,
             gap: 22,
           }}
@@ -460,12 +457,10 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
         >
           <View onLayout={(event) => { heroY.current = event.nativeEvent.layout.y; }}>
             <RoutineHeroCard
-              ref={titleRef}
               colors={colors}
               title={model.title}
               countLine={summary}
               colorKey={model.colorKey}
-              colorLabel={colorLabel}
               colorsOpen={colorsOpen}
               onChangeTitle={(title) => update((state) => setTitle(state, title))}
               onTitleFocus={() => update(leaveOpenStep)}
@@ -544,7 +539,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
                     key={row.localId}
                     colors={colors}
                     index={index}
-                    number={numbers[row.localId] ?? index + 1}
+                    number={numbers[row.localId]}
                     localId={row.localId}
                     text={row.text}
                     timerSeconds={row.timerSeconds}
@@ -569,7 +564,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
                         open={chipsOpen}
                         candidates={isOpen ? model.openCandidates : NO_CANDIDATES}
                         selected={row.timerSeconds}
-                        stepNumber={numbers[row.localId] ?? index + 1}
+                        stepNumber={numbers[row.localId]}
                         onPick={(seconds) => pickChip(row.localId, seconds)}
                         onMore={() => openPanel(row.localId)}
                       />
@@ -613,7 +608,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
         {panel && panelStep ? (
           <TimerPanel
             colors={colors}
-            stepNumber={numbers[panel.stepId] ?? 1}
+            stepNumber={numbers[panel.stepId]}
             stepText={panelStep.text}
             value={panelStep.timerSeconds}
             stepper={panel.stepper}

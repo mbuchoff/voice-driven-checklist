@@ -1,4 +1,5 @@
 import {
+  formatCountdownClock,
   RUN_STEP_GAP,
   RUN_TRANSITION_DURATION_MS,
   RUN_TRANSITION_EASING,
@@ -86,5 +87,13 @@ describe('run item presentation', () => {
       centerBorder: 'rgba(23, 56, 46, 0.06)',
       shadow: '0 13px 34px rgba(43, 74, 61, 0.13)',
     });
+  });
+});
+
+describe('the countdown under a timed step', () => {
+  it('shows a running countdown as minutes and seconds', () => {
+    expect([0, 5, 59, 60, 105, 3600].map(formatCountdownClock)).toEqual([
+      '0:00', '0:05', '0:59', '1:00', '1:45', '60:00',
+    ]);
   });
 });

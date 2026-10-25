@@ -11,11 +11,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
 import { Icon, type IconName } from '@/src/components/Icon';
-import { formatCountdownClock, formatTimerWords } from '@/src/features/routines/timerFormat';
+import { formatTimerWords } from '@/src/features/routines/timerFormat';
 import { ScreenBackground } from '@/src/components/ScreenBackground';
 import type { Palette } from '@/src/theme/palette';
 
 import {
+  formatCountdownClock,
   RUN_STEP_GAP,
   RUN_TRANSITION_CONFIG,
   getRunStepPresentation,
@@ -62,7 +63,7 @@ export function ActiveRunView({
   onAction: (action: RunCommand) => void;
 }) {
   const totalSteps = state.snapshot?.steps.length ?? 0;
-  const items = state.snapshot?.steps ?? [];
+  const steps = state.snapshot?.steps ?? [];
   const progressPalette = getRunProgressPalette(theme.mode);
   const trackStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: getRunTrackOffset(animatedCurrentIndex.value) }],
@@ -156,12 +157,12 @@ export function ActiveRunView({
             trackStyle,
           ]}
         >
-          {items.map((item, index) => (
+          {steps.map((step, index) => (
             <RunStep
-              key={item.id}
+              key={step.id}
               index={index}
               status={getRunStepStatus(index, state.currentStepIndex)}
-              text={item.text}
+              text={step.text}
               androidApi={androidApi}
               textColor={theme.runText}
               countdownSeconds={

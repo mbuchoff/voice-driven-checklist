@@ -16,6 +16,7 @@ import {
   ROW_BLEED,
   ROW_GAP,
   ROW_PAD_X,
+  ROW_PAD_Y,
   STEP_TEXT_BOX,
 } from './stepRowMetrics';
 import { useWordGlide } from './StepWordGlide';
@@ -158,7 +159,7 @@ export function StepRow(props: StepRowProps) {
           {
             minHeight: 56,
             marginHorizontal: -ROW_BLEED,
-            paddingVertical: 6,
+            paddingVertical: ROW_PAD_Y,
             paddingHorizontal: ROW_PAD_X,
             borderRadius: 16,
             backgroundColor: open ? colors.editTint : colors.surface,

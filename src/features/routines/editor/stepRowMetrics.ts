@@ -3,10 +3,13 @@
  * with it, so these are derived from each other rather than repeated.
  */
 
+/** The steps' list sits this far in from the screen's sides. */
+export const LIST_PAD_X = 16;
 /** The row's front reaches this far past the row's sides. */
 export const ROW_BLEED = 16;
-/** The front's side padding. */
+/** The front's padding. */
 export const ROW_PAD_X = 24;
+export const ROW_PAD_Y = 6;
 /** Where the number starts, from the row's edge. */
 export const CONTENT_LEFT = ROW_PAD_X - ROW_BLEED;
 /** The space between the number, the words and the time. */

@@ -1,4 +1,4 @@
-import { countLine, formatCountdownClock, formatTimerLong, formatTimerWords } from './timerFormat';
+import { countLine, formatTimerLong, formatTimerWords } from './timerFormat';
 
 describe('timer formats', () => {
   it('shows minutes as "min" and seconds as "s"', () => {
@@ -14,11 +14,6 @@ describe('timer formats', () => {
     ]);
   });
 
-  it('shows a running countdown as minutes and seconds', () => {
-    expect([0, 5, 59, 60, 105, 3600].map(formatCountdownClock)).toEqual([
-      '0:00', '0:05', '0:59', '1:00', '1:45', '60:00',
-    ]);
-  });
 
   it('summarizes a routine as steps plus the timed total', () => {
     expect(countLine(0, 0)).toBe('No steps yet');

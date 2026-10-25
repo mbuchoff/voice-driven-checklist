@@ -1,7 +1,9 @@
+import type { Step } from '@/src/features/routines/types';
+
 export type RoutineRunSnapshot = {
   routineId: string;
   routineTitle: string;
-  steps: { id: string; text: string; order: number; timerSeconds: number | null }[];
+  steps: Step[];
 };
 
 export type RunStatus = 'idle' | 'speaking' | 'listening' | 'manual' | 'completed';
@@ -14,7 +16,7 @@ export type RoutineRunState = {
   spokenPlaybackAvailable: boolean;
   latestRecognizedPhrase: string;
   /**
-   * Increments every time the current item should be re-presented (initial
+   * Increments every time the current step should be re-presented (initial
    * mount, NEXT-advance, REPEAT, PREVIOUS, RESTART). The run-screen
    * orchestrator depends on this so that REPEAT can re-trigger speech even
    * when the index and status are unchanged.

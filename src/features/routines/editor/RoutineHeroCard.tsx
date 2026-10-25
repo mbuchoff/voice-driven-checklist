@@ -1,9 +1,9 @@
-import { forwardRef } from 'react';
 import { Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
 
 import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
+import { routineColor } from '../routineColors';
 import { ColorDot, ColorGrid } from './ColorGrid';
 import { IconButton } from './controls';
 
@@ -11,12 +11,11 @@ import { IconButton } from './controls';
  * The routine's card, live: its color, name and count. The dot swaps the
  * name for the colors until one is picked.
  */
-export const RoutineHeroCard = forwardRef<TextInput, {
+export function RoutineHeroCard(props: {
   colors: EditorColors;
   title: string;
   countLine: string;
   colorKey: string;
-  colorLabel: string;
   colorsOpen: boolean;
   onChangeTitle: (title: string) => void;
   onTitleFocus: () => void;
@@ -24,7 +23,7 @@ export const RoutineHeroCard = forwardRef<TextInput, {
   onCloseColors: () => void;
   onPickColor: (key: string) => void;
   onTitleRowLayout: (event: LayoutChangeEvent) => void;
-}>(function RoutineHeroCard(props, ref) {
+}) {
   const { colors } = props;
   return (
     <View
@@ -62,7 +61,6 @@ export const RoutineHeroCard = forwardRef<TextInput, {
         ) : (
           <>
             <TextInput
-              ref={ref}
               testID="title-input"
               accessibilityLabel="Routine name"
               value={props.title}
@@ -91,7 +89,7 @@ export const RoutineHeroCard = forwardRef<TextInput, {
               colors={colors}
               size={30}
               rim={3}
-              label={`Card color: ${props.colorLabel}. Change it`}
+              label={`Card color: ${routineColor(props.colorKey).name}. Change it`}
               testID="hero-color-dot"
               onPress={props.onOpenColors}
             />
@@ -103,4 +101,4 @@ export const RoutineHeroCard = forwardRef<TextInput, {
       </Text>
     </View>
   );
-});
+}

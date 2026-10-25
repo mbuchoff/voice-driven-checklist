@@ -4,7 +4,7 @@ import Animated from 'react-native-reanimated';
 
 import type { EditorColors } from '../editorColors';
 import { NumberBadge } from './NumberBadge';
-import { STEP_WORDS, TEXT_PAD } from './stepRowMetrics';
+import { CONTENT_LEFT, LIST_PAD_X, ROW_GAP, ROW_PAD_Y, STEP_WORDS, TEXT_PAD } from './stepRowMetrics';
 
 /** The held step, floating above the list while it's dragged. */
 export function DragPreview({
@@ -30,17 +30,17 @@ export function DragPreview({
         {
           position: 'absolute',
           top,
-          left: 16,
-          right: 16,
+          left: LIST_PAD_X,
+          right: LIST_PAD_X,
           minHeight: height,
-          paddingVertical: 6,
-          paddingHorizontal: 8,
+          paddingVertical: ROW_PAD_Y,
+          paddingHorizontal: CONTENT_LEFT,
           borderRadius: 16,
           backgroundColor: colors.fill,
           boxShadow: '0 16px 34px rgba(28, 48, 41, 0.3)',
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 8,
+          gap: ROW_GAP,
           zIndex: 30,
           transform: [{ scale: 1.04 }],
         },

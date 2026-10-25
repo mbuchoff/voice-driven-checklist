@@ -1,4 +1,4 @@
-/** How timer lengths read: on chips and clocks, aloud, while counting down, and in a routine's count line. */
+/** How timer lengths read: on chips and clocks, aloud, and in a routine's count line. */
 
 /** Chips, step clocks, the timer panel's readout and the routine total: 1 min 30s. */
 export function formatTimerLong(seconds: number): string {
@@ -15,12 +15,6 @@ export function formatTimerWords(seconds: number): string {
   if (minutes) parts.push(minutes === 1 ? '1 minute' : `${minutes} minutes`);
   if (rest || !minutes) parts.push(rest === 1 ? '1 second' : `${rest} seconds`);
   return parts.join(' ');
-}
-
-/** A running countdown: 1:45. */
-export function formatCountdownClock(seconds: number): string {
-  const whole = Math.max(0, Math.ceil(seconds));
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
 /** "14 steps · 10 min timed", "1 step", "No steps yet". */

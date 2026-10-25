@@ -238,18 +238,18 @@ export function RunScreen({
   const spokenPlaybackReady = !state.voiceControlAvailable || voiceServiceReady;
 
   // Drive spoken playback whenever the run is in the `speaking` state. Bumps
-  // to `playbackTick` (e.g. REPEAT) cause the same item to be re-spoken.
+  // to `playbackTick` (e.g. REPEAT) cause the same step to be re-spoken.
   // When voice control is available, wait for voice-run startup so Android
   // applies the audio route before TTS; without voice control, routed playback
   // self-arms that route before speaking.
   useEffect(() => {
     if (state.status !== 'speaking' || !state.snapshot || !spokenPlaybackReady) return;
-    const item = state.snapshot.steps[state.currentStepIndex];
+    const step = state.snapshot.steps[state.currentStepIndex];
     let cancelled = false;
     let speechTimer: ReturnType<typeof setTimeout> | null = null;
     const speak = () => {
       playback
-        .speak(item.text, { locale: LOCALE })
+        .speak(step.text, { locale: LOCALE })
         .then(() => {
           if (!cancelled) dispatch({ type: 'PLAYBACK_FINISHED' });
         })

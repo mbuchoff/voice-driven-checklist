@@ -257,8 +257,16 @@ export function routineInput(state: EditorState): RoutineInput {
   };
 }
 
+// Each state is worked out once (the Save bar and ▶ both ask on every render).
+const snapshots = new WeakMap<EditorState, string>();
+
 export function editorSnapshot(state: EditorState): string {
-  return JSON.stringify(routineInput(state));
+  let snapshot = snapshots.get(state);
+  if (snapshot === undefined) {
+    snapshot = JSON.stringify(routineInput(state));
+    snapshots.set(state, snapshot);
+  }
+  return snapshot;
 }
 
 /** True when saving would change what's stored. */
