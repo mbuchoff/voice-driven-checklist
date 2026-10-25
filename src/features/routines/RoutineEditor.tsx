@@ -679,6 +679,8 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
       {sheet === 'delete' ? (
         <DeleteRoutineSheet
           colors={colors}
+          // Named as typed, like the prototype; the routines screen's UNDO
+          // names the saved routine it deleted.
           title={displayTitle(model, mode.kind === 'edit' ? mode.routine.title : undefined)}
           onCancel={() => setSheet(null)}
           onDelete={() => void confirmDelete()}
