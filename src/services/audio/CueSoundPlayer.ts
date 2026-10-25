@@ -42,6 +42,9 @@ export class CueSoundPlayer {
   // Every cue gets a new player. A player prepared earlier keeps the audio
   // track it made then, and after the phone locks that track can be gone:
   // the first play after the lock then sounds like nothing at all.
+  //
+  // Each cue's result is logged as the player reports it (requested,
+  // playing, finished, timed out or failed), so a silent cue shows up.
   async play(action: CueAction): Promise<boolean> {
     const family = this.family;
     if (!family || family === 'quiet') return false;
@@ -51,15 +54,28 @@ export class CueSoundPlayer {
       const created = createAudioPlayer(SOURCES[family][action]);
       player = created;
       this.sounding.add(created);
+      let playing = false;
       created.addListener('playbackStatusUpdate', (status) => {
-        if (status.didJustFinish) this.free(created);
+        if (status.playing && !playing) {
+          playing = true;
+          console.info(`[cue] ${action} playing`);
+        }
+        if (status.didJustFinish && this.sounding.has(created)) {
+          console.info(`[cue] ${action} finished`);
+          this.free(created);
+        }
       });
-      setTimeout(() => this.free(created), CUE_MAX_MS);
+      setTimeout(() => {
+        if (!this.sounding.has(created)) return;
+        console.warn(`[cue] ${action} timed out`);
+        this.free(created);
+      }, CUE_MAX_MS);
       created.play();
-      console.info(`[cue] ${action} play requested`);
+      console.info(`[cue] ${action} requested`);
       return true;
     } catch {
       // A cue must never prevent navigation, speech, or completion.
+      console.warn(`[cue] ${action} failed`);
       if (player) this.free(player);
       return false;
     }
