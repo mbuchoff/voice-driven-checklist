@@ -44,7 +44,10 @@ Reanimated.useFrameCallback = (_callback, autostart = true) => {
 };
 
 // A stand-in for the app's Android power module (modules/voice-checklist-power),
-// for tests that run as Android: no wake lock, and the test's own clock.
+// for tests that run as Android: no wake lock, and the test's own clock. It
+// relies on requireNativeModule reading expo-modules-core's internal
+// globalThis.expo.modules registry (as jest-expo sets up); if an Expo upgrade
+// changes that, Android-mode tests fail with "Cannot find native module".
 globalThis.expo.modules.VoiceChecklistPower = {
   acquireCountdownWakeLock: () => {},
   releaseCountdownWakeLock: () => {},

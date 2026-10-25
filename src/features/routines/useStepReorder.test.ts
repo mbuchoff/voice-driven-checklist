@@ -60,4 +60,11 @@ describe('routine row placement', () => {
 
     expect(getOwnPlaceShift(before, before, 2)).toBe(0);
   });
+
+  it('lands a held first step in its own place when only its height changed while held', () => {
+    // It was the open step (110 tall) and closed to 50; the step below moved up by that much.
+    const before = [{ y: 0, height: 110 }, { y: 110, height: 50 }];
+    const after = [{ y: 0, height: 50 }, { y: 50, height: 50 }];
+    expect(getOwnPlaceShift(before, after, 0)).toBe(0);
+  });
 });

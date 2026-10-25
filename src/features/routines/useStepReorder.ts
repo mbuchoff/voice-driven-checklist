@@ -102,7 +102,8 @@ export function getDropTargetOffset(
 
 /**
  * How far a held step's own place moved while it was held (steps above it
- * closing up): as far as the edge of the step next to it did.
+ * closing up): as far as the bottom of the step above it did, or else the
+ * top of the step below it, less any change in the held step's own height.
  */
 export function getOwnPlaceShift(
   before: (StepRowLayout | null)[],
@@ -112,8 +113,9 @@ export function getOwnPlaceShift(
   const [wasAbove, isAbove] = [before[index - 1], after[index - 1]];
   if (wasAbove && isAbove) return isAbove.y + isAbove.height - (wasAbove.y + wasAbove.height);
   const [wasBelow, isBelow] = [before[index + 1], after[index + 1]];
-  if (wasBelow && isBelow) return isBelow.y - wasBelow.y;
-  return 0;
+  if (!wasBelow || !isBelow) return 0;
+  const grew = (after[index]?.height ?? 0) - (before[index]?.height ?? 0);
+  return isBelow.y - wasBelow.y - grew;
 }
 
 function getDropIndex(
@@ -257,6 +259,8 @@ export function useStepReorder({
     if (Math.abs(height - current.height) < 0.5) return;
     current.height = height;
     current.startCenterY = current.previewTop + height / 2;
+    // Kept by id too: dropped back in place its frame may not change again.
+    layoutsById.current[current.localId] = { y: current.previewTop, height };
     rowLayouts.current[current.from] = { y: current.previewTop, height };
     rowLayoutsValue.value = [...rowLayouts.current];
     setDrag(dragStateFrom(current));

@@ -510,7 +510,27 @@ describe('RoutineEditor', () => {
           await cancelRowDrag(gesture);
         });
 
-        it('waits out the glide of an emptied step’s words, which closing gives back', async () => {
+        it('keeps a lifted open step’s closed height for the next drag, after it’s dropped in place', async () => {
+        await fourSteps();
+        tapToEdit(0);
+        primeRowLayouts([110, 50, 50, 50]);
+        jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+        const first = await beginRowDrag(0, 55, 55);
+        fireEvent(screen.getByTestId('step-row-0'), 'layout', { nativeEvent: { layout: { y: 0, height: 50 } } });
+        await untilSettled();
+        await finishRowDrag(first);
+        // Back in its own place its frame is as it was while held, so it sends
+        // nothing; the step below it has moved up.
+        layOut([[1, 50]]);
+        await untilSettled();
+
+        const second = await beginRowDrag(0, 25, 25);
+
+        expect(StyleSheet.flatten(screen.getByTestId('step-drop-target-0').props.style).height).toBe(50);
+        await cancelRowDrag(second);
+      });
+
+      it('waits out the glide of an emptied step’s words, which closing gives back', async () => {
           const long = Array.from({ length: 30 }, (_, i) => `word${i + 1}`).join(' ');
           await fourSteps(long);
           tapToEdit(0);
