@@ -52,6 +52,48 @@ describe('RunScreen countdowns', () => {
     expect(screen.queryByTestId('run-countdown')).toBeNull();
   });
 
+  describe('when "next" and zero come together', () => {
+    const threeTimed: RoutineRunSnapshot = {
+      ...timed,
+      steps: timed.steps.map((step) => ({ ...step, timerSeconds: 5 })),
+    };
+    async function listeningNearZero() {
+      const onCue = jest.fn();
+      const run = setupRunScreen({ snapshot: threeTimed, onCue });
+      await advance(0);
+      await act(async () => run.playback.completePlayback());
+      await advance(4750);
+      return { ...run, onCue };
+    }
+    const onStep = (index: number) =>
+      expect(screen.getByTestId(`run-item-${index}`, { includeHiddenElements: true }).props.accessibilityState)
+        .toEqual({ selected: true });
+
+    it('moves on once when "next" is heard just before zero', async () => {
+      const { recognition, onCue } = await listeningNearZero();
+
+      await act(async () => {
+        recognition.emitResult({ transcript: 'next', isFinal: true });
+        jest.advanceTimersByTime(250);
+      });
+
+      onStep(1);
+      expect(onCue).toHaveBeenCalledTimes(1);
+    });
+
+    it('moves on once when "next" is heard just after zero', async () => {
+      const { recognition, onCue } = await listeningNearZero();
+
+      await act(async () => {
+        jest.advanceTimersByTime(250);
+        recognition.emitResult({ transcript: 'next', isFinal: true });
+      });
+
+      onStep(1);
+      expect(onCue).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('waits on an untimed step as today', async () => {
     setupRunScreen({ snapshot: timed });
     await advance(0);

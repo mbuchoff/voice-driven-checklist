@@ -2,6 +2,7 @@ package expo.modules.voicechecklistaudioroute
 
 import android.content.Context
 import android.os.PowerManager
+import android.os.SystemClock
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -40,7 +41,7 @@ class VoiceChecklistAudioRouteModule : Module() {
 
     // Keeps the processor awake while a step's countdown runs with the screen
     // off, so the run moves on on time. The timeout is a safety net in case
-    // a release is missed; JS releases it when the countdown ends.
+    // a release is missed; JS releases it when the run leaves the step.
     Function("acquireCountdownWakeLock") { timeoutMs: Double ->
       acquireCountdownWakeLock(timeoutMs.toLong())
       null
@@ -49,6 +50,12 @@ class VoiceChecklistAudioRouteModule : Module() {
     Function("releaseCountdownWakeLock") {
       releaseCountdownWakeLock()
       null
+    }
+
+    // Milliseconds since boot, counting deep sleep and unmoved by changes to
+    // the time of day, so a countdown measures the time that really passed.
+    Function("elapsedRealtimeMillis") {
+      SystemClock.elapsedRealtime().toDouble()
     }
   }
 

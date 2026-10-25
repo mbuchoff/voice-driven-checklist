@@ -22,7 +22,7 @@ import { useTheme } from '@/src/theme/useTheme';
 import { formatTimerWords } from '@/src/features/routines/timers';
 
 import { parseCommand, parseInterimCommand } from './commandParser';
-import { initialRunState, runReducer } from './runReducer';
+import { initialRunState, isRunActive, runReducer } from './runReducer';
 import { CompletionView } from './CompletionView';
 import { ActiveRunView } from './RunScreenView';
 import { RUN_TRANSITION_CONFIG } from './runPresentation';
@@ -151,8 +151,23 @@ export function RunScreen({
     );
   }, [animatedCurrentIndex, state.currentStepIndex]);
 
+  // Suppress onVoiceRunStop in this cleanup on the completed transition. The
+  // completion effect stops the service after the chime has been started.
+  const statusRef = useRef(state.status);
+  statusRef.current = state.status;
+  // Each arrival is left once: "next" heard as its countdown runs out (or
+  // two taps) moves on, and cues, a single time.
+  const arrivalRef = useRef(state.arrival);
+  arrivalRef.current = state.arrival;
+  const leftArrivalRef = useRef<number | null>(null);
+
   const runAction = useCallback(
     (action: 'next' | 'previous' | 'repeat') => {
+      const arrival = arrivalRef.current;
+      if (action !== 'repeat') {
+        if (!isRunActive(statusRef.current) || leftArrivalRef.current === arrival) return;
+        leftArrivalRef.current = arrival;
+      }
       const completes =
         action === 'next' &&
         state.snapshot != null &&
@@ -163,8 +178,8 @@ export function RunScreen({
             () => false,
           )
         : null;
-      if (action === 'next') dispatch({ type: 'NEXT' });
-      else if (action === 'previous') dispatch({ type: 'PREVIOUS' });
+      if (action === 'next') dispatch({ type: 'NEXT', arrival });
+      else if (action === 'previous') dispatch({ type: 'PREVIOUS', arrival });
       else dispatch({ type: 'REPEAT' });
     },
     [onCue, state.currentStepIndex, state.snapshot],
@@ -346,29 +361,18 @@ export function RunScreen({
     state.voiceControlAvailable &&
     (state.status === 'speaking' || state.status === 'listening');
 
-  // Suppress onVoiceRunStop in this cleanup on the completed transition. The
-  // completion effect stops the service after the chime has been started.
-  const statusRef = useRef(state.status);
-  statusRef.current = state.status;
-
   // A timed step counts down from the moment the run reaches it; at zero the
   // reading is cut off and the run moves on as if you'd said "next".
   const currentStep = state.snapshot?.steps[state.currentStepIndex];
-  const arrivalRef = useRef(state.arrival);
-  arrivalRef.current = state.arrival;
   const runActionRef = useRef(runAction);
   runActionRef.current = runAction;
   const countdown = useStepCountdown({
     timerSeconds: currentStep?.timerSeconds ?? null,
     arrival: state.arrival,
-    active: state.status === 'speaking' || state.status === 'listening' || state.status === 'manual',
+    active: isRunActive(state.status),
     keepsRunningInBackground: voiceRunActive,
     onExpire: (arrival) => {
-      const status = statusRef.current;
-      if (arrival !== arrivalRef.current) return;
-      if (status === 'speaking' || status === 'listening' || status === 'manual') {
-        runActionRef.current('next');
-      }
+      if (arrival === arrivalRef.current) runActionRef.current('next');
     },
   });
 
@@ -493,11 +497,7 @@ export function RunScreen({
       onReleaseStopHold={releaseStopHold}
       onRequestStop={onRequestStop}
       onAction={runAction}
-      countdown={
-        countdown.remainingSeconds != null && countdown.totalSeconds
-          ? { remainingSeconds: countdown.remainingSeconds, totalSeconds: countdown.totalSeconds }
-          : null
-      }
+      countdown={countdown}
     />
   );
 }

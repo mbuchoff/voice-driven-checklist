@@ -27,6 +27,7 @@ import {
 } from './runPresentation';
 import { StopRunControl } from './StopRunControl';
 import type { RoutineRunState } from './types';
+import type { StepCountdown } from './useStepCountdown';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -47,7 +48,7 @@ export function ActiveRunView({
   countdown = null,
 }: {
   /** The current step's countdown, for a timed step. */
-  countdown?: { remainingSeconds: number; totalSeconds: number } | null;
+  countdown?: StepCountdown | null;
   state: RoutineRunState;
   theme: Palette;
   androidApi: number;

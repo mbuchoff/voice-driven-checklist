@@ -139,7 +139,7 @@ describe('RunScreen stop control', () => {
       snapshot: {
         routineId: 'one-step',
         routineTitle: 'One step',
-        steps: [{ id: 'only', text: 'Only step', order: 0 }],
+        steps: [{ id: 'only', text: 'Only step', order: 0, timerSeconds: null }],
       },
     });
     await flush();

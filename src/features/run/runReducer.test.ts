@@ -5,9 +5,9 @@ const snapshot: RoutineRunSnapshot = {
   routineId: 'cl-1',
   routineTitle: 'Demo',
   steps: [
-    { id: 'i1', text: 'Item one', order: 0 },
-    { id: 'i2', text: 'Item two', order: 1 },
-    { id: 'i3', text: 'Item three', order: 2 },
+    { id: 'i1', text: 'Item one', order: 0, timerSeconds: null },
+    { id: 'i2', text: 'Item two', order: 1, timerSeconds: null },
+    { id: 'i3', text: 'Item three', order: 2, timerSeconds: null },
   ],
 };
 
@@ -22,6 +22,9 @@ function start(
     spokenPlaybackAvailable: overrides.spokenPlaybackAvailable ?? true,
   });
 }
+
+const next = (state: RoutineRunState) => runReducer(state, { type: 'NEXT', arrival: state.arrival });
+const previous = (state: RoutineRunState) => runReducer(state, { type: 'PREVIOUS', arrival: state.arrival });
 
 describe('initialRunState', () => {
   it('starts in speaking when both speech paths are available', () => {
@@ -45,37 +48,31 @@ describe('initialRunState', () => {
 
 describe('runReducer NEXT', () => {
   it('advances to the next item and re-enters speaking when playback is available', () => {
-    const state = runReducer(start(), { type: 'NEXT' });
+    const state = next(start());
     expect(state.currentStepIndex).toBe(1);
     expect(state.status).toBe('speaking');
   });
 
   it('clears the latest recognized phrase when advancing', () => {
-    const phrasing = runReducer(
-      { ...start({ spokenPlaybackAvailable: false }), latestRecognizedPhrase: 'next' },
-      { type: 'NEXT' },
-    );
+    const phrasing = next({ ...start({ spokenPlaybackAvailable: false }), latestRecognizedPhrase: 'next' });
     expect(phrasing.latestRecognizedPhrase).toBe('');
   });
 
   it('transitions to listening when playback is unavailable but voice is available', () => {
-    const state = runReducer(start({ spokenPlaybackAvailable: false }), { type: 'NEXT' });
+    const state = next(start({ spokenPlaybackAvailable: false }));
     expect(state.status).toBe('listening');
   });
 
   it('transitions to manual when neither speech path is available', () => {
-    const state = runReducer(
-      start({ voiceControlAvailable: false, spokenPlaybackAvailable: false }),
-      { type: 'NEXT' },
-    );
+    const state = next(start({ voiceControlAvailable: false, spokenPlaybackAvailable: false }));
     expect(state.status).toBe('manual');
   });
 
   it('completes the run when called on the final item', () => {
     let state = start();
-    state = runReducer(state, { type: 'NEXT' }); // -> 1
-    state = runReducer(state, { type: 'NEXT' }); // -> 2
-    state = runReducer(state, { type: 'NEXT' }); // -> completed
+    state = next(state); // -> 1
+    state = next(state); // -> 2
+    state = next(state); // -> completed
     expect(state.status).toBe('completed');
     expect(state.currentStepIndex).toBe(2);
     expect(state.latestRecognizedPhrase).toBe('');
@@ -83,9 +80,9 @@ describe('runReducer NEXT', () => {
 
   it('is a no-op once the run is completed', () => {
     let state = start();
-    for (let i = 0; i < snapshot.steps.length; i++) state = runReducer(state, { type: 'NEXT' });
+    for (let i = 0; i < snapshot.steps.length; i++) state = next(state);
     const completed = state;
-    expect(runReducer(completed, { type: 'NEXT' })).toBe(completed);
+    expect(next(completed)).toBe(completed);
   });
 });
 
@@ -120,20 +117,20 @@ describe('runReducer REPEAT', () => {
 
 describe('runReducer PREVIOUS', () => {
   it('moves back one item and re-enters speaking', () => {
-    const state = runReducer({ ...start(), currentStepIndex: 2 }, { type: 'PREVIOUS' });
+    const state = previous({ ...start(), currentStepIndex: 2 });
     expect(state.currentStepIndex).toBe(1);
     expect(state.status).toBe('speaking');
   });
 
   it('stays on the first item and re-enters speaking when already at index 0', () => {
-    const state = runReducer({ ...start(), currentStepIndex: 0 }, { type: 'PREVIOUS' });
+    const state = previous({ ...start(), currentStepIndex: 0 });
     expect(state.currentStepIndex).toBe(0);
     expect(state.status).toBe('speaking');
   });
 
   it('is a no-op when completed', () => {
     const completed = { ...start(), status: 'completed' as const, currentStepIndex: 2 };
-    expect(runReducer(completed, { type: 'PREVIOUS' })).toBe(completed);
+    expect(previous(completed)).toBe(completed);
   });
 });
 
@@ -247,13 +244,13 @@ describe('runReducer playbackTick', () => {
   it('bumps the tick on NEXT advance', () => {
     const state = start();
     expect(state.playbackTick).toBe(1);
-    expect(runReducer(state, { type: 'NEXT' }).playbackTick).toBe(2);
+    expect(next(state).playbackTick).toBe(2);
   });
 
   it('does not bump the tick when NEXT completes the run', () => {
     let state = { ...start(), currentStepIndex: 2 };
     const tickBefore = state.playbackTick;
-    state = runReducer(state, { type: 'NEXT' });
+    state = next(state);
     expect(state.status).toBe('completed');
     expect(state.playbackTick).toBe(tickBefore);
   });
@@ -261,7 +258,7 @@ describe('runReducer playbackTick', () => {
   it('bumps the tick on REPEAT, PREVIOUS, and RESTART', () => {
     const state = start();
     expect(runReducer(state, { type: 'REPEAT' }).playbackTick).toBe(state.playbackTick + 1);
-    expect(runReducer({ ...state, currentStepIndex: 1 }, { type: 'PREVIOUS' }).playbackTick).toBe(
+    expect(previous({ ...state, currentStepIndex: 1 }).playbackTick).toBe(
       state.playbackTick + 1,
     );
     const completed = { ...state, status: 'completed' as const, currentStepIndex: 2 };
@@ -291,11 +288,11 @@ describe('runReducer DISCARD_RUN', () => {
       currentStepIndex: 1,
       latestRecognizedPhrase: 'something',
     };
-    const next = runReducer(listening, { type: 'DISCARD_RUN' });
-    expect(next.status).toBe('idle');
-    expect(next.snapshot).toBeNull();
-    expect(next.currentStepIndex).toBe(0);
-    expect(next.latestRecognizedPhrase).toBe('');
+    const discarded = runReducer(listening, { type: 'DISCARD_RUN' });
+    expect(discarded.status).toBe('idle');
+    expect(discarded.snapshot).toBeNull();
+    expect(discarded.currentStepIndex).toBe(0);
+    expect(discarded.latestRecognizedPhrase).toBe('');
   });
 
   describe('arrivals', () => {
@@ -306,16 +303,25 @@ describe('runReducer DISCARD_RUN', () => {
       state = runReducer(state, { type: 'REPEAT' });
       expect(state.arrival).toBe(first);
 
-      state = runReducer(state, { type: 'NEXT' });
+      state = next(state);
       expect(state.arrival).toBe(first + 1);
-      state = runReducer(state, { type: 'PREVIOUS' });
+      state = previous(state);
       expect(state.arrival).toBe(first + 2);
 
-      state = runReducer(runReducer(runReducer(state, { type: 'NEXT' }), { type: 'NEXT' }), { type: 'NEXT' });
+      state = next(next(next(state)));
       expect(state.status).toBe('completed');
       const finished = state.arrival;
       state = runReducer(state, { type: 'RESTART' });
       expect(state.arrival).toBe(finished + 1);
+    });
+
+    it('moves on once from an arrival, ignoring a second next or previous meant for it', () => {
+      const arrived = start();
+      const moved = next(arrived);
+
+      expect(runReducer(moved, { type: 'NEXT', arrival: arrived.arrival })).toBe(moved);
+      expect(runReducer(moved, { type: 'PREVIOUS', arrival: arrived.arrival })).toBe(moved);
+      expect(next(moved).currentStepIndex).toBe(2);
     });
   });
 });

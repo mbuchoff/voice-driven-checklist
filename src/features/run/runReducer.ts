@@ -13,8 +13,13 @@ function statusForActiveItem(state: RoutineRunState): RunStatus {
   return 'manual';
 }
 
+/** The run is on a step: reading it, listening, or waiting for a tap. */
+export function isRunActive(status: RunStatus): boolean {
+  return status === 'speaking' || status === 'listening' || status === 'manual';
+}
+
 function canAcceptCommand(state: RoutineRunState): state is CommandableState {
-  return state.status === 'speaking' || state.status === 'listening' || state.status === 'manual';
+  return isRunActive(state.status);
 }
 
 export function initialRunState(
@@ -37,7 +42,7 @@ export function initialRunState(
 export function runReducer(state: RoutineRunState, action: RunAction): RoutineRunState {
   switch (action.type) {
     case 'NEXT': {
-      if (!canAcceptCommand(state)) return state;
+      if (!canAcceptCommand(state) || action.arrival !== state.arrival) return state;
       const lastIndex = state.snapshot.steps.length - 1;
       if (state.currentStepIndex >= lastIndex) {
         return { ...state, status: 'completed', latestRecognizedPhrase: '' };
@@ -63,7 +68,7 @@ export function runReducer(state: RoutineRunState, action: RunAction): RoutineRu
     }
 
     case 'PREVIOUS': {
-      if (!canAcceptCommand(state)) return state;
+      if (!canAcceptCommand(state) || action.arrival !== state.arrival) return state;
       return {
         ...state,
         currentStepIndex: Math.max(0, state.currentStepIndex - 1),

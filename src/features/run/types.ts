@@ -1,7 +1,7 @@
 export type RoutineRunSnapshot = {
   routineId: string;
   routineTitle: string;
-  steps: { id: string; text: string; order: number; timerSeconds?: number | null }[];
+  steps: { id: string; text: string; order: number; timerSeconds: number | null }[];
 };
 
 export type RunStatus = 'idle' | 'speaking' | 'listening' | 'manual' | 'completed';
@@ -29,9 +29,11 @@ export type RoutineRunState = {
 };
 
 export type RunAction =
-  | { type: 'NEXT' }
+  // Next and previous name the arrival they move on from; one meant for an
+  // arrival already left is ignored, so a step is left only once.
+  | { type: 'NEXT'; arrival: number }
   | { type: 'REPEAT' }
-  | { type: 'PREVIOUS' }
+  | { type: 'PREVIOUS'; arrival: number }
   | { type: 'RESTART' }
   | { type: 'RECOGNIZED_PHRASE'; phrase: string }
   | { type: 'VOICE_UNAVAILABLE' }

@@ -14,9 +14,9 @@ export const runSnapshot: RoutineRunSnapshot = {
   routineId: 'cl-1',
   routineTitle: 'Demo',
   steps: [
-    { id: 'i1', text: 'Item one', order: 0 },
-    { id: 'i2', text: 'Item two', order: 1 },
-    { id: 'i3', text: 'Item three', order: 2 },
+    { id: 'i1', text: 'Item one', order: 0, timerSeconds: null },
+    { id: 'i2', text: 'Item two', order: 1, timerSeconds: null },
+    { id: 'i3', text: 'Item three', order: 2, timerSeconds: null },
   ],
 };
 

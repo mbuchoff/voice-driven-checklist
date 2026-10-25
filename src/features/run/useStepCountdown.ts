@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
+import { elapsedRealtimeMs } from '@/src/services/clock/elapsedRealtime';
 import {
   acquireCountdownWakeLock,
   releaseCountdownWakeLock,
@@ -12,7 +13,7 @@ const WAKE_LOCK_MARGIN_MS = 60_000;
 
 type Options = {
   /** The current step's timer, or null for an untimed step. */
-  timerSeconds: number | null | undefined;
+  timerSeconds: number | null;
   /** Changes each time the run arrives at a step (not on a repeat). */
   arrival: number;
   /** False once the run is over. */
@@ -27,10 +28,14 @@ type Options = {
   onExpire: (arrival: number) => void;
 };
 
+export type StepCountdown = { remainingSeconds: number; totalSeconds: number };
+
 /**
  * A step's countdown: it starts the moment the run arrives at a timed step,
  * keeps running through a repeat, and reports zero exactly once. Time is
- * measured by the clock, so it stays right even when timers run late.
+ * measured on a clock that keeps counting while the phone sleeps, so it stays
+ * right when timers run late or the time of day changes. Null for an untimed
+ * step or once the run is over.
  */
 export function useStepCountdown({
   timerSeconds,
@@ -38,16 +43,17 @@ export function useStepCountdown({
   active,
   keepsRunningInBackground,
   onExpire,
-}: Options): { remainingSeconds: number | null; totalSeconds: number | null } {
-  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(
-    active && timerSeconds ? timerSeconds : null,
-  );
+}: Options): StepCountdown | null {
+  // The time left belongs to the arrival it was counted for, so a new
+  // arrival shows its own full time from its first render.
+  const [left, setLeft] = useState<{ arrival: number; seconds: number } | null>(null);
   const onExpireRef = useRef(onExpire);
   onExpireRef.current = onExpire;
   const backgroundRef = useRef(keepsRunningInBackground);
   backgroundRef.current = keepsRunningInBackground;
   // The run screen opens in front; app state changes keep this current.
   const inFrontRef = useRef(true);
+  const deadlineRef = useRef(0);
   const timed = active && !!timerSeconds;
 
   useEffect(() => {
@@ -58,38 +64,24 @@ export function useStepCountdown({
   }, []);
 
   useEffect(() => {
-    if (!timed || !timerSeconds) {
-      setRemainingSeconds(null);
-      return;
-    }
-    const deadline = Date.now() + timerSeconds * 1000;
+    if (!timed || !timerSeconds) return;
+    const deadline = elapsedRealtimeMs() + timerSeconds * 1000;
+    deadlineRef.current = deadline;
     let fired = false;
-    let wakeLockHeld = false;
-    const holdWakeLock = () => {
-      if (wakeLockHeld || !backgroundRef.current) return;
-      acquireCountdownWakeLock(deadline - Date.now() + WAKE_LOCK_MARGIN_MS);
-      wakeLockHeld = true;
-    };
-    const dropWakeLock = () => {
-      if (!wakeLockHeld) return;
-      releaseCountdownWakeLock();
-      wakeLockHeld = false;
-    };
     const tick = () => {
       if (fired) return;
-      const left = deadline - Date.now();
-      setRemainingSeconds(Math.max(0, Math.ceil(left / 1000)));
-      if (left > 0) return;
+      const remaining = deadline - elapsedRealtimeMs();
+      const seconds = Math.max(0, Math.ceil(remaining / 1000));
+      setLeft((current) =>
+        current?.arrival === arrival && current.seconds === seconds ? current : { arrival, seconds });
+      if (remaining > 0) return;
       // Without the listening service, a countdown that ran out while the
       // app was in the background moves the run on once it's back in front.
       if (!backgroundRef.current && !inFrontRef.current) return;
       fired = true;
       clearInterval(interval);
-      dropWakeLock();
       onExpireRef.current(arrival);
     };
-    setRemainingSeconds(timerSeconds);
-    holdWakeLock();
     const interval = setInterval(tick, TICK_MS);
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
@@ -100,9 +92,22 @@ export function useStepCountdown({
     return () => {
       clearInterval(interval);
       subscription.remove();
-      dropWakeLock();
     };
   }, [arrival, timed, timerSeconds]);
 
-  return { remainingSeconds, totalSeconds: timed ? timerSeconds ?? null : null };
+  // A voice run holds a wake lock while it's on a timed step, from arrival
+  // until it moves on (the next step's lock takes over without a gap), and
+  // lets go if voice is lost.
+  const holdsWakeLock = timed && keepsRunningInBackground;
+  useEffect(() => {
+    if (!holdsWakeLock) return;
+    acquireCountdownWakeLock(deadlineRef.current - elapsedRealtimeMs() + WAKE_LOCK_MARGIN_MS);
+    return releaseCountdownWakeLock;
+  }, [arrival, holdsWakeLock]);
+
+  if (!timed || !timerSeconds) return null;
+  return {
+    remainingSeconds: left?.arrival === arrival ? left.seconds : timerSeconds,
+    totalSeconds: timerSeconds,
+  };
 }

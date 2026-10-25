@@ -163,6 +163,7 @@ describe('RunScreen presentation', () => {
           id: `long-${index}`,
           text: `Step ${index + 1}`,
           order: index,
+          timerSeconds: null,
         })),
       };
       setup({ snapshot: longSnapshot });
@@ -228,8 +229,9 @@ describe('RunScreen presentation', () => {
               id: 'long',
               text: 'A long step that wraps across several lines on a phone screen',
               order: 0,
+              timerSeconds: null,
             },
-            { id: 'short', text: 'Short step', order: 1 },
+            { id: 'short', text: 'Short step', order: 1, timerSeconds: null },
           ],
         },
       });
@@ -257,6 +259,7 @@ describe('RunScreen presentation', () => {
               id: 'glass',
               text: 'Drink a full glass of water',
               order: 0,
+              timerSeconds: null,
             },
           ],
         },
