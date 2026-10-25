@@ -72,14 +72,17 @@ export function WordLayouts({
   // Where each word starts in each layout, kept out of state: only the
   // finished layouts matter, reported once.
   const lefts = useRef<[Lefts, Lefts]>([[], []]);
+  // How many word places are in, in both layouts together.
+  const placed = useRef(0);
   const reported = useRef(false);
   const onMeasuredRef = useRef(onMeasured);
   onMeasuredRef.current = onMeasured;
   const place = (side: 0 | 1, i: number, x: number) => {
+    if (lefts.current[side][i] === undefined) placed.current += 1;
     lefts.current[side][i] = x;
-    const [first, second] = lefts.current;
-    if (reported.current || words.some((_, w) => first[w] === undefined || second[w] === undefined)) return;
+    if (reported.current || placed.current < 2 * words.length) return;
     reported.current = true;
+    const [first, second] = lefts.current;
     onMeasuredRef.current(spotsFromLefts(first as number[]), spotsFromLefts(second as number[]));
   };
 
@@ -318,6 +321,18 @@ function GlidingWord({
 
 type Layouts = { key: string; closed: WordSpot[]; opened: WordSpot[] };
 
+/** No words, or words with a line break of their own, just ride along. */
+const ridesAlong = (words: string) => !words || words.includes('\n');
+
+/**
+ * The longest a step's words take to glide to their new lines as it opens
+ * or closes: 0 if they ride along.
+ */
+export function wordGlideMs(text: string): number {
+  const words = text.trim();
+  return ridesAlong(words) ? 0 : glideLength(words.split(/\s+/).length);
+}
+
 /**
  * A long step's words gliding to their new lines as it opens or closes
  * (Round 27). The words are measured at rest, ahead of a glide, so it starts
@@ -353,7 +368,7 @@ export function useWordGlide({
   const { fontScale } = useWindowDimensions();
   const linePitch = STEP_WORDS.lineHeight * fontScale;
   const layoutsKey = `${closedBoxWidth}|${openedBoxWidth}|${fontScale}|${words}`;
-  const glides = !!words && !words.includes('\n') && !!closedBoxWidth;
+  const glides = !ridesAlong(words) && !!closedBoxWidth;
   const measured = useRef<Layouts | null>(null);
   const planGlide = (target: 0 | 1, { closed, opened }: Layouts) =>
     target === 1

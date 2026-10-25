@@ -234,7 +234,12 @@ export function useStepReorder({
   // without the drag (an open step closing, UNDO rows going), not making room.
   const onRowLayout = (localId: string, event: LayoutChangeEvent) => {
     const current = dragRef.current;
-    if (current?.localId === localId) return;
+    if (current?.localId === localId) {
+      // The held step was the open one and closes as it lifts: its slot and
+      // preview take its closed height while the list settles.
+      if (current.phase === 'settling') resizeHeld(current, event.nativeEvent.layout.height);
+      return;
+    }
     const { y, height } = event.nativeEvent.layout;
     layoutsById.current[localId] = { y, height };
     if (!current) {
@@ -246,6 +251,15 @@ export function useStepReorder({
         rowLayoutsValue.value = [...rowLayouts.current];
       }
     }
+  };
+
+  const resizeHeld = (current: DragContext, height: number) => {
+    if (Math.abs(height - current.height) < 0.5) return;
+    current.height = height;
+    current.startCenterY = current.previewTop + height / 2;
+    rowLayouts.current[current.from] = { y: current.previewTop, height };
+    rowLayoutsValue.value = [...rowLayouts.current];
+    setDrag(dragStateFrom(current));
   };
 
   // A drop, or a step added, deleted or put back: positions follow the order.
@@ -367,23 +381,21 @@ export function useStepReorder({
     else startAiming();
   };
 
-  // Once settled (or let go of while settling), the drag aims where the
-  // finger is, against where the steps now are.
-  const startAiming = () => {
+  const endSettling = () => {
     if (settleTimer.current) clearTimeout(settleTimer.current);
     settleTimer.current = null;
     dragSettled.value = 1;
+  };
+
+  // Once settled (or let go of while settling), the drag aims where the
+  // finger is, against where the steps now are.
+  const startAiming = () => {
+    endSettling();
     const current = dragRef.current;
     if (!current || current.phase === 'aiming') return;
     current.phase = 'aiming';
     dragTarget.value = -1;
     updateDragPosition(dragLatestPageY.value);
-  };
-
-  const endSettling = () => {
-    if (settleTimer.current) clearTimeout(settleTimer.current);
-    settleTimer.current = null;
-    dragSettled.value = 1;
   };
 
   const updateEdgeDrag = (pageY: number, nearEdge: boolean) => {
@@ -421,10 +433,9 @@ export function useStepReorder({
       );
       return;
     }
-    if (current.phase === 'settling') startAiming();
+    startAiming();
     dragRef.current = null;
     cancelEdgeAutoscroll();
-    endSettling();
     const targetOffset = current.from === current.to
       ? getOwnPlaceShift(startLayouts.current, rowLayouts.current, current.from)
       : getDropTargetOffset(rowLayouts.current, current.from, current.to);

@@ -37,11 +37,11 @@ import { SaveBar } from './editor/SaveBar';
 import { RoutineHeroCard } from './editor/RoutineHeroCard';
 import { DeletedStepRow } from './editor/DeletedStepRow';
 import { StepRow } from './editor/StepRow';
+import { wordGlideMs } from './editor/StepWordGlide';
 import { KeyboardHolder, useStepFocus } from './editor/stepFocus';
 import { LIST_PAD_X } from './editor/stepRowMetrics';
 import { ChipSizesProvider, StepTimerChips } from './editor/TimerChips';
 import { TimerPanel } from './editor/TimerPanel';
-import { glideLength } from './editor/wordGlidePlan';
 import { createRoutine, deleteRoutine, updateRoutine } from './repository';
 import { moveItem } from './reorder';
 import {
@@ -104,30 +104,34 @@ export type RoutineEditorProps = {
   onCancel: () => void;
 };
 
+// The sheets and the color grid stay screen state: each is one surface with
+// one way in and out, and Android Back closes them in order (see onBack).
+// The timer panel is in the model because its rules are.
 type Sheet = 'leave' | 'delete' | null;
+
+/** A few frames for the rows' last places to arrive after a change. */
+const LAST_LAYOUTS_MS = 50;
+
+/**
+ * How long lifting a step takes to change where the other steps are: the
+ * open step closes (its number, time and chips come back while its words,
+ * the ones it closes with, glide to their lines) and UNDO rows go.
+ */
+function liftSettleMs(state: EditorState): number {
+  const openId = state.openId;
+  const clearsUndoRows = state.rows.some((row) => row.kind === 'deleted');
+  if (!openId && !clearsUndoRows) return 0;
+  // An emptied step gets its words back as it closes.
+  const closed = openId ? realSteps(leaveOpenStep(state)).find((step) => step.localId === openId) : undefined;
+  const closing = openId ? Math.max(STEP_OPEN_MS, CHIP_FOLD_MS, closed ? wordGlideMs(closed.text) : 0) : 0;
+  return closing + LAST_LAYOUTS_MS;
+}
 
 /**
  * The rows as shown: each step with its number among the steps (`index`)
  * and its place among the steps that aren't being dragged (`dropIndex`,
  * where the drag's slot can go; null for the dragged step).
  */
-/** A few frames for the rows' last places to arrive after a change. */
-const LAST_LAYOUTS_MS = 50;
-
-/**
- * How long lifting a step takes to change where the other steps are: the
- * open step closes (its number, time and chips come back while its words
- * glide to their closed lines) and UNDO rows go.
- */
-function liftSettleMs(state: EditorState): number {
-  const open = state.openId ? realSteps(state).find((step) => step.localId === state.openId) : undefined;
-  const clearsUndoRows = state.rows.some((row) => row.kind === 'deleted');
-  if (!open && !clearsUndoRows) return 0;
-  const words = open?.text.trim() ? open.text.trim().split(/\s+/).length : 0;
-  const closing = open ? Math.max(STEP_OPEN_MS, CHIP_FOLD_MS, words ? glideLength(words) : 0) : 0;
-  return closing + LAST_LAYOUTS_MS;
-}
-
 type ShownRow =
   | { kind: 'deleted'; row: Extract<EditorRow, { kind: 'deleted' }>; rowIndex: number }
   | { kind: 'step'; row: Extract<EditorRow, { kind: 'step' }>; rowIndex: number; index: number; dropIndex: number | null };
