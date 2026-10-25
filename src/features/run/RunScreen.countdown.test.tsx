@@ -48,7 +48,7 @@ describe('RunScreen countdowns', () => {
 
     expect(onCue).toHaveBeenCalledWith('next');
     expect(playback.stopCount).toBeGreaterThan(0);
-    expect(screen.getByTestId('run-item-1').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByTestId('run-step-1').props.accessibilityState).toEqual({ selected: true });
     expect(screen.queryByTestId('run-countdown')).toBeNull();
   });
 
@@ -66,7 +66,7 @@ describe('RunScreen countdowns', () => {
       return { ...run, onCue };
     }
     const onStep = (index: number) =>
-      expect(screen.getByTestId(`run-item-${index}`, { includeHiddenElements: true }).props.accessibilityState)
+      expect(screen.getByTestId(`run-step-${index}`, { includeHiddenElements: true }).props.accessibilityState)
         .toEqual({ selected: true });
 
     it('moves on once when "next" is heard just before zero', async () => {
@@ -98,10 +98,10 @@ describe('RunScreen countdowns', () => {
     setupRunScreen({ snapshot: timed });
     await advance(0);
     await advance(5000);
-    expect(screen.getByTestId('run-item-1').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByTestId('run-step-1').props.accessibilityState).toEqual({ selected: true });
 
     await advance(60_000);
-    expect(screen.getByTestId('run-item-1').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByTestId('run-step-1').props.accessibilityState).toEqual({ selected: true });
   });
 
   it('keeps the countdown running through a repeat', async () => {
@@ -114,7 +114,7 @@ describe('RunScreen countdowns', () => {
     await advance(1000);
     expect(screen.getByTestId('run-countdown')).toHaveTextContent('0:01');
     await advance(1000);
-    expect(screen.getByTestId('run-item-1').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByTestId('run-step-1').props.accessibilityState).toEqual({ selected: true });
   });
 
   it('starts the step you land on from its full time after next or previous', async () => {
@@ -128,7 +128,7 @@ describe('RunScreen countdowns', () => {
 
     expect(screen.getByTestId('run-countdown')).toHaveTextContent('0:05');
     await advance(4000);
-    expect(screen.getByTestId('run-item-0').props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByTestId('run-step-0').props.accessibilityState).toEqual({ selected: true });
   });
 
   it('finishes the run when the last step’s countdown runs out', async () => {

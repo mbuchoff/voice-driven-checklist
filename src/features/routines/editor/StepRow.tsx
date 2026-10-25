@@ -169,7 +169,7 @@ export function StepRow(props: StepRowProps) {
   };
 
   const swipe = Gesture.Pan()
-    .withTestId(`item-swipe-gesture-${localId}-${index}`)
+    .withTestId(`step-swipe-gesture-${localId}-${index}`)
     .enabled(!open)
     .activeOffsetX([-SWIPE_START, SWIPE_START])
     .failOffsetY([-SWIPE_START, SWIPE_START])
@@ -202,7 +202,7 @@ export function StepRow(props: StepRowProps) {
     });
 
   const tap = Gesture.Tap()
-    .withTestId(`item-edit-gesture-${localId}-${index}`)
+    .withTestId(`step-edit-gesture-${localId}-${index}`)
     .enabled(!open)
     .maxDuration(STEP_REORDER_HOLD_MS - 1)
     .runOnJS(true)
@@ -244,7 +244,7 @@ export function StepRow(props: StepRowProps) {
 
   return (
     <Animated.View
-      testID={`item-row-${index}`}
+      testID={`step-row-${index}`}
       nativeID={localId}
       onLayout={(event) => {
         rowHeight.current = event.nativeEvent.layout.height;
@@ -318,7 +318,7 @@ export function StepRow(props: StepRowProps) {
                 />
               </Animated.View>
               <View
-                testID={`item-textbox-${index}`}
+                testID={`step-textbox-${index}`}
                 style={{ flex: 1, minWidth: 0 }}
                 onLayout={(event) => {
                   // Only at rest: while the number and time move, it's changing.
@@ -363,7 +363,7 @@ export function StepRow(props: StepRowProps) {
                 {open ? (
                   <TextInput
                     ref={props.inputRef}
-                    testID={`item-text-${index}`}
+                    testID={`step-text-${index}`}
                     accessibilityLabel={`Step ${number}`}
                     value={text}
                     multiline
@@ -381,7 +381,7 @@ export function StepRow(props: StepRowProps) {
                   />
                 ) : (
                   <Text
-                    testID={`item-label-${index}`}
+                    testID={`step-label-${index}`}
                     accessibilityRole="button"
                     accessibilityLabel={`Edit step ${number}: ${text}`}
                     accessibilityActions={[
@@ -432,7 +432,7 @@ export function StepRow(props: StepRowProps) {
                 <TimeLabel colors={colors} seconds={timerSeconds} />
               </View>
               <AnimatedPressable
-                testID={`item-clock-${index}`}
+                testID={`step-clock-${index}`}
                 accessibilityRole="button"
                 accessibilityLabel={`Timer for step ${number}: ${formatTimerWords(timerSeconds)}`}
                 accessibilityElementsHidden={open}

@@ -27,7 +27,7 @@ import {
 import { createRoutine, getRoutine } from './repository';
 
 function deleteStepByAccessibility(index: number) {
-  fireEvent(screen.getByTestId(`item-label-${index}`), 'accessibilityAction', {
+  fireEvent(screen.getByTestId(`step-label-${index}`), 'accessibilityAction', {
     nativeEvent: { actionName: 'delete' },
   });
 }
@@ -74,7 +74,7 @@ describe('RoutineEditor', () => {
       });
 
       // Step 7 sits 336–392 dp down the list.
-      fireEvent(screen.getByTestId('item-row-6'), 'layout', {
+      fireEvent(screen.getByTestId('step-row-6'), 'layout', {
         nativeEvent: { layout: { x: 0, y: 336, width: 360, height: 56 } },
       });
 
@@ -149,12 +149,12 @@ describe('RoutineEditor', () => {
 
         const gesture = await beginRowDrag(0, 25, 125);
 
-        expect(glide('item-row-1')).toBeDefined();
-        expect(glide('item-row-1')).toBe(STEP_MAKE_ROOM);
-        expect(glide('item-row-2')).toBe(STEP_MAKE_ROOM);
-        expect(glide('item-drop-target-2')).toBe(STEP_MAKE_ROOM);
+        expect(glide('step-row-1')).toBeDefined();
+        expect(glide('step-row-1')).toBe(STEP_MAKE_ROOM);
+        expect(glide('step-row-2')).toBe(STEP_MAKE_ROOM);
+        expect(glide('step-drop-target-2')).toBe(STEP_MAKE_ROOM);
         // Otherwise it would fly to where it lands.
-        expect(glide('item-row-0')).toBeUndefined();
+        expect(glide('step-row-0')).toBeUndefined();
         await cancelRowDrag(gesture);
       });
 
@@ -164,8 +164,8 @@ describe('RoutineEditor', () => {
 
         await finishRowDrag(gesture);
 
-        expect(['item-label-0', 'item-label-1', 'item-label-2'].map((id) => screen.getByTestId(id).props.children)).toEqual(['b', 'c', 'a']);
-        expect([0, 1, 2].map((index) => glide(`item-row-${index}`))).toEqual([undefined, undefined, undefined]);
+        expect(['step-label-0', 'step-label-1', 'step-label-2'].map((id) => screen.getByTestId(id).props.children)).toEqual(['b', 'c', 'a']);
+        expect([0, 1, 2].map((index) => glide(`step-row-${index}`))).toEqual([undefined, undefined, undefined]);
       });
     });
 
@@ -187,23 +187,23 @@ describe('RoutineEditor', () => {
       primeRowLayouts([50, 50, 50]);
       const gesture = await beginRowDrag(0, 25, 25);
 
-      expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
-      expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('a');
-      expect(screen.getByTestId('item-drop-target-0')).toBeOnTheScreen();
+      expect(screen.getByTestId('step-drag-preview')).toBeOnTheScreen();
+      expect(screen.getByTestId('step-drag-preview-text').props.children).toBe('a');
+      expect(screen.getByTestId('step-drop-target-0')).toBeOnTheScreen();
       expect(
-        StyleSheet.flatten(screen.getByTestId('item-drop-target-0').props.style)
+        StyleSheet.flatten(screen.getByTestId('step-drop-target-0').props.style)
           .height,
       ).toBe(50);
       // The held step is unseen; its slot stands in for it.
       expect(
-        StyleSheet.flatten(screen.getByTestId('item-row-0').props.style)
+        StyleSheet.flatten(screen.getByTestId('step-row-0').props.style)
           .opacity,
       ).toBe(0);
 
       await finishRowDrag(gesture);
 
-      expect(screen.queryByTestId('item-drag-preview')).toBeNull();
-      expect(screen.getByTestId('item-row-2')).toBeOnTheScreen();
+      expect(screen.queryByTestId('step-drag-preview')).toBeNull();
+      expect(screen.getByTestId('step-row-2')).toBeOnTheScreen();
     });
 
     it('replaces the gap with reordered rows without remounting displaced rows', async () => {
@@ -223,19 +223,19 @@ describe('RoutineEditor', () => {
 
       primeRowLayouts([50, 50, 50]);
       const gesture = await beginRowDrag(0, 25, 125);
-      const firstDisplacedRow = screen.getByTestId('item-row-1');
-      const secondDisplacedRow = screen.getByTestId('item-row-2');
+      const firstDisplacedRow = screen.getByTestId('step-row-1');
+      const secondDisplacedRow = screen.getByTestId('step-row-2');
 
       await releaseRowDrag(gesture);
 
-      expect(screen.getByTestId('item-label-2')).toHaveTextContent('a');
+      expect(screen.getByTestId('step-label-2')).toHaveTextContent('a');
       expect(
-        StyleSheet.flatten(screen.getByTestId('item-row-2').props.style)
+        StyleSheet.flatten(screen.getByTestId('step-row-2').props.style)
           .opacity,
       ).toBe(1);
-      expect(screen.getByTestId('item-row-0')).toBe(firstDisplacedRow);
-      expect(screen.getByTestId('item-row-1')).toBe(secondDisplacedRow);
-      expect(screen.queryByTestId('item-drop-target-2')).toBeNull();
+      expect(screen.getByTestId('step-row-0')).toBe(firstDisplacedRow);
+      expect(screen.getByTestId('step-row-1')).toBe(secondDisplacedRow);
+      expect(screen.queryByTestId('step-drop-target-2')).toBeNull();
     });
 
     it('keeps the settling preview mounted until its release animation finishes', async () => {
@@ -264,17 +264,17 @@ describe('RoutineEditor', () => {
       );
       jest.useFakeTimers();
       await releaseRowDrag(gesture);
-      expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
+      expect(screen.getByTestId('step-drag-preview')).toBeOnTheScreen();
 
       act(() => jest.advanceTimersByTime(10_000));
-      expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
+      expect(screen.getByTestId('step-drag-preview')).toBeOnTheScreen();
 
       jest.useRealTimers();
       await act(async () => {
         releaseCallbacks.at(-1)?.(true);
         await flushGestureCommit();
       });
-      expect(screen.queryByTestId('item-drag-preview')).toBeNull();
+      expect(screen.queryByTestId('step-drag-preview')).toBeNull();
     });
 
     it('moves the real insertion target while keeping the preview coordinate base fixed', async () => {
@@ -296,10 +296,10 @@ describe('RoutineEditor', () => {
 
       const gesture = await beginRowDrag(0, 25, 125);
       const previewTop = () =>
-        StyleSheet.flatten(screen.getByTestId('item-drag-preview').props.style)
+        StyleSheet.flatten(screen.getByTestId('step-drag-preview').props.style)
           .top;
       expect(previewTop()).toBe(0);
-      expect(screen.getByTestId('item-drop-target-2')).toBeOnTheScreen();
+      expect(screen.getByTestId('step-drop-target-2')).toBeOnTheScreen();
 
       act(() => {
         gesture.handlers.onUpdate?.({ absoluteY: 125 } as never);
@@ -307,7 +307,7 @@ describe('RoutineEditor', () => {
       await act(async () => {
         await flushGestureCommit();
       });
-      expect(screen.getByTestId('item-drop-target-2')).toBeOnTheScreen();
+      expect(screen.getByTestId('step-drop-target-2')).toBeOnTheScreen();
       expect(previewTop()).toBe(0);
 
       await cancelRowDrag(gesture);
@@ -371,11 +371,11 @@ describe('RoutineEditor', () => {
         await flushGestureCommit();
       });
 
-      expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('a');
-      expect(screen.getByTestId('item-label-0')).toHaveTextContent('a');
+      expect(screen.getByTestId('step-drag-preview-text').props.children).toBe('a');
+      expect(screen.getByTestId('step-label-0')).toHaveTextContent('a');
 
       await releaseRowDrag(firstGesture);
-      expect(screen.getByTestId('item-label-2')).toHaveTextContent('a');
+      expect(screen.getByTestId('step-label-2')).toHaveTextContent('a');
     });
 
     it('allows another drag when the claimed row disappears before drag setup', async () => {
@@ -407,7 +407,7 @@ describe('RoutineEditor', () => {
       primeRowLayouts([50, 50]);
       await beginRowDrag(0, 25, 25);
 
-      expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('b');
+      expect(screen.getByTestId('step-drag-preview-text').props.children).toBe('b');
     });
 
     it('keeps a successful release claimed until its JS setup begins', async () => {
@@ -467,7 +467,7 @@ describe('RoutineEditor', () => {
 
       const gesture = await beginRowDrag(0, 25, 180);
 
-      expect(screen.getByTestId('item-drop-target-2')).toBeOnTheScreen();
+      expect(screen.getByTestId('step-drop-target-2')).toBeOnTheScreen();
       await cancelRowDrag(gesture);
     });
 
@@ -489,15 +489,15 @@ describe('RoutineEditor', () => {
       primeRowLayouts([50, 50, 50]);
       await dragRow(2, 125, 20);
 
-      expect(screen.getByTestId('item-label-0')).toHaveTextContent('c');
+      expect(screen.getByTestId('step-label-0')).toHaveTextContent('c');
 
       await beginRowDrag(0, 25, 25);
 
       expect(
-        StyleSheet.flatten(screen.getByTestId('item-drag-preview').props.style)
+        StyleSheet.flatten(screen.getByTestId('step-drag-preview').props.style)
           .top,
       ).toBe(0);
-      expect(screen.getByTestId('item-drag-preview-text').props.children).toBe('c');
+      expect(screen.getByTestId('step-drag-preview-text').props.children).toBe('c');
     });
 
     it('does not reuse temporary drop-gap layouts on later drags', async () => {
@@ -520,12 +520,12 @@ describe('RoutineEditor', () => {
 
       await dragRow(0, 25, 125);
 
-      expect(screen.getByTestId('item-label-2')).toHaveTextContent('c');
+      expect(screen.getByTestId('step-label-2')).toHaveTextContent('c');
 
       await beginRowDrag(2, 125, 125);
 
       expect(
-        StyleSheet.flatten(screen.getByTestId('item-drag-preview').props.style)
+        StyleSheet.flatten(screen.getByTestId('step-drag-preview').props.style)
           .top,
       ).toBe(100);
     });
@@ -604,7 +604,7 @@ describe('RoutineEditor', () => {
         0,
         1000,
       );
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+      fireEvent(screen.getByTestId('step-row-0'), 'layout', {
         nativeEvent: { layout: { y: 0, height: 50 } },
       });
 
@@ -648,13 +648,13 @@ describe('RoutineEditor', () => {
         nativeEvent: { layout: { y: 0, height: 300 } },
       });
       fireEvent(screen.getByTestId('routine-editor-scroll'), 'contentSizeChange', 0, 1000);
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+      fireEvent(screen.getByTestId('step-row-0'), 'layout', {
         nativeEvent: { layout: { y: 0, height: 50 } },
       });
-      fireEvent(screen.getByTestId('item-row-1'), 'layout', {
+      fireEvent(screen.getByTestId('step-row-1'), 'layout', {
         nativeEvent: { layout: { y: 300, height: 20 } },
       });
-      fireEvent(screen.getByTestId('item-row-2'), 'layout', {
+      fireEvent(screen.getByTestId('step-row-2'), 'layout', {
         nativeEvent: { layout: { y: 650, height: 50 } },
       });
 
@@ -664,7 +664,7 @@ describe('RoutineEditor', () => {
       }
       await finishRowDrag(gesture);
 
-      expect(screen.getByTestId('item-label-1')).toHaveTextContent('a');
+      expect(screen.getByTestId('step-label-1')).toHaveTextContent('a');
       jest.restoreAllMocks();
     });
 
@@ -687,8 +687,8 @@ describe('RoutineEditor', () => {
       const gesture = await beginRowDrag(0, 25, 125);
       await cancelRowDrag(gesture);
 
-      expect(screen.getByTestId('item-label-0')).toHaveTextContent('a');
-      expect(screen.queryByTestId('item-drag-preview')).toBeNull();
+      expect(screen.getByTestId('step-label-0')).toHaveTextContent('a');
+      expect(screen.queryByTestId('step-drag-preview')).toBeNull();
     });
 
     it('lifts a held step, but lets a finger that drifts more than 12 dp scroll instead', async () => {
@@ -701,11 +701,11 @@ describe('RoutineEditor', () => {
         <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
-      fireEvent(screen.getByTestId('item-row-0'), 'layout', {
+      fireEvent(screen.getByTestId('step-row-0'), 'layout', {
         nativeEvent: { layout: { y: 0, height: 50 } },
       });
-      const localId = screen.getByTestId('item-row-0').props.nativeID;
-      const gesture = getByGestureTestId(`item-hold-gesture-${localId}-0`);
+      const localId = screen.getByTestId('step-row-0').props.nativeID;
+      const gesture = getByGestureTestId(`step-hold-gesture-${localId}-0`);
       const touch = (x: number, y: number) =>
         ({ numberOfTouches: 1, allTouches: [{ absoluteX: x, absoluteY: y }] }) as never;
 
@@ -722,7 +722,7 @@ describe('RoutineEditor', () => {
 
       expect(screen.getByTestId('routine-editor-scroll').props.scrollEnabled).toBe(true);
       await beginRowDrag(0, 25, 25);
-      expect(screen.getByTestId('item-drag-preview')).toBeOnTheScreen();
+      expect(screen.getByTestId('step-drag-preview')).toBeOnTheScreen();
       expect(screen.getByTestId('routine-editor-scroll').props.scrollEnabled).toBe(false);
       await finishRowDrag(gesture);
     });
@@ -737,22 +737,22 @@ describe('RoutineEditor', () => {
         <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
-      expect(screen.queryByTestId('item-text-0')).toBeNull();
+      expect(screen.queryByTestId('step-text-0')).toBeNull();
 
-      const localId = screen.getByTestId('item-row-0').props.nativeID;
-      const editGesture = getByGestureTestId(`item-edit-gesture-${localId}-0`);
+      const localId = screen.getByTestId('step-row-0').props.nativeID;
+      const editGesture = getByGestureTestId(`step-edit-gesture-${localId}-0`);
       expect(editGesture.config.maxDurationMs).toBeLessThan(350);
       act(() => {
         editGesture.handlers.onEnd?.({} as never, true);
       });
-      expect(screen.getByTestId('item-text-0').props.value).toBe('hold this text');
+      expect(screen.getByTestId('step-text-0').props.value).toBe('hold this text');
 
       await act(async () => {
-        fireEvent(screen.getByTestId('item-text-0'), 'blur');
+        fireEvent(screen.getByTestId('step-text-0'), 'blur');
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
-      expect(screen.queryByTestId('item-text-0')).toBeNull();
-      expect(screen.getByTestId('item-label-0')).toHaveTextContent('hold this text');
+      expect(screen.queryByTestId('step-text-0')).toBeNull();
+      expect(screen.getByTestId('step-label-0')).toHaveTextContent('hold this text');
     });
   });
 });

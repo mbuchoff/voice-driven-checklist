@@ -69,7 +69,7 @@ export function AccountSettingsContent({
     const confirmed = await confirmAction({
       title: 'Delete Voice Checklist account?',
       message:
-        'This deletes the Voice Checklist profile used for Google sign-in. It does not delete your Google account. Checklists on this device will be preserved.',
+        'This deletes the Voice Checklist profile used for Google sign-in. It does not delete your Google account. Routines on this device will be preserved.',
       confirmLabel: 'Delete account',
       destructive: true,
     });

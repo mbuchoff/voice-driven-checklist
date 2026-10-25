@@ -467,13 +467,13 @@ export function RunScreen({
     return () => sub.remove();
   }, [state.status, onExit, onRequestStop]);
 
-  const totalItems = state.snapshot?.steps.length ?? 0;
+  const totalSteps = state.snapshot?.steps.length ?? 0;
   const androidApi = Platform.OS === 'android' ? Number(Platform.Version) : 0;
 
   if (state.status === 'completed') {
     return (
       <CompletionView
-        totalItems={totalItems}
+        totalSteps={totalSteps}
         routineTitle={state.snapshot?.routineTitle}
         onRestart={() => {
           cueStartedRef.current = null;

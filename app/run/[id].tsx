@@ -167,7 +167,7 @@ export default function RunRoute() {
   if (loadState.kind === 'empty') {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <Text>This routine has no items. Add at least one before starting.</Text>
+        <Text>This routine has no steps. Add at least one before starting.</Text>
       </View>
     );
   }

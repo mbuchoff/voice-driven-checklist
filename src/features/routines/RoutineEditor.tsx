@@ -479,7 +479,7 @@ export function RoutineEditor({
     drag?.to === index ? (
       <Animated.View
         key="drop-slot"
-        testID={`item-drop-target-${index}`}
+        testID={`step-drop-target-${index}`}
         layout={STEP_MAKE_ROOM}
         style={{ height: drag.height, backgroundColor: colors.dragSlot }}
       />
@@ -823,7 +823,7 @@ function DragPreview({
 }) {
   return (
     <Animated.View
-      testID="item-drag-preview"
+      testID="step-drag-preview"
       pointerEvents="none"
       style={[
         {
@@ -848,7 +848,7 @@ function DragPreview({
     >
       <NumberBadge number={number} color={colors.ink} background={colors.surface} />
       <Text
-        testID="item-drag-preview-text"
+        testID="step-drag-preview-text"
         style={{ flex: 1, color: colors.text, ...STEP_WORDS, paddingHorizontal: TEXT_PAD.x }}
       >
         {text}

@@ -86,7 +86,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item two')).toBeOnTheScreen();
-      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 2 of 3/i)).toBeOnTheScreen();
       expect(playback.spoken).toEqual(['Item one', 'Item two']);
     });
 
@@ -100,7 +100,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item two')).toBeOnTheScreen();
-      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 2 of 3/i)).toBeOnTheScreen();
       expect(playback.spoken).toEqual(['Item one', 'Item two']);
     });
 
@@ -136,7 +136,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item two')).toBeOnTheScreen();
-      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 2 of 3/i)).toBeOnTheScreen();
       expect(screen.queryByText('Item three')).toBeNull();
     });
 
@@ -153,7 +153,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item two')).toBeOnTheScreen();
-      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 2 of 3/i)).toBeOnTheScreen();
       expect(screen.queryByText('Item three')).toBeNull();
     });
 
@@ -202,7 +202,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item one')).toBeOnTheScreen();
-      expect(screen.getByText(/item 1 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 1 of 3/i)).toBeOnTheScreen();
       expect(playback.spoken).toEqual(['Item one', 'Item one']);
     });
 
@@ -283,7 +283,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item two')).toBeOnTheScreen();
-      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 2 of 3/i)).toBeOnTheScreen();
       expect(playback.spoken).toEqual(['Item one', 'Item two']);
     });
 
@@ -688,7 +688,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item one')).toBeOnTheScreen();
-      expect(screen.getByText(/item 1 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 1 of 3/i)).toBeOnTheScreen();
       expect(playback.spoken[playback.spoken.length - 1]).toBe('Item one');
     });
 

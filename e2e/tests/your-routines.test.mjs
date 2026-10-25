@@ -214,7 +214,7 @@ async function editLastStep() {
   await openEditor(firstTitle);
   const lastStep = await scrollToLabel(driver, `Edit step 11: ${fixture.checklists[0].items[10].text}`);
   await lastStep.click();
-  const lastStepInput = await waitForDisplayed(byId(driver, 'item-text-10'));
+  const lastStepInput = await waitForDisplayed(byId(driver, 'step-text-10'));
   await lastStepInput.setValue('Make coffee and place the mug beside breakfast');
   assert.equal(await driver.isKeyboardShown(), true);
   const [inputRect, windowRect] = await Promise.all([
@@ -228,18 +228,18 @@ async function editLastStep() {
   // A timer from the open step's chips, and one from the timer panel.
   // The times show under the open step and the list scrolls them above the
   // keyboard; tap them once they've stopped moving.
-  const thirtySeconds = await waitForDisplayed(byId(driver, 'item-chip-10-30'));
+  const thirtySeconds = await waitForDisplayed(byId(driver, 'step-chip-10-30'));
   await (await waitForSettled(driver, thirtySeconds)).click();
   // The step stays open; tapping the step above moves to it, times and all.
   await (await scrollToLabel(driver, `Edit step 10: ${fixture.checklists[0].items[9].text}`)).click();
-  const more = await waitForDisplayed(byId(driver, 'item-more-9'));
+  const more = await waitForDisplayed(byId(driver, 'step-more-9'));
   await (await waitForSettled(driver, more)).click();
   await waitForDisplayed(byId(driver, 'timer-panel'));
   await byId(driver, 'timer-plus').click();
   await byId(driver, 'timer-done').click();
   // Done returns to typing in the step. The Save bar sits under the keyboard;
   // with the keyboard put away, Save closes the step and saves.
-  await waitForDisplayed(byId(driver, 'item-text-9'));
+  await waitForDisplayed(byId(driver, 'step-text-9'));
   await driver.hideKeyboard();
   await byId(driver, 'save').click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));
@@ -538,8 +538,8 @@ scenario('create-delete: prepends a routine and deletes it from its editor', { t
   await waitForDisplayed(byText(driver, 'Tap + to add your first step'));
   await byId(driver, 'title-input').setValue(temporaryTitle);
   await byId(driver, 'add-step').click();
-  await waitForDisplayed(byId(driver, 'item-text-0'));
-  await byId(driver, 'item-text-0').setValue('Temporary step');
+  await waitForDisplayed(byId(driver, 'step-text-0'));
+  await byId(driver, 'step-text-0').setValue('Temporary step');
   await driver.hideKeyboard();
   await byId(driver, 'save').click();
   await waitForDisplayed(byId(driver, 'library-safe-area'));
@@ -648,13 +648,13 @@ scenario('editor-gestures: swipe delete with UNDO, Back asks to save, hold-drag 
   await openEditor(firstTitle);
 
   // Swipe a step away, then bring it back.
-  await swipeAcross(driver, byId(driver, 'item-row-0'));
+  await swipeAcross(driver, byId(driver, 'step-row-0'));
   await waitForDisplayed(byText(driver, 'Step deleted'));
   await tapLabel(driver, 'Undo deleting this step');
   await waitForDisplayed(byLabel(driver, `Edit step 1: ${steps[0]}`));
 
   // Swipe it away again and leave: the editor asks, and Discard keeps it.
-  await swipeAcross(driver, byId(driver, 'item-row-0'));
+  await swipeAcross(driver, byId(driver, 'step-row-0'));
   await waitForDisplayed(byText(driver, 'Step deleted'));
   await driver.back();
   await waitForDisplayed(byText(driver, 'Save your changes?'));
@@ -664,8 +664,8 @@ scenario('editor-gestures: swipe delete with UNDO, Back asks to save, hold-drag 
   await waitForDisplayed(byLabel(driver, `Edit step 1: ${steps[0]}`));
 
   // Hold the first step until it lifts, then drag it below the third.
-  const first = await elementRect(driver, byId(driver, 'item-row-0'));
-  const third = await elementRect(driver, byId(driver, 'item-row-2'));
+  const first = await elementRect(driver, byId(driver, 'step-row-0'));
+  const third = await elementRect(driver, byId(driver, 'step-row-2'));
   const x = Math.round(first.x + first.width * 0.4);
   await holdAndDragFromTo(
     driver,

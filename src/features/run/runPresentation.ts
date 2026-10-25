@@ -1,6 +1,6 @@
 import { Easing } from 'react-native-reanimated';
 
-export const RUN_ITEM_GAP = 152;
+export const RUN_STEP_GAP = 152;
 export const RUN_TRANSITION_DURATION_MS = 440;
 export const RUN_TRANSITION_EASING = Easing.bezier(0.22, 0.75, 0.2, 1);
 export const RUN_TRANSITION_CONFIG = {
@@ -8,10 +8,10 @@ export const RUN_TRANSITION_CONFIG = {
   easing: RUN_TRANSITION_EASING,
 };
 
-export type RunItemStatus = 'past' | 'current' | 'upcoming';
-export type RunItemBackgroundStatus = Exclude<RunItemStatus, 'current'>;
+export type RunStepStatus = 'past' | 'current' | 'upcoming';
+export type RunStepBackgroundStatus = Exclude<RunStepStatus, 'current'>;
 
-export type RunItemPresentation = {
+export type RunStepPresentation = {
   opacity: number;
   scale: number;
   blurRadius: number;
@@ -39,23 +39,23 @@ export function getRunProgressPalette(mode: 'light' | 'dark') {
 
 export function getRunTrackOffset(currentIndex: number): number {
   'worklet';
-  return -currentIndex * RUN_ITEM_GAP;
+  return -currentIndex * RUN_STEP_GAP;
 }
 
-export function getRunItemStatus(
-  itemIndex: number,
+export function getRunStepStatus(
+  stepIndex: number,
   currentIndex: number,
-): RunItemStatus {
-  if (itemIndex < currentIndex) return 'past';
-  if (itemIndex > currentIndex) return 'upcoming';
+): RunStepStatus {
+  if (stepIndex < currentIndex) return 'past';
+  if (stepIndex > currentIndex) return 'upcoming';
   return 'current';
 }
 
-export function getRunItemPresentation(
-  backgroundStatus: RunItemBackgroundStatus,
+export function getRunStepPresentation(
+  backgroundStatus: RunStepBackgroundStatus,
   focusProgress: number,
   androidApi: number,
-): RunItemPresentation {
+): RunStepPresentation {
   'worklet';
   const progress = Math.max(0, Math.min(focusProgress, 1));
   const backgroundOpacity = backgroundStatus === 'past' ? 0.13 : 0.23;

@@ -16,14 +16,14 @@ import { ScreenBackground } from '@/src/components/ScreenBackground';
 import type { Palette } from '@/src/theme/palette';
 
 import {
-  RUN_ITEM_GAP,
+  RUN_STEP_GAP,
   RUN_TRANSITION_CONFIG,
-  getRunItemPresentation,
-  getRunItemStatus,
+  getRunStepPresentation,
+  getRunStepStatus,
   getRunProgressPalette,
   getRunTrackOffset,
-  type RunItemBackgroundStatus,
-  type RunItemStatus,
+  type RunStepBackgroundStatus,
+  type RunStepStatus,
 } from './runPresentation';
 import { StopRunControl } from './StopRunControl';
 import type { RoutineRunState } from './types';
@@ -61,7 +61,7 @@ export function ActiveRunView({
   onRequestStop: () => void | Promise<void>;
   onAction: (action: RunCommand) => void;
 }) {
-  const totalItems = state.snapshot?.steps.length ?? 0;
+  const totalSteps = state.snapshot?.steps.length ?? 0;
   const items = state.snapshot?.steps ?? [];
   const progressPalette = getRunProgressPalette(theme.mode);
   const trackStyle = useAnimatedStyle(() => ({
@@ -131,7 +131,7 @@ export function ActiveRunView({
 
       <ProgressOrbit
         current={state.currentStepIndex + 1}
-        total={totalItems}
+        total={totalSteps}
         animatedCurrentIndex={animatedCurrentIndex}
         color={theme.runText}
         mutedColor={progressPalette.track}
@@ -143,7 +143,7 @@ export function ActiveRunView({
         timeUsed={countdown ? 1 - countdown.remainingSeconds / countdown.totalSeconds : null}
       />
 
-      <View testID="run-items-stage" style={{ flex: 1, overflow: 'visible' }}>
+      <View testID="run-steps-stage" style={{ flex: 1, overflow: 'visible' }}>
         <Animated.View
           testID="run-track"
           style={[
@@ -157,10 +157,10 @@ export function ActiveRunView({
           ]}
         >
           {items.map((item, index) => (
-            <RunItem
+            <RunStep
               key={item.id}
               index={index}
-              status={getRunItemStatus(index, state.currentStepIndex)}
+              status={getRunStepStatus(index, state.currentStepIndex)}
               text={item.text}
               androidApi={androidApi}
               textColor={theme.runText}
@@ -186,7 +186,7 @@ export function ActiveRunView({
             testID="playback-unavailable"
             style={{ color: theme.danger, textAlign: 'center' }}
           >
-            Spoken playback unavailable — the item text remains visible above.
+            Spoken playback unavailable — the step text remains visible above.
           </Text>
         ) : null}
 
@@ -290,7 +290,7 @@ export function ActiveRunView({
   );
 }
 
-const RunItem = memo(function RunItem({
+const RunStep = memo(function RunStep({
   index,
   status,
   text,
@@ -299,7 +299,7 @@ const RunItem = memo(function RunItem({
   countdownSeconds = null,
 }: {
   index: number;
-  status: RunItemStatus;
+  status: RunStepStatus;
   text: string;
   androidApi: number;
   textColor: string;
@@ -309,7 +309,7 @@ const RunItem = memo(function RunItem({
   const selected = status === 'current';
   const focusProgress = useSharedValue(selected ? 1 : 0);
   const previousStatus = useRef(status);
-  const backgroundStatus: RunItemBackgroundStatus = selected
+  const backgroundStatus: RunStepBackgroundStatus = selected
     ? previousStatus.current === 'past'
       ? 'past'
       : 'upcoming'
@@ -321,7 +321,7 @@ const RunItem = memo(function RunItem({
   }, [focusProgress, selected, status]);
 
   const animatedStyle = useAnimatedStyle(() => {
-    const presentation = getRunItemPresentation(
+    const presentation = getRunStepPresentation(
       backgroundStatus,
       focusProgress.value,
       androidApi,
@@ -342,14 +342,14 @@ const RunItem = memo(function RunItem({
 
   return (
     <Animated.View
-      testID={`run-item-${index}`}
+      testID={`run-step-${index}`}
       accessibilityState={{ selected }}
       accessible={selected}
       importantForAccessibility={selected ? 'yes' : 'no-hide-descendants'}
       style={[
         {
           position: 'absolute',
-          top: index * RUN_ITEM_GAP,
+          top: index * RUN_STEP_GAP,
           left: 0,
           right: 0,
           minHeight: 136,
@@ -512,7 +512,7 @@ function ProgressOrbit({
         </Text>
       </View>
       <Text style={{ position: 'absolute', opacity: 0 }}>
-        Item {current} of {total}
+        Step {current} of {total}
       </Text>
     </View>
   );

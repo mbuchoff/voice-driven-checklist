@@ -193,7 +193,7 @@ export function StepTimerChips({
         style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
       >
         <View
-          testID={shown ? `item-chips-${index}` : undefined}
+          testID={shown ? `step-chips-${index}` : undefined}
           accessibilityRole="radiogroup"
           accessibilityLabel={`Timer for step ${stepNumber}`}
           onLayout={(event) => setContentHeight(event.nativeEvent.layout.height)}
@@ -207,7 +207,7 @@ export function StepTimerChips({
           }}
         >
           <Chip
-            testID={`item-chip-${index}-none`}
+            testID={`step-chip-${index}-none`}
             colors={colors}
             look={STRIP_LOOK}
             seconds={null}
@@ -218,7 +218,7 @@ export function StepTimerChips({
           {(visibleTimes ?? []).map((time) => (
             <Chip
               key={time}
-              testID={`item-chip-${index}-${time}`}
+              testID={`step-chip-${index}-${time}`}
               colors={colors}
               look={STRIP_LOOK}
               seconds={time}
@@ -228,7 +228,7 @@ export function StepTimerChips({
             />
           ))}
           <Pressable
-            testID={`item-more-${index}`}
+            testID={`step-more-${index}`}
             accessibilityRole="button"
             accessibilityLabel="More timer lengths"
             onPress={onMore}

@@ -47,8 +47,8 @@ export async function beginRowDrag(
 }
 
 export function rowGesture(index: number) {
-  const localId = screen.getByTestId(`item-row-${index}`).props.nativeID;
-  return getByGestureTestId(`item-hold-gesture-${localId}-${index}`);
+  const localId = screen.getByTestId(`step-row-${index}`).props.nativeID;
+  return getByGestureTestId(`step-hold-gesture-${localId}-${index}`);
 }
 
 export async function releaseRowDrag(gesture: GestureType) {
@@ -71,8 +71,8 @@ export async function cancelRowDrag(gesture: GestureType) {
 }
 
 export function tapToEdit(index: number) {
-  const localId = screen.getByTestId(`item-row-${index}`).props.nativeID;
-  const gesture = getByGestureTestId(`item-edit-gesture-${localId}-${index}`);
+  const localId = screen.getByTestId(`step-row-${index}`).props.nativeID;
+  const gesture = getByGestureTestId(`step-edit-gesture-${localId}-${index}`);
   act(() => {
     gesture.handlers.onEnd?.({} as never, true);
   });
@@ -81,7 +81,7 @@ export function tapToEdit(index: number) {
 export function primeRowLayouts(heights: number[], gap = 0) {
   let y = 0;
   heights.forEach((height, index) => {
-    fireEvent(screen.getByTestId(`item-row-${index}`), 'layout', {
+    fireEvent(screen.getByTestId(`step-row-${index}`), 'layout', {
       nativeEvent: { layout: { y, height } },
     });
     y += height + gap;

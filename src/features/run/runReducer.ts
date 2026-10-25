@@ -7,7 +7,7 @@ import type {
 
 type CommandableState = RoutineRunState & { snapshot: RoutineRunSnapshot };
 
-function statusForActiveItem(state: RoutineRunState): RunStatus {
+function statusForActiveStep(state: RoutineRunState): RunStatus {
   if (state.spokenPlaybackAvailable) return 'speaking';
   if (state.voiceControlAvailable) return 'listening';
   return 'manual';
@@ -36,7 +36,7 @@ export function initialRunState(
     playbackTick: 1,
     arrival: 1,
   };
-  return { ...base, status: statusForActiveItem(base) };
+  return { ...base, status: statusForActiveStep(base) };
 }
 
 export function runReducer(state: RoutineRunState, action: RunAction): RoutineRunState {
@@ -53,7 +53,7 @@ export function runReducer(state: RoutineRunState, action: RunAction): RoutineRu
         latestRecognizedPhrase: '',
         playbackTick: state.playbackTick + 1,
         arrival: state.arrival + 1,
-        status: statusForActiveItem(state),
+        status: statusForActiveStep(state),
       };
     }
 
@@ -63,7 +63,7 @@ export function runReducer(state: RoutineRunState, action: RunAction): RoutineRu
         ...state,
         latestRecognizedPhrase: '',
         playbackTick: state.playbackTick + 1,
-        status: statusForActiveItem(state),
+        status: statusForActiveStep(state),
       };
     }
 
@@ -75,7 +75,7 @@ export function runReducer(state: RoutineRunState, action: RunAction): RoutineRu
         latestRecognizedPhrase: '',
         playbackTick: state.playbackTick + 1,
         arrival: state.arrival + 1,
-        status: statusForActiveItem(state),
+        status: statusForActiveStep(state),
       };
     }
 
@@ -87,7 +87,7 @@ export function runReducer(state: RoutineRunState, action: RunAction): RoutineRu
         latestRecognizedPhrase: '',
         playbackTick: state.playbackTick + 1,
         arrival: state.arrival + 1,
-        status: statusForActiveItem(state),
+        status: statusForActiveStep(state),
       };
     }
 

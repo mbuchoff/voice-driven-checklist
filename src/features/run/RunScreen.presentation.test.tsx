@@ -11,7 +11,7 @@ import {
   getHeldStopControlSize,
   getStopControlPosition,
 } from './StopRunControl';
-import { RUN_ITEM_GAP } from './runPresentation';
+import { RUN_STEP_GAP } from './runPresentation';
 import type { RoutineRunSnapshot } from './types';
 const defaultPlatformOS = Platform.OS;
 const defaultPlatformVersion = Platform.Version;
@@ -37,7 +37,7 @@ describe('RunScreen presentation', () => {
 
       expect(screen.getByText('Demo')).toBeOnTheScreen();
       expect(screen.getByText('Item one')).toBeOnTheScreen();
-      expect(screen.getByText(/item 1 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 1 of 3/i)).toBeOnTheScreen();
     });
 
     it('exposes only stop and the three run actions as buttons', async () => {
@@ -90,7 +90,7 @@ describe('RunScreen presentation', () => {
         screen.getByTestId('run-progress-orbit').props.style,
       );
       const stageStyle = StyleSheet.flatten(
-        screen.getByTestId('run-items-stage').props.style,
+        screen.getByTestId('run-steps-stage').props.style,
       );
       expect(orbitStyle.zIndex).toBeGreaterThan(stageStyle.zIndex ?? 0);
     });
@@ -170,12 +170,12 @@ describe('RunScreen presentation', () => {
       await flush();
 
       expect(
-        screen.getAllByTestId(/run-item-/, { includeHiddenElements: true }),
+        screen.getAllByTestId(/run-step-/, { includeHiddenElements: true }),
       ).toHaveLength(17);
       expect(
         screen.getByText('Step 17', { includeHiddenElements: true }),
       ).toBeOnTheScreen();
-      expect(screen.getByTestId('run-item-0').props.accessibilityState).toMatchObject({
+      expect(screen.getByTestId('run-step-0').props.accessibilityState).toMatchObject({
         selected: true,
       });
 
@@ -183,9 +183,9 @@ describe('RunScreen presentation', () => {
       await flush();
 
       expect(
-        screen.getAllByTestId(/run-item-/, { includeHiddenElements: true }),
+        screen.getAllByTestId(/run-step-/, { includeHiddenElements: true }),
       ).toHaveLength(17);
-      expect(screen.getByTestId('run-item-1').props.accessibilityState).toMatchObject({
+      expect(screen.getByTestId('run-step-1').props.accessibilityState).toMatchObject({
         selected: true,
       });
     });
@@ -195,7 +195,7 @@ describe('RunScreen presentation', () => {
       await flush();
 
       const stageStyle = StyleSheet.flatten(
-        screen.getByTestId('run-items-stage').props.style,
+        screen.getByTestId('run-steps-stage').props.style,
       );
       expect(stageStyle.overflow ?? 'visible').toBe('visible');
     });
@@ -215,7 +215,7 @@ describe('RunScreen presentation', () => {
       fireEvent.press(screen.getByTestId('manual-next'));
       await flush();
 
-      expect(screen.getByTestId('run-item-1').props.accessibilityState).toMatchObject({
+      expect(screen.getByTestId('run-step-1').props.accessibilityState).toMatchObject({
         selected: true,
       });
     });
@@ -238,14 +238,14 @@ describe('RunScreen presentation', () => {
       await flush();
 
       const firstStyle = StyleSheet.flatten(
-        screen.getByTestId('run-item-0').props.style,
+        screen.getByTestId('run-step-0').props.style,
       );
       const secondStyle = StyleSheet.flatten(
-        screen.getByTestId('run-item-1', { includeHiddenElements: true }).props
+        screen.getByTestId('run-step-1', { includeHiddenElements: true }).props
           .style,
       );
       expect(firstStyle.top).toBe(0);
-      expect(secondStyle.top).toBe(RUN_ITEM_GAP);
+      expect(secondStyle.top).toBe(RUN_STEP_GAP);
       expect(firstStyle.transform).toContainEqual({ translateY: '-50%' });
       expect(secondStyle.transform).toContainEqual({ translateY: '-50%' });
     });

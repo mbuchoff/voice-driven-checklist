@@ -5,12 +5,12 @@ import { Icon } from '@/src/components/Icon';
 import { ScreenBackground } from '@/src/components/ScreenBackground';
 
 export function CompletionView({
-  totalItems,
+  totalSteps,
   routineTitle,
   onRestart,
   onExit,
 }: {
-  totalItems: number;
+  totalSteps: number;
   routineTitle?: string;
   onRestart: () => void;
   onExit: () => void | Promise<void>;
@@ -84,7 +84,7 @@ export function CompletionView({
               marginBottom: 36,
             }}
           >
-            All {totalItems} steps in “{routineTitle}” are checked off.
+            All {totalSteps} steps in “{routineTitle}” are checked off.
           </Text>
           <View style={{ width: '100%', gap: 10 }}>
             <Pressable

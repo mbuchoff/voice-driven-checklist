@@ -97,7 +97,7 @@ describe('RoutineEditor', () => {
       expect(create()).toBeDisabled();
 
       fireEvent.press(screen.getByTestId('add-step'));
-      fireEvent.changeText(screen.getByTestId('item-text-0'), 'Lights off');
+      fireEvent.changeText(screen.getByTestId('step-text-0'), 'Lights off');
       expect(create()).toBeEnabled();
     });
 
@@ -105,9 +105,9 @@ describe('RoutineEditor', () => {
       const { database, onSaved } = await renderEditor({ newColorKey: 'slate' });
       fireEvent.changeText(screen.getByTestId('title-input'), '  Night  ');
       fireEvent.press(screen.getByTestId('add-step'));
-      fireEvent.changeText(screen.getByTestId('item-text-0'), ' Lights off ');
-      fireEvent(screen.getByTestId('item-text-0'), 'submitEditing');
-      fireEvent.changeText(screen.getByTestId('item-text-1'), '   ');
+      fireEvent.changeText(screen.getByTestId('step-text-0'), ' Lights off ');
+      fireEvent(screen.getByTestId('step-text-0'), 'submitEditing');
+      fireEvent.changeText(screen.getByTestId('step-text-1'), '   ');
 
       await act(async () => {
         fireEvent.press(screen.getByRole('button', { name: 'Create routine' }));
@@ -126,7 +126,7 @@ describe('RoutineEditor', () => {
       await renderEditor();
       fireEvent.press(screen.getByTestId('add-step'));
       expect(screen.getByTestId('hero-count')).toHaveTextContent('No steps yet');
-      fireEvent.changeText(screen.getByTestId('item-text-0'), 'P');
+      fireEvent.changeText(screen.getByTestId('step-text-0'), 'P');
       expect(screen.getByTestId('hero-count')).toHaveTextContent('1 step');
     });
   });
@@ -135,15 +135,15 @@ describe('RoutineEditor', () => {
     it('keeps a new step with words on Enter and opens another; Enter on a blank new step removes it', async () => {
       await renderEditor();
       fireEvent.press(screen.getByTestId('add-step'));
-      fireEvent.changeText(screen.getByTestId('item-text-0'), 'Stretch');
+      fireEvent.changeText(screen.getByTestId('step-text-0'), 'Stretch');
 
-      fireEvent(screen.getByTestId('item-text-0'), 'submitEditing');
-      expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
-      expect(screen.getByTestId('item-label-0')).toHaveTextContent('Stretch');
+      fireEvent(screen.getByTestId('step-text-0'), 'submitEditing');
+      expect(screen.getByTestId('step-text-1')).toBeOnTheScreen();
+      expect(screen.getByTestId('step-label-0')).toHaveTextContent('Stretch');
 
-      fireEvent(screen.getByTestId('item-text-1'), 'submitEditing');
-      expect(screen.queryByTestId('item-row-1')).toBeNull();
-      expect(screen.queryByTestId('item-text-0')).toBeNull();
+      fireEvent(screen.getByTestId('step-text-1'), 'submitEditing');
+      expect(screen.queryByTestId('step-row-1')).toBeNull();
+      expect(screen.queryByTestId('step-text-0')).toBeNull();
     });
 
     // On Android, when the focused field disappears, focus jumps to the next
@@ -154,7 +154,7 @@ describe('RoutineEditor', () => {
       function fieldsAtDismiss() {
         const fields: (string | null)[] = [];
         jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {
-          fields.push(screen.queryAllByTestId(/^item-text-/)[0]?.props.testID ?? null);
+          fields.push(screen.queryAllByTestId(/^step-text-/)[0]?.props.testID ?? null);
         });
         return fields;
       }
@@ -165,10 +165,10 @@ describe('RoutineEditor', () => {
         tapToEdit(1);
         const fields = fieldsAtDismiss();
 
-        fireEvent(screen.getByTestId('item-text-1'), 'submitEditing');
+        fireEvent(screen.getByTestId('step-text-1'), 'submitEditing');
 
-        expect(fields).toEqual(['item-text-1']);
-        expect(screen.queryByTestId('item-text-1')).toBeNull();
+        expect(fields).toEqual(['step-text-1']);
+        expect(screen.queryByTestId('step-text-1')).toBeNull();
       });
 
       it('on Enter in a blank new step', async () => {
@@ -177,10 +177,10 @@ describe('RoutineEditor', () => {
         fireEvent.press(screen.getByTestId('add-step'));
         const fields = fieldsAtDismiss();
 
-        fireEvent(screen.getByTestId('item-text-2'), 'submitEditing');
+        fireEvent(screen.getByTestId('step-text-2'), 'submitEditing');
 
-        expect(fields).toEqual(['item-text-2']);
-        expect(screen.queryByTestId('item-row-2')).toBeNull();
+        expect(fields).toEqual(['step-text-2']);
+        expect(screen.queryByTestId('step-row-2')).toBeNull();
       });
     });
 
@@ -190,7 +190,7 @@ describe('RoutineEditor', () => {
       jest.spyOn(TextInput.prototype, 'focus').mockImplementation(function (this: TextInput) {
         requests.push({
           field: (this.props as { testID?: string }).testID ?? '',
-          stepFields: screen.queryAllByTestId(/^item-text-/).map((field) => field.props.testID),
+          stepFields: screen.queryAllByTestId(/^step-text-/).map((field) => field.props.testID),
         });
       });
       return requests;
@@ -208,7 +208,7 @@ describe('RoutineEditor', () => {
         tapToEdit(1);
 
         expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: [] });
-        expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
+        expect(screen.getByTestId('step-text-1')).toBeOnTheScreen();
       });
 
       it('on a step’s time', async () => {
@@ -216,7 +216,7 @@ describe('RoutineEditor', () => {
         await renderEditor({ initialRoutine: await existing(database) }, { database });
         const requests = focusRequests();
 
-        fireEvent.press(screen.getByTestId('item-clock-0'));
+        fireEvent.press(screen.getByTestId('step-clock-0'));
 
         expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: [] });
       });
@@ -229,7 +229,7 @@ describe('RoutineEditor', () => {
         fireEvent.press(screen.getByTestId('add-step'));
 
         expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: [] });
-        expect(screen.getByTestId('item-text-2')).toBeOnTheScreen();
+        expect(screen.getByTestId('step-text-2')).toBeOnTheScreen();
       });
     });
 
@@ -241,14 +241,14 @@ describe('RoutineEditor', () => {
       it('on Enter in a new step with words', async () => {
         await renderEditor();
         fireEvent.press(screen.getByTestId('add-step'));
-        fireEvent.changeText(screen.getByTestId('item-text-0'), 'Stretch');
+        fireEvent.changeText(screen.getByTestId('step-text-0'), 'Stretch');
         const requests = focusRequests();
         const dismiss = jest.spyOn(Keyboard, 'dismiss');
 
-        fireEvent(screen.getByTestId('item-text-0'), 'submitEditing');
+        fireEvent(screen.getByTestId('step-text-0'), 'submitEditing');
 
-        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: ['item-text-0'] });
-        expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
+        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: ['step-text-0'] });
+        expect(screen.getByTestId('step-text-1')).toBeOnTheScreen();
         expect(dismiss).not.toHaveBeenCalled();
       });
 
@@ -261,8 +261,8 @@ describe('RoutineEditor', () => {
 
         tapToEdit(1);
 
-        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: ['item-text-0'] });
-        expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
+        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: ['step-text-0'] });
+        expect(screen.getByTestId('step-text-1')).toBeOnTheScreen();
         expect(dismiss).not.toHaveBeenCalled();
       });
 
@@ -272,10 +272,10 @@ describe('RoutineEditor', () => {
         tapToEdit(1);
         const requests = focusRequests();
 
-        fireEvent.press(screen.getByTestId('item-clock-0'));
+        fireEvent.press(screen.getByTestId('step-clock-0'));
 
-        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: ['item-text-1'] });
-        expect(screen.getByTestId('item-text-0')).toBeOnTheScreen();
+        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: ['step-text-1'] });
+        expect(screen.getByTestId('step-text-0')).toBeOnTheScreen();
       });
 
       it('when another step is tapped while a blank new step goes away', async () => {
@@ -286,9 +286,9 @@ describe('RoutineEditor', () => {
 
         tapToEdit(0);
 
-        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: ['item-text-2'] });
-        expect(screen.getByTestId('item-text-0')).toBeOnTheScreen();
-        expect(screen.queryByTestId('item-row-2')).toBeNull();
+        expect(requests).toContainEqual({ field: 'keyboard-holder', stepFields: ['step-text-2'] });
+        expect(screen.getByTestId('step-text-0')).toBeOnTheScreen();
+        expect(screen.queryByTestId('step-row-2')).toBeNull();
       });
 
       it('still closes the open step when you tap the name yourself', async () => {
@@ -298,7 +298,7 @@ describe('RoutineEditor', () => {
 
         fireEvent(screen.getByTestId('title-input'), 'focus');
 
-        expect(screen.queryByTestId('item-text-1')).toBeNull();
+        expect(screen.queryByTestId('step-text-1')).toBeNull();
       });
     });
 
@@ -357,10 +357,10 @@ describe('RoutineEditor', () => {
       await renderEditor({ initialRoutine: routine }, { database });
 
       tapToEdit(1);
-      fireEvent.changeText(screen.getByTestId('item-text-1'), '');
-      fireEvent(screen.getByTestId('item-text-1'), 'submitEditing');
+      fireEvent.changeText(screen.getByTestId('step-text-1'), '');
+      fireEvent(screen.getByTestId('step-text-1'), 'submitEditing');
 
-      expect(screen.getByTestId('item-label-1')).toHaveTextContent('Breathe');
+      expect(screen.getByTestId('step-label-1')).toHaveTextContent('Breathe');
       expect(screen.queryByTestId('save')).toBeNull();
     });
   });
@@ -390,11 +390,11 @@ describe('RoutineEditor', () => {
         { initialRoutine: await existing(database, { steps: [{ text: LONG, timerSeconds: null }] }) },
         { database },
       );
-      fireEvent(screen.getByTestId('item-textbox-0'), 'layout', {
+      fireEvent(screen.getByTestId('step-textbox-0'), 'layout', {
         nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 100 } },
       });
     }
-    const fieldOpacity = () => StyleSheet.flatten(screen.getByTestId('item-text-0').props.style).opacity;
+    const fieldOpacity = () => StyleSheet.flatten(screen.getByTestId('step-text-0').props.style).opacity;
     /** Android's font size setting, as the phone reports it. */
     function setFontScale(fontScale: number) {
       const { window, screen: display } = { window: Dimensions.get('window'), screen: Dimensions.get('screen') };
@@ -428,10 +428,10 @@ describe('RoutineEditor', () => {
       tapToEdit(0);
       expect(screen.getByTestId('word-glide-0')).toBeOnTheScreen();
 
-      fireEvent.changeText(screen.getByTestId('item-text-0'), `${LONG} today`);
+      fireEvent.changeText(screen.getByTestId('step-text-0'), `${LONG} today`);
 
       expect(screen.queryByTestId('word-glide-0')).toBeNull();
-      expect(screen.getByTestId('item-text-0').props.value).toBe(`${LONG} today`);
+      expect(screen.getByTestId('step-text-0').props.value).toBe(`${LONG} today`);
       expect(fieldOpacity()).not.toBe(0);
     });
 
@@ -440,7 +440,7 @@ describe('RoutineEditor', () => {
       tapToEdit(0);
       expect(screen.getByTestId('word-hold-0')).toBeOnTheScreen();
 
-      fireEvent.changeText(screen.getByTestId('item-text-0'), `${LONG} today`);
+      fireEvent.changeText(screen.getByTestId('step-text-0'), `${LONG} today`);
 
       expect(screen.queryByTestId('word-hold-0')).toBeNull();
       expect(fieldOpacity()).not.toBe(0);
@@ -474,7 +474,7 @@ describe('RoutineEditor', () => {
         { initialRoutine: await existing(database, { steps: [{ text: 'Drink a full glass\nof water', timerSeconds: null }] }) },
         { database },
       );
-      fireEvent(screen.getByTestId('item-textbox-0'), 'layout', {
+      fireEvent(screen.getByTestId('step-textbox-0'), 'layout', {
         nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 100 } },
       });
 
@@ -575,7 +575,7 @@ describe('RoutineEditor', () => {
 
       tapToEdit(1);
       layOutChips(1, [30, 60, 120, 300]);
-      fireEvent.press(screen.getByTestId('item-more-1'));
+      fireEvent.press(screen.getByTestId('step-more-1'));
       expect(screen.getByTestId('timer-panel')).toBeOnTheScreen();
       fireEvent(screen.getByTestId('timer-plus'), 'pressIn');
       fireEvent(screen.getByTestId('timer-plus'), 'pressOut');
@@ -594,7 +594,7 @@ describe('RoutineEditor', () => {
 
   describe('timers', () => {
     const chipLabels = (index: number) =>
-      within(screen.getByTestId(`item-chips-${index}`)).getAllByRole('radio').map((chip) => chip.props.accessibilityLabel);
+      within(screen.getByTestId(`step-chips-${index}`)).getAllByRole('radio').map((chip) => chip.props.accessibilityLabel);
 
     it('shows an open step’s times under its words: No timer, then the times, then ⋯', async () => {
       const preferences = new MemoryDevicePreferenceStore({
@@ -610,8 +610,8 @@ describe('RoutineEditor', () => {
       expect(chipLabels(1)).toEqual([
         'No timer', '30 seconds', '1 minute', '1 minute 30 seconds', '2 minutes',
       ]);
-      expect(within(screen.getByTestId('item-chips-1')).getByRole('radio', { name: 'No timer' })).toBeChecked();
-      expect(screen.getByTestId('item-more-1')).toHaveProp('accessibilityLabel', 'More timer lengths');
+      expect(within(screen.getByTestId('step-chips-1')).getByRole('radio', { name: 'No timer' })).toBeChecked();
+      expect(screen.getByTestId('step-more-1')).toHaveProp('accessibilityLabel', 'More timer lengths');
     });
 
     it('shows the times on a new step too', async () => {
@@ -632,14 +632,14 @@ describe('RoutineEditor', () => {
       tapToEdit(1);
       layOutChips(1, [90, 30, 60, 120]);
 
-      fireEvent.press(screen.getByTestId('item-chip-1-90'));
+      fireEvent.press(screen.getByTestId('step-chip-1-90'));
       expect(screen.getByTestId('hero-count')).toHaveTextContent('2 steps · 2 min timed');
-      expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
-      const chips = within(screen.getByTestId('item-chips-1'));
+      expect(screen.getByTestId('step-text-1')).toBeOnTheScreen();
+      const chips = within(screen.getByTestId('step-chips-1'));
       expect(chips.getByRole('radio', { name: '1 minute 30 seconds' })).toBeChecked();
 
       // Tapping the chosen time again keeps it.
-      fireEvent.press(screen.getByTestId('item-chip-1-90'));
+      fireEvent.press(screen.getByTestId('step-chip-1-90'));
       expect(screen.getByTestId('hero-count')).toHaveTextContent('2 steps · 2 min timed');
       await expect(preferences.load()).resolves.toMatchObject({ recentTimerSeconds: [90] });
     });
@@ -650,21 +650,21 @@ describe('RoutineEditor', () => {
       tapToEdit(0);
       layOutChips(0, [30, 60, 120, 300]);
 
-      fireEvent.press(screen.getByTestId('item-chip-0-none'));
+      fireEvent.press(screen.getByTestId('step-chip-0-none'));
 
       expect(screen.getByTestId('hero-count')).toHaveTextContent(/^2 steps$/);
-      expect(within(screen.getByTestId('item-chips-0')).getByRole('radio', { name: 'No timer' })).toBeChecked();
-      expect(screen.getByTestId('item-text-0')).toBeOnTheScreen();
+      expect(within(screen.getByTestId('step-chips-0')).getByRole('radio', { name: 'No timer' })).toBeChecked();
+      expect(screen.getByTestId('step-text-0')).toBeOnTheScreen();
     });
 
     it('opens a timed step from its time, like its words', async () => {
       const database = await setupDb();
       await renderEditor({ initialRoutine: await existing(database) }, { database });
 
-      fireEvent.press(screen.getByTestId('item-clock-0'));
+      fireEvent.press(screen.getByTestId('step-clock-0'));
       layOutChips(0, [30, 60, 120, 300]);
 
-      expect(screen.getByTestId('item-text-0')).toBeOnTheScreen();
+      expect(screen.getByTestId('step-text-0')).toBeOnTheScreen();
       expect(chipLabels(0)).toContain('30 seconds');
     });
 
@@ -674,12 +674,12 @@ describe('RoutineEditor', () => {
       tapToEdit(0);
       layOutChips(0, [30, 60, 120, 300]);
 
-      fireEvent(screen.getByTestId('item-text-0'), 'submitEditing');
+      fireEvent(screen.getByTestId('step-text-0'), 'submitEditing');
 
       // Folding takes a moment; the chips fold with ⋯ rather than vanishing.
-      expect(screen.queryByTestId('item-text-0')).toBeNull();
-      expect(screen.getAllByTestId(/^item-chip-0-/, HIDDEN).map((chip) => chip.props.testID)).toEqual([
-        'item-chip-0-none', 'item-chip-0-30', 'item-chip-0-60', 'item-chip-0-120', 'item-chip-0-300',
+      expect(screen.queryByTestId('step-text-0')).toBeNull();
+      expect(screen.getAllByTestId(/^step-chip-0-/, HIDDEN).map((chip) => chip.props.testID)).toEqual([
+        'step-chip-0-none', 'step-chip-0-30', 'step-chip-0-60', 'step-chip-0-120', 'step-chip-0-300',
       ]);
     });
 
@@ -694,8 +694,8 @@ describe('RoutineEditor', () => {
       tapToEdit(0);
       layOutChips(0, [30, 600, 700, 800]);
 
-      expect(screen.getByTestId('item-chip-0-30')).toBeOnTheScreen();
-      expect(screen.getByTestId('item-more-0')).toHaveProp('accessibilityLabel', 'More timer lengths');
+      expect(screen.getByTestId('step-chip-0-30')).toBeOnTheScreen();
+      expect(screen.getByTestId('step-more-0')).toHaveProp('accessibilityLabel', 'More timer lengths');
     });
 
     it('drops the oldest times so the chips stay on one line', async () => {
@@ -713,7 +713,7 @@ describe('RoutineEditor', () => {
 
       expect(chipLabels(1)).toHaveLength(4);
       expect(chipLabels(1)[0]).toBe('No timer');
-      expect(screen.queryByTestId('item-chip-1-1545')).toBeNull();
+      expect(screen.queryByTestId('step-chip-1-1545')).toBeNull();
     });
 
     it('steps the timer in the panel, clears it with No timer, and remembers a changed time on Done', async () => {
@@ -722,7 +722,7 @@ describe('RoutineEditor', () => {
       await renderEditor({ initialRoutine: await existing(database) }, { database, preferences });
       tapToEdit(1);
       layOutChips(1, [30, 60, 120, 300]);
-      fireEvent.press(screen.getByTestId('item-more-1'));
+      fireEvent.press(screen.getByTestId('step-more-1'));
       layOutPanelChips([30, 60, 120, 300]);
       const press = (id: string) => {
         fireEvent(screen.getByTestId(id), 'pressIn');
@@ -745,8 +745,8 @@ describe('RoutineEditor', () => {
       expect(screen.queryByTestId('timer-panel')).toBeNull();
       // Back to typing, with the step's times showing its new one. They're the
       // same four times, so the phone doesn't lay their chips out again.
-      expect(screen.getByTestId('item-text-1')).toBeOnTheScreen();
-      expect(within(screen.getByTestId('item-chips-1')).getByRole('radio', { name: '2 minutes' })).toBeChecked();
+      expect(screen.getByTestId('step-text-1')).toBeOnTheScreen();
+      expect(within(screen.getByTestId('step-chips-1')).getByRole('radio', { name: '2 minutes' })).toBeChecked();
       await waitFor(async () => {
         await expect(preferences.load()).resolves.toMatchObject({ recentTimerSeconds: [120] });
       });
@@ -757,7 +757,7 @@ describe('RoutineEditor', () => {
       await renderEditor({ initialRoutine: await existing(database) }, { database });
       tapToEdit(0);
       layOutChips(0, [30, 60, 120, 300]);
-      fireEvent.press(screen.getByTestId('item-more-0'));
+      fireEvent.press(screen.getByTestId('step-more-0'));
       layOutPanelChips([30, 60, 120, 300]);
       const press = (id: string) => {
         fireEvent(screen.getByTestId(id), 'pressIn');
@@ -780,7 +780,7 @@ describe('RoutineEditor', () => {
       await renderEditor({ initialRoutine: await existing(database) }, { database });
       tapToEdit(0);
       layOutChips(0, [30, 60, 120, 300]);
-      fireEvent.press(screen.getByTestId('item-more-0'));
+      fireEvent.press(screen.getByTestId('step-more-0'));
 
       fireEvent(screen.getByTestId('timer-minus'), 'pressIn');
       fireEvent(screen.getByTestId('timer-minus'), 'pressOut');
@@ -796,28 +796,28 @@ describe('RoutineEditor', () => {
       await renderEditor({ initialRoutine: routine }, { database });
 
       act(() => {
-        fireEvent(screen.getByTestId('item-label-0'), 'accessibilityAction', {
+        fireEvent(screen.getByTestId('step-label-0'), 'accessibilityAction', {
           nativeEvent: { actionName: 'delete' },
         });
       });
       expect(screen.getByText('Step deleted')).toBeOnTheScreen();
-      expect(screen.getByTestId('item-label-0')).toHaveTextContent('Breathe');
+      expect(screen.getByTestId('step-label-0')).toHaveTextContent('Breathe');
       expect((await getRoutine(database, routine.id))?.steps).toHaveLength(2);
 
       fireEvent.press(screen.getByRole('button', { name: 'Undo deleting this step' }));
-      expect(screen.getByTestId('item-label-0')).toHaveTextContent('Neck rolls');
-      expect(screen.getByTestId('item-clock-0')).toHaveTextContent('30s');
+      expect(screen.getByTestId('step-label-0')).toHaveTextContent('Neck rolls');
+      expect(screen.getByTestId('step-clock-0')).toHaveTextContent('30s');
     });
 
     it('deletes a step swiped left past 40% of its width', async () => {
       const database = await setupDb();
       const routine = await existing(database);
       await renderEditor({ initialRoutine: routine }, { database });
-      const row = screen.getByTestId('item-row-0');
+      const row = screen.getByTestId('step-row-0');
       fireEvent(row, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 380, height: 56 } } });
 
       // Android reports no movement in a swipe's first update after it starts.
-      fireGestureHandler(getByGestureTestId(`item-swipe-gesture-${row.props.nativeID}-0`), [
+      fireGestureHandler(getByGestureTestId(`step-swipe-gesture-${row.props.nativeID}-0`), [
         { state: State.BEGAN, translationX: 0 },
         { state: State.ACTIVE, translationX: 0 },
         { state: State.ACTIVE, translationX: 0 },
@@ -827,17 +827,17 @@ describe('RoutineEditor', () => {
       ]);
 
       expect(await screen.findByText('Step deleted')).toBeOnTheScreen();
-      expect(screen.getByTestId('item-label-0')).toHaveTextContent('Breathe');
+      expect(screen.getByTestId('step-label-0')).toHaveTextContent('Breathe');
     });
 
     it('keeps a step whose swipe is cancelled, even past 40% of its width', async () => {
       const database = await setupDb();
       const routine = await existing(database);
       await renderEditor({ initialRoutine: routine }, { database });
-      const row = screen.getByTestId('item-row-0');
+      const row = screen.getByTestId('step-row-0');
       fireEvent(row, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 380, height: 56 } } });
 
-      fireGestureHandler(getByGestureTestId(`item-swipe-gesture-${row.props.nativeID}-0`), [
+      fireGestureHandler(getByGestureTestId(`step-swipe-gesture-${row.props.nativeID}-0`), [
         { state: State.BEGAN, translationX: 0 },
         { state: State.ACTIVE, translationX: -60 },
         { state: State.ACTIVE, translationX: -200 },
@@ -846,7 +846,7 @@ describe('RoutineEditor', () => {
       await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
 
       expect(screen.queryByText('Step deleted')).toBeNull();
-      expect(screen.getByTestId('item-label-0')).toHaveTextContent('Neck rolls');
+      expect(screen.getByTestId('step-label-0')).toHaveTextContent('Neck rolls');
     });
 
     it('deletes the routine from its sheet and hands back what undoes it', async () => {
@@ -926,7 +926,7 @@ describe('RoutineEditor', () => {
       await renderEditor();
       fireEvent.changeText(screen.getByTestId('title-input'), 'Night');
       fireEvent.press(screen.getByTestId('add-step'));
-      fireEvent.changeText(screen.getByTestId('item-text-0'), 'Lights off');
+      fireEvent.changeText(screen.getByTestId('step-text-0'), 'Lights off');
       expect(screen.queryByRole('button', { name: 'Start a run' })).toBeNull();
     });
 
@@ -951,13 +951,13 @@ describe('RoutineEditor', () => {
       await renderEditor({ initialRoutine: routine }, { database });
 
       act(() => {
-        fireEvent(screen.getByTestId('item-label-1'), 'accessibilityAction', {
+        fireEvent(screen.getByTestId('step-label-1'), 'accessibilityAction', {
           nativeEvent: { actionName: 'moveEarlier' },
         });
       });
 
-      expect(screen.getByTestId('item-label-0')).toHaveTextContent('Breathe');
-      expect(screen.getByTestId('item-label-0').props.accessibilityActions).toEqual(
+      expect(screen.getByTestId('step-label-0')).toHaveTextContent('Breathe');
+      expect(screen.getByTestId('step-label-0').props.accessibilityActions).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ label: 'Move earlier' }),
           expect.objectContaining({ label: 'Move later' }),

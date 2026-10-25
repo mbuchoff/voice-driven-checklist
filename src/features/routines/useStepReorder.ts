@@ -53,7 +53,7 @@ export function getEdgeAutoscrollDelta(
   return calculateEdgeAutoscrollDelta(distanceIntoEdge, elapsedMs, EDGE_AUTOSCROLL_THRESHOLD, EDGE_AUTOSCROLL_MAX_SPEED);
 }
 
-export type ReorderItem = { localId: string; text: string };
+export type ReorderStep = { localId: string; text: string };
 export type StepRowLayout = { y: number; height: number };
 export type StepDragState = {
   localId: string;
@@ -76,7 +76,7 @@ type DragContext = {
 };
 
 type StepReorderOptions = {
-  items: ReorderItem[];
+  items: ReorderStep[];
   /** Commits a finished drag. */
   onMove: (from: number, to: number) => void;
   scrollRef: RefObject<ComponentRef<typeof ScrollView> | null>;
@@ -105,9 +105,9 @@ function getDropIndex(
 ): number {
   'worklet';
   let index = 0;
-  for (let itemIndex = 0; itemIndex < layouts.length; itemIndex += 1) {
-    if (itemIndex === activeIndex) continue;
-    const layout = layouts[itemIndex];
+  for (let stepIndex = 0; stepIndex < layouts.length; stepIndex += 1) {
+    if (stepIndex === activeIndex) continue;
+    const layout = layouts[stepIndex];
     if (layout && contentY < layout.y + layout.height / 2) return index;
     index += 1;
   }
@@ -385,8 +385,8 @@ export function useStepReorder({
 
   const dragHandlers = <T extends ReturnType<typeof Gesture.Pan>>(
     gesture: T,
-    item: ReorderItem,
-    itemIndex: number,
+    item: ReorderStep,
+    stepIndex: number,
   ) =>
     gesture
       .maxPointers(1)
@@ -394,11 +394,11 @@ export function useStepReorder({
       .blocksExternalGesture(scrollRef as never)
       .onStart((event) => {
         'worklet';
-        const layout = rowLayoutsValue.value[itemIndex];
+        const layout = rowLayoutsValue.value[stepIndex];
         if (!layout || dragActive.value) return;
         dragActive.value = 1;
-        dragFrom.value = itemIndex;
-        dragTarget.value = itemIndex;
+        dragFrom.value = stepIndex;
+        dragTarget.value = stepIndex;
         dragStartPageY.value = event.absoluteY;
         dragStartScrollY.value = scrollYValue.value;
         dragNearEdge.value = 0;
@@ -408,15 +408,15 @@ export function useStepReorder({
       })
       .onUpdate((event) => {
         'worklet';
-        const layout = rowLayoutsValue.value[itemIndex];
-        if (!layout || !dragActive.value || dragFrom.value !== itemIndex) {
+        const layout = rowLayoutsValue.value[stepIndex];
+        if (!layout || !dragActive.value || dragFrom.value !== stepIndex) {
           return;
         }
         const contentY =
           layout.y + layout.height / 2 +
           (event.absoluteY - dragStartPageY.value) +
           (scrollYValue.value - dragStartScrollY.value);
-        const to = getDropIndex(rowLayoutsValue.value, itemIndex, contentY);
+        const to = getDropIndex(rowLayoutsValue.value, stepIndex, contentY);
         dragOffset.value = contentY - layout.height / 2 - layout.y;
         if (to !== dragTarget.value) {
           dragTarget.value = to;
@@ -434,14 +434,14 @@ export function useStepReorder({
       })
       .onEnd(() => {
         'worklet';
-        if (dragFrom.value === itemIndex) {
-          scheduleOnRN(finishDrag, item.localId, itemIndex);
+        if (dragFrom.value === stepIndex) {
+          scheduleOnRN(finishDrag, item.localId, stepIndex);
         }
       })
       .onFinalize((_event, success) => {
         'worklet';
         cancelAnimation(holdActivation);
-        if (dragFrom.value !== itemIndex) return;
+        if (dragFrom.value !== stepIndex) return;
         if (!success) {
           scheduleOnRN(cancelDrag, item.localId);
           releaseDragClaim(
@@ -449,7 +449,7 @@ export function useStepReorder({
             dragFrom,
             dragTarget,
             dragNearEdge,
-            itemIndex,
+            stepIndex,
           );
         }
       });
@@ -459,10 +459,10 @@ export function useStepReorder({
    * up to STEP_REORDER_HOLD_DRIFT on either axis first; more than that lets
    * the list scroll (or a sideways swipe take over) instead.
    */
-  const gestureFor = (item: ReorderItem, itemIndex: number) =>
+  const gestureFor = (item: ReorderStep, stepIndex: number) =>
     dragHandlers(
       Gesture.Pan()
-        .withTestId(`item-hold-gesture-${item.localId}-${itemIndex}`)
+        .withTestId(`step-hold-gesture-${item.localId}-${stepIndex}`)
         .manualActivation(true)
         .simultaneousWithExternalGesture(scrollRef as never)
         .onTouchesDown((event, manager) => {
@@ -503,7 +503,7 @@ export function useStepReorder({
           }
         }),
       item,
-      itemIndex,
+      stepIndex,
     );
 
   useEffect(
