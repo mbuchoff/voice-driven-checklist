@@ -150,7 +150,7 @@ describe('routine backup', () => {
   });
 
   it('rejects a backup whose timers are not whole seconds from one second to an hour', () => {
-    for (const timer of [0, 3601, 2.5, '30']) {
+    for (const timer of [0, 3601, 2.5, '30', null]) {
       const json = JSON.stringify({
         format: BACKUP_FORMAT,
         version: BACKUP_VERSION,

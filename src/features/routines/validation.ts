@@ -24,6 +24,8 @@ export type TimerValidationResult =
   | { ok: true; value: number | null }
   | { ok: false; error: string };
 
+export const STEP_TIMER_ERROR = 'Step timers must be whole seconds from 1 second to 60 minutes.';
+
 /** A step timer is whole seconds from 1 to an hour, or none. */
 export function validateStepTimer(input: unknown): TimerValidationResult {
   if (input == null) return { ok: true, value: null };
@@ -33,7 +35,7 @@ export function validateStepTimer(input: unknown): TimerValidationResult {
     input < 1 ||
     input > STEP_TIMER_MAX_SECONDS
   ) {
-    return { ok: false, error: 'Step timers must be whole seconds from 1 second to 60 minutes.' };
+    return { ok: false, error: STEP_TIMER_ERROR };
   }
   return { ok: true, value: input };
 }

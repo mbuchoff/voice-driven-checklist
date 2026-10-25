@@ -1,6 +1,6 @@
 import { isRoutineColorKey } from './routineColors';
 import type { RoutineInput } from './types';
-import { validateRoutineTitle, validateStepText, validateStepTimer } from './validation';
+import { STEP_TIMER_ERROR, validateRoutineTitle, validateStepText, validateStepTimer } from './validation';
 
 export const BACKUP_FORMAT = 'voice-driven-checklist-backup';
 export const BACKUP_VERSION = 1;
@@ -39,8 +39,11 @@ function readRoutineInput(value: unknown): RoutineInput {
       }
       const text = validateStepText(item.text);
       if (!text.ok) throw new Error(text.error);
+      // A step without a timer leaves the key out; a timer that's there must
+      // be whole seconds from 1 to an hour (null included).
+      if (!('timer' in item)) return { text: text.value, timerSeconds: null };
       const timer = validateStepTimer(item.timer);
-      if (!timer.ok) throw new Error(timer.error);
+      if (!timer.ok || timer.value === null) throw new Error(STEP_TIMER_ERROR);
       return { text: text.value, timerSeconds: timer.value };
     }),
   };
