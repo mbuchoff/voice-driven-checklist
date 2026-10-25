@@ -14,7 +14,7 @@ import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
 import { LibraryScreen } from './LibraryScreen';
 import { createRoutine, deleteRoutine, listRoutines } from './repository';
-import { offerRoutineUndo } from './routineUndo';
+import { createRoutineUndoStore } from './routineUndo';
 import { routineColorShades } from './routineColors';
 
 async function setupDb(): Promise<Database> {
@@ -29,11 +29,12 @@ describe('LibraryScreen', () => {
     const last = await createRoutine(database, { title: 'Last', steps: [{ text: 'a' }] });
     const doomed = await createRoutine(database, { title: 'Doomed', steps: [{ text: 'b' }] });
     await createRoutine(database, { title: 'First', steps: [{ text: 'c' }] });
-    offerRoutineUndo((await deleteRoutine(database, doomed.id))!);
+    const routineUndo = createRoutineUndoStore();
+    routineUndo.offer((await deleteRoutine(database, doomed.id))!);
 
     await renderWithDatabase(
       <LibraryScreen onCreate={jest.fn()} onEdit={jest.fn()} onStart={jest.fn()} />,
-      { database },
+      { database, routineUndo },
     );
     expect(await screen.findByText('“Doomed” deleted')).toBeOnTheScreen();
 
@@ -49,14 +50,15 @@ describe('LibraryScreen', () => {
     const alert = jest.spyOn(Alert, 'alert');
     const database = await setupDb();
     const doomed = await createRoutine(database, { title: 'Doomed', steps: [{ text: 'b' }] });
-    offerRoutineUndo((await deleteRoutine(database, doomed.id))!);
+    const routineUndo = createRoutineUndoStore();
+    routineUndo.offer((await deleteRoutine(database, doomed.id))!);
     await database.execAsync(`
       CREATE TRIGGER reject_restore BEFORE INSERT ON routines
       BEGIN SELECT RAISE(ABORT, 'simulated restore failure'); END;
     `);
     await renderWithDatabase(
       <LibraryScreen onCreate={jest.fn()} onEdit={jest.fn()} onStart={jest.fn()} />,
-      { database },
+      { database, routineUndo },
     );
     expect(await screen.findByText('“Doomed” deleted')).toBeOnTheScreen();
 
@@ -78,9 +80,10 @@ describe('LibraryScreen', () => {
   it('ends the undo offer when the routines screen is left', async () => {
     const database = await setupDb();
     const doomed = await createRoutine(database, { title: 'Doomed', steps: [] });
-    offerRoutineUndo((await deleteRoutine(database, doomed.id))!);
+    const routineUndo = createRoutineUndoStore();
+    routineUndo.offer((await deleteRoutine(database, doomed.id))!);
     const callbacks = { onCreate: jest.fn(), onEdit: jest.fn(), onStart: jest.fn() };
-    const view = await renderWithDatabase(<LibraryScreen {...callbacks} active />, { database });
+    const view = await renderWithDatabase(<LibraryScreen {...callbacks} active />, { database, routineUndo });
     expect(await screen.findByText('“Doomed” deleted')).toBeOnTheScreen();
 
     view.rerender(<LibraryScreen {...callbacks} active={false} />);

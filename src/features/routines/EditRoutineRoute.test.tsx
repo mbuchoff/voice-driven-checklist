@@ -11,7 +11,7 @@ import { MemoryDevicePreferenceStore } from '@/src/features/settings/preferences
 import { createTestDatabase } from '@/src/test/createTestDatabase';
 
 import { createRoutine, getRoutine } from './repository';
-import { takeRoutineUndo } from './routineUndo';
+import { createRoutineUndoStore, RoutineUndoProvider } from './routineUndo';
 
 afterEach(() => {
   jest.restoreAllMocks();
@@ -25,6 +25,7 @@ it.each([false, true])('returns to a single library after deletion (direct entry
   for (const title of ['First', 'Second']) {
     routines.push(await createRoutine(database, { title, steps: [{ text: 'A step' }] }));
   }
+  const routineUndo = createRoutineUndoStore();
   try {
     const routes = renderRouter({
       _layout: () => (
@@ -33,7 +34,9 @@ it.each([false, true])('returns to a single library after deletion (direct entry
         >
           <DatabaseProvider database={database}>
             <DevicePreferencesProvider store={new MemoryDevicePreferenceStore()}>
-              <Stack screenOptions={{ animation: 'none' }} />
+              <RoutineUndoProvider store={routineUndo}>
+                <Stack screenOptions={{ animation: 'none' }} />
+              </RoutineUndoProvider>
             </DevicePreferencesProvider>
           </DatabaseProvider>
         </SafeAreaProvider>
@@ -50,7 +53,7 @@ it.each([false, true])('returns to a single library after deletion (direct entry
       fireEvent.press(await screen.findByTestId('delete-confirm'));
       await screen.findByTestId('test-library');
       await expect(getRoutine(database, routine.id)).resolves.toBeNull();
-      expect(takeRoutineUndo()?.routine.id).toBe(routine.id);
+      expect(routineUndo.take()?.routine.id).toBe(routine.id);
     }
 
     await waitFor(() => expect(router.canGoBack()).toBe(false));

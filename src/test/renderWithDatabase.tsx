@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { Database } from '@/src/db/database';
 import { DatabaseProvider } from '@/src/db/DatabaseProvider';
 import { runMigrations } from '@/src/db/migrations';
+import { RoutineUndoProvider, type RoutineUndoStore } from '@/src/features/routines/routineUndo';
 import { DevicePreferencesProvider } from '@/src/features/settings/DevicePreferencesProvider';
 import { MemoryDevicePreferenceStore } from '@/src/features/settings/preferences';
 
@@ -25,6 +26,8 @@ export async function renderWithDatabase(
   options: {
     database?: Database;
     preferences?: MemoryDevicePreferenceStore;
+    /** What the routines screen is handed to offer UNDO for. */
+    routineUndo?: RoutineUndoStore;
   } & Omit<RenderOptions, 'wrapper'> = {},
 ): Promise<RenderWithDatabaseResult> {
   const database = options.database ?? createTestDatabase();
@@ -38,7 +41,9 @@ export async function renderWithDatabase(
     wrapper: ({ children }) => (
       <SafeAreaProvider initialMetrics={TEST_WINDOW_METRICS}>
         <DatabaseProvider database={database}>
-          <DevicePreferencesProvider store={preferences}>{children}</DevicePreferencesProvider>
+          <DevicePreferencesProvider store={preferences}>
+            <RoutineUndoProvider store={options.routineUndo}>{children}</RoutineUndoProvider>
+          </DevicePreferencesProvider>
         </DatabaseProvider>
       </SafeAreaProvider>
     ),

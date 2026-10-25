@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppDatabaseProvider } from '@/src/db/DatabaseProvider';
 import { AppAccountProvider } from '@/src/features/account/AccountProvider';
+import { RoutineUndoProvider } from '@/src/features/routines/routineUndo';
 import { AppDevicePreferencesProvider } from '@/src/features/settings/DevicePreferencesProvider';
 import { registerListeningService } from '@/src/services/speech/foregroundService';
 import { useResolvedColorScheme } from '@/src/theme/useTheme';
@@ -19,7 +20,9 @@ export default function RootLayout() {
       <AppDatabaseProvider>
         <AppDevicePreferencesProvider>
           <AppAccountProvider>
-            <ThemedNavigation />
+            <RoutineUndoProvider>
+              <ThemedNavigation />
+            </RoutineUndoProvider>
           </AppAccountProvider>
         </AppDevicePreferencesProvider>
       </AppDatabaseProvider>

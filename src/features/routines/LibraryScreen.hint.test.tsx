@@ -24,6 +24,7 @@ import {
   shouldShowRoutineArrangeHint,
 } from './RoutineArrangeHint';
 import { ROUTINE_ARRANGE_LESSON_DURATION_MS } from './RoutineArrangeLesson';
+import { RoutineUndoProvider } from './routineUndo';
 
 const { getByGestureTestId } = jest.requireActual(
   'react-native-gesture-handler/lib/commonjs/jestUtils',
@@ -51,11 +52,13 @@ async function renderLibrary(
       <DevicePreferencesProvider
         store={new SqliteDevicePreferenceStore(database)}
       >
-        <LibraryScreen
-          onCreate={jest.fn()}
-          onEdit={jest.fn()}
-          onStart={jest.fn()}
-        />
+        <RoutineUndoProvider>
+          <LibraryScreen
+            onCreate={jest.fn()}
+            onEdit={jest.fn()}
+            onStart={jest.fn()}
+          />
+        </RoutineUndoProvider>
       </DevicePreferencesProvider>
     </DatabaseProvider>,
   );

@@ -16,7 +16,7 @@ import Reanimated, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RoutineUndoToast } from './RoutineUndoToast';
-import { takeRoutineUndo } from './routineUndo';
+import { useRoutineUndo } from './routineUndo';
 import { ScrollView as GestureScrollView } from 'react-native-gesture-handler';
 
 import { Icon } from '@/src/components/Icon';
@@ -159,15 +159,16 @@ export function LibraryScreen({
 
   // A routine just deleted in its editor can be put back for a few seconds;
   // leaving this screen ends the offer.
+  const routineUndo = useRoutineUndo();
   const [undoOffer, setUndoOffer] = useState<DeletedRoutine | null>(null);
   useEffect(() => {
     if (!active) {
       setUndoOffer(null);
       return;
     }
-    const offered = takeRoutineUndo();
+    const offered = routineUndo.take();
     if (offered) setUndoOffer(offered);
-  }, [active, refreshKey]);
+  }, [active, refreshKey, routineUndo]);
   // The offer stays up until the routine is back, so a failed restore can
   // be tried again; taps during a restore are ignored.
   const restoring = useRef(false);
