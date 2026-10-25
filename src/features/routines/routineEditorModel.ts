@@ -177,15 +177,16 @@ export function expireDeletedStep(state: EditorState, id: string): EditorState {
   };
 }
 
-/** Moves a step from one position to another, counting real steps only. */
+/**
+ * Moves a step from one position to another, counting real steps only. Undo
+ * rows stay where they are, so UNDO still puts a step back in its place.
+ */
 export function moveStep(state: EditorState, from: number, to: number): EditorState {
   const steps = moveItem(realSteps(state), from, to);
-  const deleted = state.rows.filter((row) => row.kind === 'deleted');
-  // Undo rows close up when a drag starts, so the order of real steps is all
-  // that matters; any undo rows go back at the end of their old positions.
+  let next = 0;
   return {
     ...state,
-    rows: [...steps.map((step) => ({ kind: 'step' as const, ...step })), ...deleted],
+    rows: state.rows.map((row) => (row.kind === 'deleted' ? row : { kind: 'step' as const, ...steps[next++] })),
   };
 }
 

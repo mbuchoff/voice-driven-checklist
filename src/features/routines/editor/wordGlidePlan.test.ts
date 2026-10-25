@@ -22,22 +22,22 @@ describe('planning how a long step’s words reach their new lines', () => {
     expect(planWordGlide(closed, wider, -34, LINE)).toBeNull();
   });
 
-  it('slides the words that keep their line and fades the ones that change lines, one after another', () => {
+  it('slides the words that keep their line and fades the ones that change lines', () => {
     const plan = planWordGlide(closed, open, -34, LINE)!;
 
     expect(plan).toHaveLength(words.length);
     // "Drink" keeps its line: it slides from where it was, 34 to the right
     // of where the opened box starts.
-    expect(plan[0]).toEqual({ kind: 'slide', dx: 34, dy: 0, delay: 0 });
+    expect(plan[0]).toEqual({ kind: 'slide', dx: 34, dy: 0 });
     // "water" moves up a line: it fades out where it was and in where it lands.
-    expect(plan[5]).toEqual({ kind: 'fade', dx: 0 - 200 + 34, dy: LINE, delay: 5 * 12 });
-    expect(plan[8]).toEqual({ kind: 'fade', dx: 34, dy: LINE, delay: 8 * 12 });
+    expect(plan[5]).toEqual({ kind: 'fade', dx: 0 - 200 + 34, dy: LINE });
+    expect(plan[8]).toEqual({ kind: 'fade', dx: 34, dy: LINE });
   });
 
   it('works the same way back when the step closes', () => {
     const plan = planWordGlide(open, closed, 34, LINE)!;
-    expect(plan[0]).toEqual({ kind: 'slide', dx: -34, dy: 0, delay: 0 });
-    expect(plan[5]).toEqual({ kind: 'fade', dx: 200 - 0 - 34, dy: -LINE, delay: 60 });
+    expect(plan[0]).toEqual({ kind: 'slide', dx: -34, dy: 0 });
+    expect(plan[5]).toEqual({ kind: 'fade', dx: 200 - 0 - 34, dy: -LINE });
   });
 });
 

@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
   type LayoutChangeEvent,
 } from 'react-native';
 import {
@@ -24,7 +25,19 @@ import type { EditorColors } from '../editorColors';
 import { STEP_MAKE_ROOM, STEP_REORDER_HOLD_MS } from '../useStepReorder';
 import { formatTimerLong, formatTimerWords } from '../timers';
 import { CSS_EASE } from './motion';
-import { makeGlide, STEP_WORDS, WordGlide, WordLayouts, type WordSpots } from './StepWordGlide';
+import { NumberBadge } from './NumberBadge';
+import {
+  BADGE_SIZE,
+  OPEN_BADGE_MARGIN,
+  OPEN_BOX_SHIFT,
+  ROW_BLEED,
+  ROW_GAP,
+  ROW_PAD_X,
+  STEP_TEXT_BOX,
+  STEP_WORDS,
+  TIME_BADGE_HEIGHT,
+} from './stepRowMetrics';
+import { HeldWords, makeGlide, WordGlide, WordLayouts, type Glide } from './StepWordGlide';
 import type { WordSpot } from './wordGlidePlan';
 
 /** A swipe starts after this much mostly-sideways movement. */
@@ -38,17 +51,13 @@ const FLING_MS = 220;
 const OPEN_MS = 220;
 /** The time badge's look, shared with the hidden copy that measures it. */
 const TIME_BADGE = {
-  height: 34,
+  height: TIME_BADGE_HEIGHT,
   paddingHorizontal: 8,
   borderRadius: 20,
   flexDirection: 'row',
   alignItems: 'center',
   gap: 4,
 } as const;
-/** Where an open step's words sit from the row's edge. */
-export const EDIT_INSET = 18;
-/** How far the text box's left edge moves when a step opens (the number's place closes). */
-const OPEN_BOX_SHIFT = EDIT_INSET - 22 - 30;
 /** The step's own text steps aside, unseen, while its words glide (it keeps focus). */
 const UNDER_GLIDE = { position: 'absolute', top: 0, left: 0, right: 0, opacity: 0 } as const;
 
@@ -103,11 +112,26 @@ export function StepRow(props: StepRowProps) {
   // measured ahead of time, while the row is at rest, so a glide starts with
   // the number and time.
   const [closedBoxWidth, setClosedBoxWidth] = useState(0);
-  const openedRoom = () => -OPEN_BOX_SHIFT + (timerSeconds ? timeBadgeWidth + 8 : 0);
+  // The room an open step's words gain: the number's place, and the time's.
+  const openedRoom = () => -OPEN_BOX_SHIFT + (timerSeconds ? timeBadgeWidth + ROW_GAP : 0);
+  const openedBoxWidth = closedBoxWidth + openedRoom();
   const words = text.trim();
-  const layoutsKey = `${closedBoxWidth}|${openedRoom()}|${words}`;
-  const measured = useRef<{ key: string; closed: WordSpot[]; opened: WordSpot[] } | null>(null);
-  const [glide, setGlide] = useState<{ id: number; target: 0 | 1; spots?: WordSpots } | null>(null);
+  // Lines grow with Android's font size; a change measures the words again.
+  const { fontScale } = useWindowDimensions();
+  const linePitch = STEP_WORDS.lineHeight * fontScale;
+  const layoutsKey = `${closedBoxWidth}|${openedBoxWidth}|${fontScale}|${words}`;
+  // Words with a line break of their own just ride along.
+  const glides = !!words && !words.includes('\n') && !!closedBoxWidth;
+  type Layouts = { key: string; closed: WordSpot[]; opened: WordSpot[] };
+  const measured = useRef<Layouts | null>(null);
+  const planGlide = (target: 0 | 1, { closed, opened }: Layouts) =>
+    target === 1
+      ? makeGlide({ before: closed, after: opened }, OPEN_BOX_SHIFT, linePitch)
+      : makeGlide({ before: opened, after: closed }, -OPEN_BOX_SHIFT, linePitch);
+  // A glide keeps the words it started with (typing ends it at once and
+  // hands the step's own text back). Without its plan, it holds the old
+  // lines while the words are measured.
+  const [glide, setGlide] = useState<{ id: number; target: 0 | 1; text: string; plan?: Glide } | null>(null);
   const glideCount = useRef(0);
   // The glide starts in the very render where the step opens or closes, so no
   // frame shows the step's own text re-split before it.
@@ -117,15 +141,23 @@ export function StepRow(props: StepRowProps) {
     glideCount.current += 1;
     const target = open ? 1 : 0;
     const ready = measured.current?.key === layoutsKey ? measured.current : null;
-    const spots = ready
-      ? (target === 1 ? { before: ready.closed, after: ready.opened } : { before: ready.opened, after: ready.closed })
-      : undefined;
-    // Without words or a measured box, or measured with no word changing
-    // lines, the words just ride along.
-    const rides = !words || !closedBoxWidth || (spots && !makeGlide(spots, target === 1 ? OPEN_BOX_SHIFT : -OPEN_BOX_SHIFT));
-    setGlide(rides ? null : { id: glideCount.current, target, spots });
+    const plan = ready ? planGlide(target, ready) : undefined;
+    // Without words or a measured box, or with no word changing lines, the
+    // words just ride along.
+    setGlide(!glides || plan === null ? null : { id: glideCount.current, target, text, plan });
+  } else if (glide && glide.text !== text) {
+    setGlide(null);
   }
   const endGlide = () => setGlide(null);
+  const onWordsMeasured = (closed: WordSpot[], opened: WordSpot[]) => {
+    const layouts = { key: layoutsKey, closed, opened };
+    measured.current = layouts;
+    setGlide((current) => {
+      if (!current || current.plan) return current;
+      const plan = planGlide(current.target, layouts);
+      return plan ? { ...current, plan } : null;
+    });
+  };
 
   useEffect(() => {
     openProgress.value = withTiming(open ? 1 : 0, { duration: OPEN_MS, easing: CSS_EASE });
@@ -153,10 +185,11 @@ export function StepRow(props: StepRowProps) {
       const along = event.translationX * swipeDirection.value;
       translateX.value = swipeDirection.value * Math.min(rowWidth.value, Math.max(0, along));
     })
-    .onEnd(() => {
+    .onEnd((_event, success) => {
       'worklet';
       const width = rowWidth.value;
-      if (width > 0 && Math.abs(translateX.value) > width * SWIPE_DELETE_SHARE) {
+      // A cancelled swipe (an interruption, another gesture) slides back.
+      if (success && width > 0 && Math.abs(translateX.value) > width * SWIPE_DELETE_SHARE) {
         translateX.value = withTiming(swipeDirection.value * (width + 40), { duration: SWIPE_MS });
         scheduleOnRN(deleteAfterFling);
       } else {
@@ -185,8 +218,8 @@ export function StepRow(props: StepRowProps) {
   const leftSide = useAnimatedStyle(() => ({ opacity: translateX.value > 0 ? 1 : 0 }));
   const rightSide = useAnimatedStyle(() => ({ opacity: translateX.value < 0 ? 1 : 0 }));
   const badgeSlotStyle = useAnimatedStyle(() => ({
-    width: 30 * (1 - openProgress.value),
-    marginRight: (EDIT_INSET - 22) * openProgress.value,
+    width: BADGE_SIZE * (1 - openProgress.value),
+    marginRight: OPEN_BADGE_MARGIN * openProgress.value,
   }));
   // The number shrinks away toward its left edge.
   const badgeStyle = useAnimatedStyle(() => ({
@@ -200,7 +233,7 @@ export function StepRow(props: StepRowProps) {
     const width = timeWidth.value;
     return {
       width: width > 0 ? width * (1 - openProgress.value) : openProgress.value > 0 ? 0 : undefined,
-      marginLeft: -8 * openProgress.value,
+      marginLeft: -ROW_GAP * openProgress.value,
     };
   });
   const timeStyle = useAnimatedStyle(() => ({
@@ -259,9 +292,9 @@ export function StepRow(props: StepRowProps) {
         style={[
           {
             minHeight: 56,
-            marginHorizontal: -16,
+            marginHorizontal: -ROW_BLEED,
             paddingVertical: 6,
-            paddingHorizontal: 24,
+            paddingHorizontal: ROW_PAD_X,
             borderRadius: 16,
             backgroundColor: open ? colors.editTint : colors.surface,
             justifyContent: 'center',
@@ -269,33 +302,20 @@ export function StepRow(props: StepRowProps) {
           frontStyle,
         ]}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: ROW_GAP }}>
           <GestureDetector gesture={rowGesture}>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: ROW_GAP }}>
               <Animated.View
                 accessible={false}
                 importantForAccessibility="no-hide-descendants"
                 style={[{ alignItems: 'flex-start', justifyContent: 'center' }, badgeSlotStyle]}
               >
-                <Animated.View
-                  style={[
-                    {
-                      width: 30,
-                      height: 30,
-                      borderTopLeftRadius: 10,
-                      borderTopRightRadius: 10,
-                      borderBottomRightRadius: 10,
-                      borderBottomLeftRadius: 4,
-                      backgroundColor: open ? colors.surface : colors.fill,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transformOrigin: 'left center',
-                    },
-                    badgeStyle,
-                  ]}
-                >
-                  <Text style={{ color: colors.ink, fontSize: 15, fontWeight: '800' }}>{number}</Text>
-                </Animated.View>
+                <NumberBadge
+                  number={number}
+                  color={colors.ink}
+                  background={open ? colors.surface : colors.fill}
+                  style={[{ transformOrigin: 'left center' }, badgeStyle]}
+                />
               </Animated.View>
               <View
                 testID={`item-textbox-${index}`}
@@ -308,31 +328,36 @@ export function StepRow(props: StepRowProps) {
                   if (Math.abs(closed - closedBoxWidth) > 0.5) setClosedBoxWidth(closed);
                 }}
               >
-                {!glide && words && closedBoxWidth ? (
+                {/* The words are measured at rest, ahead of a glide, and go on
+                    being measured while a glide waits for them. */}
+                {glides && !glide?.plan ? (
                   <WordLayouts
                     key={layoutsKey}
                     index={index}
                     text={words}
-                    widths={[closedBoxWidth, closedBoxWidth + openedRoom()]}
+                    widths={[closedBoxWidth, openedBoxWidth]}
                     names={['closed', 'opened']}
-                    onMeasured={(closed, opened) => {
-                      measured.current = { key: layoutsKey, closed, opened };
-                    }}
+                    onMeasured={onWordsMeasured}
                   />
                 ) : null}
-                {glide ? (
+                {glide?.plan ? (
                   <WordGlide
                     key={glide.id}
                     index={index}
-                    text={text}
+                    text={glide.text}
                     color={colors.text}
-                    fromWidth={closedBoxWidth + (glide.target === 1 ? 0 : openedRoom())}
-                    toWidth={closedBoxWidth + (glide.target === 1 ? openedRoom() : 0)}
-                    boxShift={glide.target === 1 ? OPEN_BOX_SHIFT : -OPEN_BOX_SHIFT}
-                    progress={openProgress}
-                    target={glide.target}
-                    spots={glide.spots}
+                    glide={glide.plan}
+                    width={glide.target === 1 ? openedBoxWidth : closedBoxWidth}
+                    travel={{ progress: openProgress, target: glide.target, boxShift: OPEN_BOX_SHIFT }}
                     onDone={endGlide}
+                  />
+                ) : glide ? (
+                  <HeldWords
+                    index={index}
+                    text={glide.text}
+                    color={colors.text}
+                    width={glide.target === 1 ? closedBoxWidth : openedBoxWidth}
+                    travel={{ progress: openProgress, target: glide.target, boxShift: OPEN_BOX_SHIFT }}
                   />
                 ) : null}
                 {open ? (
@@ -352,15 +377,7 @@ export function StepRow(props: StepRowProps) {
                     placeholderTextColor={colors.muted}
                     textAlignVertical="center"
                     textBreakStrategy="simple"
-                    style={[
-                      {
-                        color: colors.text,
-                        paddingHorizontal: 6,
-                        paddingVertical: 11,
-                        ...STEP_WORDS,
-                      },
-                      glide ? UNDER_GLIDE : null,
-                    ]}
+                    style={[STEP_TEXT_BOX, { color: colors.text }, glide ? UNDER_GLIDE : null]}
                   />
                 ) : (
                   <Text
@@ -383,12 +400,8 @@ export function StepRow(props: StepRowProps) {
                     }}
                     textBreakStrategy="simple"
                     style={[
-                      {
-                        color: text.trim() ? colors.text : colors.muted,
-                        paddingHorizontal: 6,
-                        paddingVertical: 11,
-                        ...STEP_WORDS,
-                      },
+                      STEP_TEXT_BOX,
+                      { color: text.trim() ? colors.text : colors.muted },
                       glide ? UNDER_GLIDE : null,
                     ]}
                   >
@@ -401,7 +414,7 @@ export function StepRow(props: StepRowProps) {
           {timerSeconds ? (
             <Animated.View
               style={[
-                { height: 34, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
+                { height: TIME_BADGE_HEIGHT, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
                 timeSlotStyle,
               ]}
             >

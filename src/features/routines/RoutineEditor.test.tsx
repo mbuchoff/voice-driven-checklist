@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
-import { Alert, BackHandler, Keyboard, Platform, StyleSheet, TextInput } from 'react-native';
+import { Alert, BackHandler, Dimensions, Keyboard, Platform, StyleSheet, TextInput } from 'react-native';
 import { State } from 'react-native-gesture-handler';
 import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 
@@ -395,6 +395,13 @@ describe('RoutineEditor', () => {
       });
     }
     const fieldOpacity = () => StyleSheet.flatten(screen.getByTestId('item-text-0').props.style).opacity;
+    /** Android's font size setting, as the phone reports it. */
+    function setFontScale(fontScale: number) {
+      const { window, screen: display } = { window: Dimensions.get('window'), screen: Dimensions.get('screen') };
+      act(() => Dimensions.set({ window: { ...window, fontScale }, screen: { ...display, fontScale } }));
+    }
+    const initialFontScale = Dimensions.get('window').fontScale;
+    afterEach(() => setFontScale(initialFontScale));
 
     it('glide to their new lines as the step opens, then the field takes over', async () => {
       await longStep();
@@ -415,6 +422,69 @@ describe('RoutineEditor', () => {
       }
     });
 
+    it('hand the field back at once when it is typed into during the glide', async () => {
+      await longStep();
+      layOutWords(0, ['closed', 'opened'], [CLOSED_LINES, OPENED_LINES]);
+      tapToEdit(0);
+      expect(screen.getByTestId('word-glide-0')).toBeOnTheScreen();
+
+      fireEvent.changeText(screen.getByTestId('item-text-0'), `${LONG} today`);
+
+      expect(screen.queryByTestId('word-glide-0')).toBeNull();
+      expect(screen.getByTestId('item-text-0').props.value).toBe(`${LONG} today`);
+      expect(fieldOpacity()).not.toBe(0);
+    });
+
+    it('hand the field back at once when it is typed into while they’re measured', async () => {
+      await longStep();
+      tapToEdit(0);
+      expect(screen.getByTestId('word-hold-0')).toBeOnTheScreen();
+
+      fireEvent.changeText(screen.getByTestId('item-text-0'), `${LONG} today`);
+
+      expect(screen.queryByTestId('word-hold-0')).toBeNull();
+      expect(fieldOpacity()).not.toBe(0);
+    });
+
+    it('glide on lines as tall as the enlarged text when the font size is larger', async () => {
+      setFontScale(1.5);
+      await longStep();
+      layOutWords(0, ['closed', 'opened'], [CLOSED_LINES, OPENED_LINES]);
+
+      tapToEdit(0);
+
+      // It eases to the opened words' two lines, each 26 × 1.5 tall, inside the box's padding.
+      expect(StyleSheet.flatten(screen.getByTestId('word-glide-0').props.style).height).toBe(2 * 26 * 1.5 + 2 * 11);
+    });
+
+    it('are measured again when the font size changes', async () => {
+      await longStep();
+      layOutWords(0, ['closed', 'opened'], [CLOSED_LINES, OPENED_LINES]);
+      setFontScale(1.5);
+
+      tapToEdit(0);
+
+      expect(screen.getByTestId('word-hold-0')).toBeOnTheScreen();
+      expect(screen.queryByTestId('word-glide-0')).toBeNull();
+    });
+
+    it('ride along when the step has a line break of its own', async () => {
+      const database = await setupDb();
+      await renderEditor(
+        { initialRoutine: await existing(database, { steps: [{ text: 'Drink a full glass\nof water', timerSeconds: null }] }) },
+        { database },
+      );
+      fireEvent(screen.getByTestId('item-textbox-0'), 'layout', {
+        nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 100 } },
+      });
+
+      tapToEdit(0);
+
+      expect(screen.queryByTestId('word-hold-0')).toBeNull();
+      expect(screen.queryByTestId('word-glide-0')).toBeNull();
+      expect(fieldOpacity()).not.toBe(0);
+    });
+
     it('stay put when their lines don’t change', async () => {
       await longStep();
       layOutWords(0, ['closed', 'opened'], [CLOSED_LINES, CLOSED_LINES]);
@@ -432,7 +502,7 @@ describe('RoutineEditor', () => {
 
       expect(screen.getByTestId('word-hold-0')).toHaveTextContent(LONG);
       expect(fieldOpacity()).toBe(0);
-      layOutWords(0, ['before', 'after'], [CLOSED_LINES, OPENED_LINES]);
+      layOutWords(0, ['closed', 'opened'], [CLOSED_LINES, OPENED_LINES]);
       expect(screen.queryByTestId('word-hold-0')).toBeNull();
       expect(screen.getByTestId('word-glide-0')).toBeOnTheScreen();
     });
@@ -682,6 +752,29 @@ describe('RoutineEditor', () => {
       });
     });
 
+    it('does nothing when the panel’s selected quick pick is tapped again', async () => {
+      const database = await setupDb();
+      await renderEditor({ initialRoutine: await existing(database) }, { database });
+      tapToEdit(0);
+      layOutChips(0, [30, 60, 120, 300]);
+      fireEvent.press(screen.getByTestId('item-more-0'));
+      layOutPanelChips([30, 60, 120, 300]);
+      const press = (id: string) => {
+        fireEvent(screen.getByTestId(id), 'pressIn');
+        fireEvent(screen.getByTestId(id), 'pressOut');
+      };
+      press('timer-plus');
+      press('timer-minus');
+      press('timer-minus');
+      expect(screen.getByTestId('timer-readout')).toHaveTextContent('1 min');
+      expect(screen.getByText('+5s')).toBeOnTheScreen();
+
+      fireEvent.press(screen.getByTestId('panel-chip-60'));
+
+      expect(screen.getByTestId('timer-readout')).toHaveTextContent('1 min');
+      expect(screen.getByText('+5s')).toBeOnTheScreen();
+    });
+
     it('lets minus take a timer to Off', async () => {
       const database = await setupDb();
       await renderEditor({ initialRoutine: await existing(database) }, { database });
@@ -735,6 +828,25 @@ describe('RoutineEditor', () => {
 
       expect(await screen.findByText('Step deleted')).toBeOnTheScreen();
       expect(screen.getByTestId('item-label-0')).toHaveTextContent('Breathe');
+    });
+
+    it('keeps a step whose swipe is cancelled, even past 40% of its width', async () => {
+      const database = await setupDb();
+      const routine = await existing(database);
+      await renderEditor({ initialRoutine: routine }, { database });
+      const row = screen.getByTestId('item-row-0');
+      fireEvent(row, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 380, height: 56 } } });
+
+      fireGestureHandler(getByGestureTestId(`item-swipe-gesture-${row.props.nativeID}-0`), [
+        { state: State.BEGAN, translationX: 0 },
+        { state: State.ACTIVE, translationX: -60 },
+        { state: State.ACTIVE, translationX: -200 },
+        { state: State.CANCELLED, translationX: -200 },
+      ]);
+      await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+
+      expect(screen.queryByText('Step deleted')).toBeNull();
+      expect(screen.getByTestId('item-label-0')).toHaveTextContent('Neck rolls');
     });
 
     it('deletes the routine from its sheet and hands back what undoes it', async () => {

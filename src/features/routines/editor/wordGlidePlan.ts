@@ -29,7 +29,6 @@ export type WordMove = {
   kind: 'slide' | 'fade';
   dx: number;
   dy: number;
-  delay: number;
 };
 
 /**
@@ -48,7 +47,6 @@ export function planWordGlide(
     kind: spot.line === after[i].line ? 'slide' : 'fade',
     dx: spot.x - after[i].x - boxShift,
     dy: (spot.line - after[i].line) * lineHeight,
-    delay: i * WORD_GLIDE_STAGGER_MS,
   }));
 }
 

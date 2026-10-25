@@ -48,6 +48,8 @@ import {
 } from './editor/EditorSheet';
 import { RoutineHeroCard } from './editor/RoutineHeroCard';
 import { DeletedStepRow, StepRow } from './editor/StepRow';
+import { NumberBadge } from './editor/NumberBadge';
+import { STEP_WORDS, TEXT_PAD } from './editor/stepRowMetrics';
 import { StepTimerChips } from './editor/TimerChips';
 import { TimerPanel } from './editor/TimerPanel';
 import { createRoutine, deleteRoutine, updateRoutine } from './repository';
@@ -340,8 +342,10 @@ export function RoutineEditor({
     setModel((state) => setStepTimer(state, panel.stepId, next.value));
   };
 
+  // Picking the time the step already has does nothing (the stepper keeps
+  // its level).
   const pickPanelTime = (seconds: number | null) => {
-    if (!panel) return;
+    if (!panel || seconds === (panelStep?.timerSeconds ?? null)) return;
     setPanel({ ...panel, stepper: initialStepper() });
     setModel((state) => setStepTimer(state, panel.stepId, seconds));
   };
@@ -842,22 +846,11 @@ function DragPreview({
         style,
       ]}
     >
-      <View
-        style={{
-          width: 30,
-          height: 30,
-          borderTopLeftRadius: 10,
-          borderTopRightRadius: 10,
-          borderBottomRightRadius: 10,
-          borderBottomLeftRadius: 4,
-          backgroundColor: colors.surface,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+      <NumberBadge number={number} color={colors.ink} background={colors.surface} />
+      <Text
+        testID="item-drag-preview-text"
+        style={{ flex: 1, color: colors.text, ...STEP_WORDS, paddingHorizontal: TEXT_PAD.x }}
       >
-        <Text style={{ color: colors.ink, fontSize: 15, fontWeight: '800' }}>{number}</Text>
-      </View>
-      <Text testID="item-drag-preview-text" style={{ flex: 1, color: colors.text, fontSize: 20, lineHeight: 26, paddingHorizontal: 6 }}>
         {text}
       </Text>
     </Animated.View>

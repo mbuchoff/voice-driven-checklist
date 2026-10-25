@@ -11,6 +11,7 @@ import { Icon } from '@/src/components/Icon';
 import type { EditorColors } from '../editorColors';
 import { fitChips, formatTimerLong, formatTimerWords } from '../timers';
 import { CSS_EASE } from './motion';
+import { CHIP_STRIP_INSET } from './stepRowMetrics';
 
 type ChipLook = {
   minHeight: number;
@@ -28,8 +29,6 @@ const STRIP_LOOK: ChipLook = { minHeight: 44, paddingHorizontal: 6, fontSize: 16
 const PANEL_LOOK: ChipLook = { minHeight: 44, paddingHorizontal: 10, fontSize: 17, gap: 6 };
 const MORE_WIDTH = 44;
 const FOLD_MS = 220;
-/** The strip's chips line up with the open step's words (inset 18 − 8). */
-const STRIP_INSET = 10;
 
 function Chip({
   colors,
@@ -190,7 +189,7 @@ export function StepTimerChips({
     >
       <View
         testID={`chips-room-${index}`}
-        onLayout={(event) => setRoom(event.nativeEvent.layout.width - STRIP_INSET)}
+        onLayout={(event) => setRoom(event.nativeEvent.layout.width - CHIP_STRIP_INSET)}
         style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
       >
         <View
@@ -201,7 +200,7 @@ export function StepTimerChips({
           style={{
             paddingTop: 8,
             paddingBottom: 6,
-            paddingLeft: STRIP_INSET,
+            paddingLeft: CHIP_STRIP_INSET,
             flexDirection: 'row',
             flexWrap: 'wrap',
             gap: STRIP_LOOK.gap,

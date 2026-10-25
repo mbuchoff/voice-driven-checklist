@@ -133,6 +133,19 @@ describe('routine editor model', () => {
   });
 
   describe('reordering', () => {
+    it('leaves an undo row in its place when another step moves, so UNDO puts the step back there', () => {
+      let state = createEditorState({
+        routine: { ...saved, steps: ['A', 'B', 'C', 'D'].map((text, order) => ({ id: text, text, order, timerSeconds: null })) },
+      });
+      const b = realSteps(state)[1].localId;
+      state = deleteStep(state, b);
+      state = moveStep(state, 2, 1);
+      expect(state.rows.map((row) => (row.kind === 'deleted' ? 'undo' : row.text))).toEqual(['A', 'undo', 'D', 'C']);
+
+      state = undoDeleteStep(state, b);
+      expect(texts(state)).toEqual(['A', 'B', 'D', 'C']);
+    });
+
     it('moves a step among the real steps, skipping undo rows', () => {
       let state = createEditorState({ routine: saved });
       state = addStep(state, 'n1');
