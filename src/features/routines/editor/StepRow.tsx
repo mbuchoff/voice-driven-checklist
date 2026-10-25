@@ -65,9 +65,17 @@ export function StepRow(props: StepRowProps) {
   const openProgress = useSharedValue(open ? 1 : 0);
   const [timeBadgeWidth, setTimeBadgeWidth] = useState(0);
   // The text box's width with the step closed, measured at rest.
-  const [closedBoxWidth, setClosedBoxWidth] = useState(0);
+  // The time's place, with the row's gap before it.
+  const timeRoom = timerSeconds ? timeBadgeWidth + ROW_GAP : 0;
   // The room an open step's words gain: the number's place, and the time's.
-  const openedRoom = () => -OPEN_BOX_SHIFT + (timerSeconds ? timeBadgeWidth + ROW_GAP : 0);
+  const openedRoom = () => -OPEN_BOX_SHIFT + timeRoom;
+  // The text box's width as last measured at rest, with the time's place
+  // then. Its closed width follows from that, so it stays right when the
+  // step gets (or loses) a timer while it's open, with no new measurement.
+  const [boxAtRest, setBoxAtRest] = useState({ width: 0, open: false, timeRoom: 0 });
+  const closedWidthFrom = (box: typeof boxAtRest) =>
+    box.open ? box.width + OPEN_BOX_SHIFT - timeRoom : box.width + box.timeRoom - timeRoom;
+  const closedBoxWidth = closedWidthFrom(boxAtRest);
   const { glide, textHidden } = useWordGlide({
     index,
     open,
@@ -189,9 +197,9 @@ export function StepRow(props: StepRowProps) {
                 onLayout={(event) => {
                   // Only at rest: while the number and time move, it's changing.
                   if (Math.abs(openProgress.value - (open ? 1 : 0)) > 0.001) return;
-                  const width = event.nativeEvent.layout.width;
-                  const closed = open ? width - openedRoom() : width;
-                  if (Math.abs(closed - closedBoxWidth) > 0.5) setClosedBoxWidth(closed);
+                  const box = { width: event.nativeEvent.layout.width, open, timeRoom };
+                  // Within half a point, the words aren't measured again for nothing.
+                  if (Math.abs(closedWidthFrom(box) - closedBoxWidth) > 0.5) setBoxAtRest(box);
                 }}
               >
                 {glide}

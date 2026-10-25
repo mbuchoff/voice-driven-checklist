@@ -5,6 +5,7 @@ import * as Reanimated from 'react-native-reanimated';
 import {
   existing,
   HIDDEN,
+  layOutChips,
   renderEditor,
   setupEditorDatabase as setupDb,
   tapToEdit,
@@ -73,11 +74,50 @@ describe('RoutineEditor', () => {
 
       expect(screen.getByTestId('word-glide-0')).toBeOnTheScreen();
       expect(fieldOpacity()).toBe(0);
+      // The box still sits where it was closed, so the words' layer starts
+      // 34 to its left, where the box ends up.
+      expect(StyleSheet.flatten(screen.getByTestId('word-glide-layer-0').props.style).transform).toEqual([{ translateX: -34 }]);
 
       await glidesEnd();
 
       expect(screen.queryByTestId('word-glide-0')).toBeNull();
       expect(fieldOpacity()).not.toBe(0);
+    });
+
+    it('are measured for the closed box the step will have after a timer is set while it’s open', async () => {
+      // Closed and untimed, its text box was measured 300 wide; opened, it
+      // reports nothing more (its last layout comes while it's still moving).
+      await longStep();
+      tapToEdit(0);
+      layOutChips(0, [30, 60, 120, 300]);
+      fireEvent.press(screen.getByTestId('step-chip-0-120'));
+      // The time badge that will show when it closes is 60 wide (and the row's gap 8).
+      fireEvent(screen.getByTestId('step-clock-measure-0', HIDDEN), 'layout', {
+        nativeEvent: { layout: { x: 0, y: 0, width: 60, height: 34 } },
+      });
+
+      fireEvent(screen.getByTestId('word-space-0-closed', HIDDEN), 'layout', {
+        nativeEvent: { layout: { x: 0, y: 0, width: 5, height: 26 } },
+      });
+
+      const closed = StyleSheet.flatten(screen.getByTestId('word-layout-0-closed', HIDDEN).props.style);
+      // Closed, the time and the row's gap before it take 60 + 8 of the 300;
+      // less the text box's padding on both sides.
+      expect(closed.width).toBe(300 - 60 - 8 - 2 * 6);
+    });
+
+    it('glide from where they were as the step closes: their layer sits where the box ends up', async () => {
+      await longStep();
+      layOutWords(0, ['closed', 'opened'], [CLOSED_LINES, OPENED_LINES]);
+      tapToEdit(0);
+      await glidesEnd();
+
+      fireEvent(screen.getByTestId('step-text-0'), 'submitEditing');
+
+      // The box is still where it was open, 34 left of its closed place, so
+      // the words' layer starts 34 to its right.
+      const layer = StyleSheet.flatten(screen.getByTestId('word-glide-layer-0').props.style);
+      expect(layer.transform).toEqual([{ translateX: 34 }]);
     });
 
     it('hand the field back at once when it is typed into during the glide', async () => {

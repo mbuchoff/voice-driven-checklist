@@ -100,6 +100,7 @@ export function WordLayouts({
       {space ? ([0, 1] as const).map((side) => (
         <View
           key={side}
+          testID={`word-layout-${index}-${names[side]}`}
           pointerEvents="none"
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
@@ -133,12 +134,12 @@ export function WordLayouts({
 
 /** How the text box moves along the row as `progress` goes toward `target`. */
 type BoxTravel = {
-  /** The row's open progress, which moves the text box. */
+  /** The row's open progress (0 closed, 1 open), which moves the text box. */
   progress: SharedValue<number>;
   /** Where `progress` ends: 1 opening, 0 closing. */
   target: 0 | 1;
-  /** How far the text box's left edge moves along the row. */
-  boxShift: number;
+  /** How far the text box's left edge is from its closed place when open. */
+  openShift: number;
 };
 
 /**
@@ -150,7 +151,7 @@ export function HeldWords({
   text,
   color,
   width,
-  travel: { progress, target, boxShift },
+  travel: { progress, target, openShift },
 }: {
   index: number;
   text: string;
@@ -159,9 +160,9 @@ export function HeldWords({
   width: number;
   travel: BoxTravel;
 }) {
-  const travel = target === 1 ? boxShift : -boxShift;
+  // Where the box was when the move began, against where it is now.
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: travel * (1 - target - progress.value) }],
+    transform: [{ translateX: openShift * (1 - target - progress.value) }],
   }));
   return (
     <Animated.Text
@@ -185,7 +186,7 @@ export function WordGlide({
   color,
   glide,
   width,
-  travel: { progress, target, boxShift },
+  travel: { progress, target, openShift },
   onDone,
 }: {
   index: number;
@@ -223,9 +224,8 @@ export function WordGlide({
   }, []);
 
   // The words sit where the box ends up while it moves there.
-  const travel = target === 1 ? boxShift : -boxShift;
   const layerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: travel * (target - progress.value) }],
+    transform: [{ translateX: openShift * (target - progress.value) }],
   }));
   const boxStyle = useAnimatedStyle(() => {
     const t = cssEase(Math.min(1, clock.value / glide.length));
@@ -237,13 +237,14 @@ export function WordGlide({
   return (
     <Animated.View testID={`word-glide-${index}`} pointerEvents="none" style={[{ height: glide.fromHeight }, boxStyle]}>
       <Animated.View
+        testID={`word-glide-layer-${index}`}
         style={[
           {
             position: 'absolute',
             top: TEXT_PAD.y,
             left: TEXT_PAD.x,
             width: width - 2 * TEXT_PAD.x,
-            transform: [{ translateX: travel * (target - progress.value) }],
+            transform: [{ translateX: openShift * (target - progress.value) }],
           },
           layerStyle,
         ]}
@@ -400,7 +401,7 @@ export function useWordGlide({
     });
   };
 
-  const travel = glide ? { progress, target: glide.target, boxShift: OPEN_BOX_SHIFT } : null;
+  const travel = glide ? { progress, target: glide.target, openShift: OPEN_BOX_SHIFT } : null;
   return {
     textHidden: !!glide,
     glide: (

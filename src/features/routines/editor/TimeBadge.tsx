@@ -62,6 +62,7 @@ export function TimeBadge({
       style={[{ height: TIME_BADGE_HEIGHT, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }, slotStyle]}
     >
       <View
+        testID={`step-clock-measure-${index}`}
         pointerEvents="none"
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
