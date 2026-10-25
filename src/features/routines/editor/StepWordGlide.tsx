@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useSharedValue,
@@ -8,8 +9,10 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
+import { scheduleOnRN } from 'react-native-worklets';
+
 import { cssEase } from './motion';
-import { STEP_TEXT_BOX, STEP_WORDS, TEXT_PAD } from './stepRowMetrics';
+import { OPEN_BOX_SHIFT, STEP_TEXT_BOX, STEP_WORDS, TEXT_PAD } from './stepRowMetrics';
 import {
   fadeThrough,
   glideLength,
@@ -68,15 +71,19 @@ export function WordLayouts({
 }) {
   const words = useMemo(() => text.trim().split(/\s+/), [text]);
   const [space, setSpace] = useState(0);
-  const [lefts, setLefts] = useState<[Lefts, Lefts]>([[], []]);
+  // Where each word starts in each layout, kept out of state: only the
+  // finished layouts matter, reported once.
+  const lefts = useRef<[Lefts, Lefts]>([[], []]);
   const reported = useRef(false);
-
-  useEffect(() => {
-    if (reported.current || !space) return;
-    if (words.some((_, i) => lefts[0][i] === undefined || lefts[1][i] === undefined)) return;
+  const onMeasuredRef = useRef(onMeasured);
+  onMeasuredRef.current = onMeasured;
+  const place = (side: 0 | 1, i: number, x: number) => {
+    lefts.current[side][i] = x;
+    const [first, second] = lefts.current;
+    if (reported.current || words.some((_, w) => first[w] === undefined || second[w] === undefined)) return;
     reported.current = true;
-    onMeasured(spotsFromLefts(lefts[0] as number[]), spotsFromLefts(lefts[1] as number[]));
-  }, [lefts, onMeasured, space, words]);
+    onMeasuredRef.current(spotsFromLefts(first as number[]), spotsFromLefts(second as number[]));
+  };
 
   return (
     <>
@@ -112,14 +119,7 @@ export function WordLayouts({
               testID={`word-measure-${index}-${names[side]}-${i}`}
               numberOfLines={1}
               style={STEP_WORDS}
-              onLayout={(event) => {
-                const { x } = event.nativeEvent.layout;
-                setLefts((current) => {
-                  const next: [Lefts, Lefts] = [[...current[0]], [...current[1]]];
-                  next[side][i] = x;
-                  return next;
-                });
-              }}
+              onLayout={(event) => place(side, i, event.nativeEvent.layout.x)}
             >
               {word}
             </Text>
@@ -203,10 +203,20 @@ export function WordGlide({
 
   // One clock drives every word and the box's height, from 0 when they
   // first show, so their first frame is where the old lines were.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  const mounted = useRef(true);
+  const done = () => {
+    if (mounted.current) onDoneRef.current();
+  };
   useEffect(() => {
-    clock.value = withTiming(glide.length, { duration: glide.length, easing: Easing.linear });
-    const done = setTimeout(onDone, glide.length + 16);
-    return () => clearTimeout(done);
+    clock.value = withTiming(glide.length, { duration: glide.length, easing: Easing.linear }, (finished) => {
+      if (finished) scheduleOnRN(done);
+    });
+    return () => {
+      mounted.current = false;
+      cancelAnimation(clock);
+    };
     // Runs once: each glide is its own mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -306,4 +316,115 @@ function GlidingWord({
       {word}
     </Animated.Text>
   );
+}
+
+type Layouts = { key: string; closed: WordSpot[]; opened: WordSpot[] };
+
+/**
+ * A long step's words gliding to their new lines as it opens or closes
+ * (Round 27). The words are measured at rest, ahead of a glide, so it starts
+ * with the number and time; if the step opens or closes before that, the old
+ * lines hold where they were until they are. A glide keeps the words it
+ * started with, and typing ends it at once. Words with a line break of their
+ * own, or that keep their lines, just ride along.
+ *
+ * `glide` goes in the step's text box; while `textHidden`, the step's own
+ * text steps aside, unseen (it keeps focus).
+ */
+export function useWordGlide({
+  index,
+  open,
+  text,
+  color,
+  closedBoxWidth,
+  openedBoxWidth,
+  progress,
+}: {
+  index: number;
+  open: boolean;
+  text: string;
+  color: string;
+  /** The text box's width (padding included) with the step closed and open. */
+  closedBoxWidth: number;
+  openedBoxWidth: number;
+  /** The row's open progress, which moves the text box. */
+  progress: SharedValue<number>;
+}): { glide: ReactNode; textHidden: boolean } {
+  const words = text.trim();
+  // Lines grow with Android's font size; a change measures the words again.
+  const { fontScale } = useWindowDimensions();
+  const linePitch = STEP_WORDS.lineHeight * fontScale;
+  const layoutsKey = `${closedBoxWidth}|${openedBoxWidth}|${fontScale}|${words}`;
+  const glides = !!words && !words.includes('\n') && !!closedBoxWidth;
+  const measured = useRef<Layouts | null>(null);
+  const planGlide = (target: 0 | 1, { closed, opened }: Layouts) =>
+    target === 1
+      ? makeGlide({ before: closed, after: opened }, OPEN_BOX_SHIFT, linePitch)
+      : makeGlide({ before: opened, after: closed }, -OPEN_BOX_SHIFT, linePitch);
+  // Without its plan, a glide holds the old lines while the words are measured.
+  const [glide, setGlide] = useState<{ id: number; target: 0 | 1; text: string; plan?: Glide } | null>(null);
+  const glideCount = useRef(0);
+  // The glide starts in the very render where the step opens or closes, so no
+  // frame shows the step's own text re-split before it.
+  const [glideFor, setGlideFor] = useState(open);
+  if (open !== glideFor) {
+    setGlideFor(open);
+    glideCount.current += 1;
+    const target = open ? 1 : 0;
+    const ready = measured.current?.key === layoutsKey ? measured.current : null;
+    const plan = ready ? planGlide(target, ready) : undefined;
+    setGlide(!glides || plan === null ? null : { id: glideCount.current, target, text, plan });
+  } else if (glide && glide.text !== text) {
+    setGlide(null);
+  }
+  const onMeasured = (closed: WordSpot[], opened: WordSpot[]) => {
+    const layouts = { key: layoutsKey, closed, opened };
+    measured.current = layouts;
+    setGlide((current) => {
+      if (!current || current.plan) return current;
+      const plan = planGlide(current.target, layouts);
+      return plan ? { ...current, plan } : null;
+    });
+  };
+
+  const travel = glide ? { progress, target: glide.target, boxShift: OPEN_BOX_SHIFT } : null;
+  return {
+    textHidden: !!glide,
+    glide: (
+      <>
+        {/* Mounted while the layouts stay the same, glides included, so the
+            words are measured once for them. */}
+        {glides ? (
+          <WordLayouts
+            key={layoutsKey}
+            index={index}
+            text={words}
+            widths={[closedBoxWidth, openedBoxWidth]}
+            names={['closed', 'opened']}
+            onMeasured={onMeasured}
+          />
+        ) : null}
+        {glide?.plan && travel ? (
+          <WordGlide
+            key={glide.id}
+            index={index}
+            text={glide.text}
+            color={color}
+            glide={glide.plan}
+            width={glide.target === 1 ? openedBoxWidth : closedBoxWidth}
+            travel={travel}
+            onDone={() => setGlide(null)}
+          />
+        ) : glide && travel ? (
+          <HeldWords
+            index={index}
+            text={glide.text}
+            color={color}
+            width={glide.target === 1 ? closedBoxWidth : openedBoxWidth}
+            travel={travel}
+          />
+        ) : null}
+      </>
+    ),
+  };
 }
