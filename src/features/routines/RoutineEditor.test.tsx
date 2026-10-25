@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-
 import { Alert, BackHandler, Dimensions, Keyboard, Platform, StyleSheet, TextInput } from 'react-native';
 import { State } from 'react-native-gesture-handler';
 import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
+import * as Reanimated from 'react-native-reanimated';
 
 import type { Database } from '@/src/db/database';
 import {
@@ -26,11 +27,13 @@ async function renderEditor(
     onDeleted: jest.fn(),
     onRun: jest.fn(),
   };
-  await renderWithDatabase(
+  const view = await renderWithDatabase(
     <RoutineEditor newColorKey="teal-1" {...callbacks} {...props} />,
     { database, preferences: options.preferences },
   );
-  return { database, ...callbacks };
+  // Jest's Reanimated stand-in reads an animated style when its view renders.
+  const renderAgain = () => view.rerender(<RoutineEditor newColorKey="teal-1" {...callbacks} {...props} />);
+  return { database, ...callbacks, renderAgain };
 }
 
 async function existing(database: Database, overrides: Partial<Parameters<typeof createRoutine>[1]> = {}) {
@@ -807,6 +810,71 @@ describe('RoutineEditor', () => {
       fireEvent.press(screen.getByRole('button', { name: 'Undo deleting this step' }));
       expect(screen.getByTestId('step-label-0')).toHaveTextContent('Neck rolls');
       expect(screen.getByTestId('step-clock-0')).toHaveTextContent('30s');
+    });
+
+    describe('the UNDO in a deleted step’s place', () => {
+      const deleteFirst = () => act(() => {
+        fireEvent(screen.getByTestId('step-label-0'), 'accessibilityAction', {
+          nativeEvent: { actionName: 'delete' },
+        });
+      });
+      let renderAgain: () => void;
+      const undoHeight = () => {
+        renderAgain();
+        return StyleSheet.flatten(screen.getByTestId('deleted-step-0').props.style).height;
+      };
+
+      it('closes up after 5 seconds and the step stays deleted', async () => {
+        const database = await setupDb();
+        ({ renderAgain } = await renderEditor({ initialRoutine: await existing(database) }, { database }));
+        jest.useFakeTimers();
+        try {
+          deleteFirst();
+          act(() => jest.advanceTimersByTime(4900));
+          expect(screen.getByText('Step deleted')).toBeOnTheScreen();
+          expect(undoHeight()).toBeGreaterThan(0);
+
+          act(() => jest.advanceTimersByTime(400));
+
+          expect(screen.queryByText('Step deleted')).toBeNull();
+          expect(screen.getByTestId('step-label-0')).toHaveTextContent('Breathe');
+        } finally {
+          jest.useRealTimers();
+        }
+      });
+
+      it('gives a step deleted again, after UNDO while it closed up, its full 5 seconds', async () => {
+        const database = await setupDb();
+        ({ renderAgain } = await renderEditor({ initialRoutine: await existing(database) }, { database }));
+        // Each close-up ends when the test says.
+        const closeUps: ((finished: boolean) => void)[] = [];
+        jest.spyOn(Reanimated, 'withTiming').mockImplementation(((value, _config, callback) => {
+          if (callback) closeUps.push(callback);
+          return value;
+        }) as typeof Reanimated.withTiming);
+        jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+        try {
+          deleteFirst();
+          act(() => jest.advanceTimersByTime(5000));
+          expect(undoHeight()).toBe(0);
+          fireEvent.press(screen.getByRole('button', { name: 'Undo deleting this step' }));
+          expect(screen.getByTestId('step-label-0')).toHaveTextContent('Neck rolls');
+
+          deleteFirst();
+          // The first close-up, cut short by UNDO, ends now: it leaves the new UNDO be.
+          await act(async () => closeUps.forEach((end) => end(true)));
+          act(() => jest.advanceTimersByTime(4900));
+
+          expect(screen.getByText('Step deleted')).toBeOnTheScreen();
+          expect(undoHeight()).toBeGreaterThan(0);
+          act(() => jest.advanceTimersByTime(100));
+          await act(async () => closeUps.at(-1)?.(true));
+          expect(screen.queryByText('Step deleted')).toBeNull();
+        } finally {
+          jest.useRealTimers();
+          jest.restoreAllMocks();
+        }
+      });
     });
 
     it('deletes a step swiped left past 40% of its width', async () => {

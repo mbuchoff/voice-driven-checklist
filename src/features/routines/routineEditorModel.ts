@@ -16,6 +16,8 @@ export type DeletedStepRow = {
   kind: 'deleted';
   localId: string;
   step: EditorStep;
+  /** The step's height, which its place keeps. */
+  height: number;
 };
 
 export type EditorRow = ({ kind: 'step' } & EditorStep) | DeletedStepRow;
@@ -148,14 +150,14 @@ export function setColor(state: EditorState, colorKey: string): EditorState {
   return { ...state, colorKey };
 }
 
-/** Swipe-delete: the step's place becomes an undo row. */
-export function deleteStep(state: EditorState, id: string): EditorState {
+/** Swipe-delete: the step's place, at its height, becomes an undo row. */
+export function deleteStep(state: EditorState, id: string, height: number): EditorState {
   const closed = state.openId === id ? { ...state, openId: null, openedText: '' } : state;
   return {
     ...closed,
     rows: closed.rows.map((row) =>
       row.kind === 'step' && row.localId === id
-        ? { kind: 'deleted', localId: id, step: { ...row, fresh: false } }
+        ? { kind: 'deleted', localId: id, step: { ...row, fresh: false }, height }
         : row,
     ),
   };
@@ -175,6 +177,13 @@ export function expireDeletedStep(state: EditorState, id: string): EditorState {
     ...state,
     rows: state.rows.filter((row) => !(row.kind === 'deleted' && row.localId === id)),
   };
+}
+
+/** Every undo row goes at once (a drag starting). */
+export function expireDeletedSteps(state: EditorState): EditorState {
+  return state.rows.some((row) => row.kind === 'deleted')
+    ? { ...state, rows: state.rows.filter((row) => row.kind === 'step') }
+    : state;
 }
 
 /**

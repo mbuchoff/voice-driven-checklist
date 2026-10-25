@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
-import { AccessibilityInfo, Platform, Pressable, Text } from 'react-native';
+import { AccessibilityInfo, Pressable, Text } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Palette } from '@/src/theme/palette';
+
+import { useUndoTimeout } from './useUndoTimeout';
 
 /** How long UNDO is offered (longer if Android's accessibility timeout asks). */
 export const ROUTINE_UNDO_MS = 5000;
@@ -29,27 +31,11 @@ export function RoutineUndoToast({
   const message = `“${title}” deleted`;
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let cancelled = false;
-    const start = (ms: number) => {
-      if (!cancelled) timer = setTimeout(onExpire, ms);
-    };
     AccessibilityInfo.announceForAccessibility?.(message);
-    if (Platform.OS === 'android' && AccessibilityInfo.getRecommendedTimeoutMillis) {
-      AccessibilityInfo.getRecommendedTimeoutMillis(ROUTINE_UNDO_MS).then(
-        (ms) => start(Math.max(ROUTINE_UNDO_MS, ms)),
-        () => start(ROUTINE_UNDO_MS),
-      );
-    } else {
-      start(ROUTINE_UNDO_MS);
-    }
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-    // Starts once per offered routine (the toast is keyed by routine id).
+    // Announced once per offered routine (the toast is keyed by routine id).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useUndoTimeout(ROUTINE_UNDO_MS, onExpire);
 
   return (
     <Animated.View

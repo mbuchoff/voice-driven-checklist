@@ -62,6 +62,7 @@ import {
   deleteStep,
   editorSnapshot,
   expireDeletedStep,
+  expireDeletedSteps,
   isDirty,
   leaveOpenStep,
   moveStep,
@@ -90,9 +91,6 @@ import { scrollToKeepAboveKeyboard } from './keepAboveKeyboard';
 import { STEP_MAKE_ROOM, useStepReorder } from './useStepReorder';
 
 const EDITOR_KEYBOARD_OFFSET = 24;
-/** A swiped-away step's UNDO stays this long (longer if TalkBack asks). */
-const STEP_UNDO_MS = 5000;
-const UNDO_CLOSE_UP_MS = 280;
 
 export type RoutineEditorProps = {
   initialRoutine?: Routine;
@@ -166,7 +164,6 @@ export function RoutineEditor({
   const rowLayouts = useRef<Record<string, { y: number; height: number }>>({});
   const scrollToId = useRef<string | null>(null);
   const keepOpenOnBlur = useRef(false);
-  const undoTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const [chips, setChips] = useState<ChipsState | null>(null);
   const [panel, setPanel] = useState<PanelState | null>(null);
@@ -174,8 +171,6 @@ export function RoutineEditor({
   const [colorsOpen, setColorsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [keyboardClearance, setKeyboardClearance] = useState(0);
-  const [deletedHeights, setDeletedHeights] = useState<Record<string, number>>({});
-  const [closingRows, setClosingRows] = useState<Record<string, boolean>>({});
   const [saveBarHeight, setSaveBarHeight] = useState(0);
   const [busy, setBusy] = useState(false);
 
@@ -188,12 +183,6 @@ export function RoutineEditor({
   const canRun = !model.isNew && !dirty && steps.some((step) => step.text.trim());
   const colorLabel = routineColor(model.colorKey).name;
 
-  const expireAllUndoRows = useCallback(() => {
-    for (const timer of Object.values(undoTimers.current)) clearTimeout(timer);
-    undoTimers.current = {};
-    setModel((state) => ({ ...state, rows: state.rows.filter((row) => row.kind === 'step') }));
-  }, []);
-
   const reorder = useStepReorder({
     items: steps.map(({ localId, text }) => ({ localId, text })),
     onMove: (from, to) => setModel((state) => moveStep(state, from, to)),
@@ -201,8 +190,7 @@ export function RoutineEditor({
     onDragStart: () => {
       const reshapes = !!modelRef.current.openId || modelRef.current.rows.some((row) => row.kind === 'deleted');
       releaseOpenStep();
-      expireAllUndoRows();
-      setModel((state) => leaveOpenStep(state));
+      setModel((state) => leaveOpenStep(expireDeletedSteps(state)));
       return reshapes;
     },
   });
@@ -262,10 +250,6 @@ export function RoutineEditor({
   useEffect(() => {
     setChips(chipsFor(model.openId));
   }, [chipsFor, model.openId]);
-
-  useEffect(() => () => {
-    for (const timer of Object.values(undoTimers.current)) clearTimeout(timer);
-  }, []);
 
   // Before a sheet opens or the editor leaves: a native tap doesn't blur
   // the field being typed in, so the keyboard would stay up over the sheet.
@@ -354,37 +338,8 @@ export function RoutineEditor({
 
   const removeStep = (id: string, height: number) => {
     setChips((current) => (current?.stepId === id ? null : current));
-    setDeletedHeights((current) => ({ ...current, [id]: height }));
-    setModel((state) => deleteStep(state, id));
+    setModel((state) => deleteStep(state, id, height));
     void AccessibilityInfo.announceForAccessibility?.('Step deleted');
-    const startExpiry = (ms: number) => {
-      undoTimers.current[id] = setTimeout(() => {
-        setClosingRows((current) => ({ ...current, [id]: true }));
-        undoTimers.current[id] = setTimeout(() => {
-          delete undoTimers.current[id];
-          setModel((state) => expireDeletedStep(state, id));
-          setClosingRows((current) => {
-            const next = { ...current };
-            delete next[id];
-            return next;
-          });
-        }, UNDO_CLOSE_UP_MS);
-      }, ms);
-    };
-    if (Platform.OS === 'android' && AccessibilityInfo.getRecommendedTimeoutMillis) {
-      void AccessibilityInfo.getRecommendedTimeoutMillis(STEP_UNDO_MS).then(
-        (ms) => startExpiry(Math.max(STEP_UNDO_MS, ms)),
-        () => startExpiry(STEP_UNDO_MS),
-      );
-    } else {
-      startExpiry(STEP_UNDO_MS);
-    }
-  };
-
-  const undoRemove = (id: string) => {
-    clearTimeout(undoTimers.current[id]);
-    delete undoTimers.current[id];
-    setModel((state) => undoDeleteStep(state, id));
   };
 
   const persist = async (state: EditorState): Promise<Routine> => {
@@ -595,10 +550,10 @@ export function RoutineEditor({
                     key={row.localId}
                     index={rowIndex}
                     colors={colors}
-                    height={deletedHeights[row.localId] ?? 56}
+                    height={row.height}
                     first={rowIndex === 0}
-                    closing={!!closingRows[row.localId]}
-                    onUndo={() => undoRemove(row.localId)}
+                    onUndo={() => setModel((state) => undoDeleteStep(state, row.localId))}
+                    onExpired={() => setModel((state) => expireDeletedStep(state, row.localId))}
                   />
                 );
               }

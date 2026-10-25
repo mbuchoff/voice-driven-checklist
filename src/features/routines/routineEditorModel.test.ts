@@ -112,7 +112,7 @@ describe('routine editor model', () => {
     it('leaves an undo row in the step’s place and restores the step, timer included', () => {
       let state = createEditorState({ routine: saved });
       const first = realSteps(state)[0].localId;
-      state = deleteStep(state, first);
+      state = deleteStep(state, first, 56);
       expect(texts(state)).toEqual(['Breathe']);
       expect(state.rows[0]).toMatchObject({ kind: 'deleted' });
 
@@ -126,7 +126,7 @@ describe('routine editor model', () => {
     it('closes up the undo row when it expires', () => {
       let state = createEditorState({ routine: saved });
       const first = realSteps(state)[0].localId;
-      state = expireDeletedStep(deleteStep(state, first), first);
+      state = expireDeletedStep(deleteStep(state, first, 56), first);
       expect(state.rows).toHaveLength(1);
       expect(texts(state)).toEqual(['Breathe']);
     });
@@ -138,7 +138,7 @@ describe('routine editor model', () => {
         routine: { ...saved, steps: ['A', 'B', 'C', 'D'].map((text, order) => ({ id: text, text, order, timerSeconds: null })) },
       });
       const b = realSteps(state)[1].localId;
-      state = deleteStep(state, b);
+      state = deleteStep(state, b, 56);
       state = moveStep(state, 2, 1);
       expect(state.rows.map((row) => (row.kind === 'deleted' ? 'undo' : row.text))).toEqual(['A', 'undo', 'D', 'C']);
 
@@ -151,7 +151,7 @@ describe('routine editor model', () => {
       state = addStep(state, 'n1');
       state = setStepText(state, 'n1', 'Plank');
       state = leaveOpenStep(state);
-      state = deleteStep(state, realSteps(state)[1].localId);
+      state = deleteStep(state, realSteps(state)[1].localId, 56);
       state = moveStep(state, 1, 0);
       expect(texts(state)).toEqual(['Plank', 'Neck rolls']);
     });
@@ -168,7 +168,7 @@ describe('routine editor model', () => {
       expect(canSave(fresh)).toBe(true);
 
       let existing = createEditorState({ routine: saved });
-      for (const step of realSteps(existing)) existing = deleteStep(existing, step.localId);
+      for (const step of realSteps(existing)) existing = deleteStep(existing, step.localId, 56);
       expect(canSave(existing)).toBe(true);
       expect(canSave(setTitle(existing, '  '))).toBe(false);
     });
@@ -204,7 +204,7 @@ describe('routine editor model', () => {
       expect(isDirty(blankTimed, baseline)).toBe(false);
 
       expect(isDirty(setStepTimer(start, realSteps(start)[1].localId, 15), baseline)).toBe(true);
-      expect(isDirty(deleteStep(start, realSteps(start)[0].localId), baseline)).toBe(true);
+      expect(isDirty(deleteStep(start, realSteps(start)[0].localId, 56), baseline)).toBe(true);
       expect(isDirty({ ...start, colorKey: 'slate' }, baseline)).toBe(true);
     });
   });

@@ -13,6 +13,7 @@ import {
   type GestureType,
 } from 'react-native-gesture-handler';
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -22,6 +23,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
+import { useUndoTimeout } from '../useUndoTimeout';
 import { STEP_MAKE_ROOM, STEP_REORDER_HOLD_MS } from '../useStepReorder';
 import { formatTimerLong, formatTimerWords } from '../timers';
 import { CSS_EASE } from './motion';
@@ -483,28 +485,46 @@ function TimeLabel({ colors, seconds }: { colors: EditorColors; seconds: number 
   );
 }
 
+/** A swiped-away step's UNDO stays this long (longer if TalkBack asks). */
+export const STEP_UNDO_MS = 5000;
 const CLOSE_UP_MS = 260;
 
-/** The place a swiped-away step leaves, with UNDO, at the step's height. */
+/**
+ * The place a swiped-away step leaves, with UNDO, at the step's height. It
+ * keeps its UNDO for STEP_UNDO_MS, closes up, then reports it's gone;
+ * going away sooner (UNDO, a drag) cancels all of that.
+ */
 export function DeletedStepRow({
   colors,
   height,
   first,
-  closing,
   onUndo,
+  onExpired,
   index,
 }: {
   colors: EditorColors;
   height: number;
   first: boolean;
-  closing: boolean;
   onUndo: () => void;
+  onExpired: () => void;
   index: number;
 }) {
   const progress = useSharedValue(1);
-  useEffect(() => {
-    if (closing) progress.value = withTiming(0, { duration: CLOSE_UP_MS, easing: CSS_EASE });
-  }, [closing, progress]);
+  const mounted = useRef(true);
+  const onExpiredRef = useRef(onExpired);
+  onExpiredRef.current = onExpired;
+  const expire = () => {
+    if (mounted.current) onExpiredRef.current();
+  };
+  useEffect(() => () => {
+    mounted.current = false;
+    cancelAnimation(progress);
+  }, [progress]);
+  useUndoTimeout(STEP_UNDO_MS, () => {
+    progress.value = withTiming(0, { duration: CLOSE_UP_MS, easing: CSS_EASE }, (finished) => {
+      if (finished) scheduleOnRN(expire);
+    });
+  });
   const style = useAnimatedStyle(() => ({
     height: Math.max(52, height) * progress.value,
     opacity: progress.value,
