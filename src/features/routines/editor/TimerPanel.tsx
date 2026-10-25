@@ -45,6 +45,11 @@ function StepperButton({
         accessibilityRole="button"
         accessibilityLabel={`${dir < 0 ? 'Subtract' : 'Add'} ${words}`}
         accessibilityState={{ disabled }}
+        // TalkBack's double-tap steps once; a finger steps on touch and repeats while held.
+        accessibilityActions={[{ name: 'activate' }]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === 'activate' && !disabled) pressRef.current();
+        }}
         onPressIn={() => {
           if (disabled) return;
           pressRef.current();

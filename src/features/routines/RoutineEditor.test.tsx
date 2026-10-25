@@ -755,6 +755,22 @@ describe('RoutineEditor', () => {
       expect(screen.queryByTestId('step-chip-1-1545')).toBeNull();
     });
 
+    it('steps the timer once for each TalkBack activation of − or +', async () => {
+      const database = await setupDb();
+      await renderEditor({ initialRoutine: await existing(database) }, { database });
+      tapToEdit(1);
+      layOutChips(1, [30, 60, 120, 300]);
+      fireEvent.press(screen.getByTestId('step-more-1'));
+      const activate = (id: string) =>
+        fireEvent(screen.getByTestId(id), 'accessibilityAction', { nativeEvent: { actionName: 'activate' } });
+
+      activate('timer-plus');
+      activate('timer-plus');
+      activate('timer-minus');
+
+      expect(screen.getByTestId('timer-readout')).toHaveTextContent('1 min 45s');
+    });
+
     it('steps the timer in the panel, clears it with No timer, and remembers a changed time on Done', async () => {
       const preferences = new MemoryDevicePreferenceStore();
       const database = await setupDb();
