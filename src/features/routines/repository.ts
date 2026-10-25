@@ -9,6 +9,7 @@ import type {
   Routine,
   RoutineInput,
   Step,
+  StepInput,
 } from './types';
 import {
   validateRoutineTitle,
@@ -268,7 +269,10 @@ export async function getRoutine(db: Database, id: string): Promise<Routine | nu
   return readRoutine(db, id);
 }
 
-export async function exportAllRoutines(db: Database): Promise<RoutineInput[]> {
+type LibraryRow = { id: string; title: string; colorKey: string; steps: StepInput[] };
+
+/** Every routine in library order, with its steps in order. */
+async function readLibrary(db: Database): Promise<LibraryRow[]> {
   const rows = await db.getAllAsync<{
     id: string;
     title: string;
@@ -282,21 +286,20 @@ export async function exportAllRoutines(db: Database): Promise<RoutineInput[]> {
      LEFT JOIN steps s ON s.routine_id = r.id
      ORDER BY r.library_position ASC, s.position ASC`,
   );
-  const routines: RoutineInput[] = [];
-  let currentId: string | null = null;
+  const routines: LibraryRow[] = [];
   for (const row of rows) {
-    if (row.id !== currentId) {
-      currentId = row.id;
-      routines.push({ title: row.title, colorKey: row.color, steps: [] });
+    if (routines[routines.length - 1]?.id !== row.id) {
+      routines.push({ id: row.id, title: row.title, colorKey: row.color, steps: [] });
     }
     if (row.text != null) {
-      routines[routines.length - 1].steps.push({
-        text: row.text,
-        timerSeconds: row.timer_seconds,
-      });
+      routines[routines.length - 1].steps.push({ text: row.text, timerSeconds: row.timer_seconds });
     }
   }
   return routines;
+}
+
+export async function exportAllRoutines(db: Database): Promise<RoutineInput[]> {
+  return (await readLibrary(db)).map(({ title, colorKey, steps }) => ({ title, colorKey, steps }));
 }
 
 export async function importRoutines(
@@ -329,41 +332,12 @@ export async function importRoutines(
 }
 
 export async function listRoutines(db: Database): Promise<LibraryRoutine[]> {
-  const rows = await db.getAllAsync<{
-    id: string;
-    title: string;
-    color: string;
-    step_text: string | null;
-  }>(
-    `SELECT
-       r.id AS id,
-       r.title AS title,
-       r.color AS color,
-       s.text AS step_text
-     FROM routines r
-     LEFT JOIN steps s ON s.routine_id = r.id
-     ORDER BY r.library_position ASC, s.position ASC`,
-  );
-
-  const summaries: LibraryRoutine[] = [];
-  let currentId: string | null = null;
-  let current: LibraryRoutine | null = null;
-  for (const row of rows) {
-    if (row.id !== currentId) {
-      currentId = row.id;
-      current = {
-        id: row.id,
-        title: row.title,
-        colorKey: row.color,
-        steps: [],
-      };
-      summaries.push(current);
-    }
-    if (row.step_text != null && current) {
-      current.steps.push({ text: row.step_text });
-    }
-  }
-  return summaries;
+  return (await readLibrary(db)).map(({ id, title, colorKey, steps }) => ({
+    id,
+    title,
+    colorKey,
+    steps: steps.map(({ text }) => ({ text })),
+  }));
 }
 
 export async function reorderRoutines(
