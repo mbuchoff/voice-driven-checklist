@@ -48,6 +48,7 @@ import {
   addStep,
   canRun,
   canSave,
+  closeTimerPanel,
   countedStepCount,
   createEditorState,
   deleteStep,
@@ -60,9 +61,11 @@ import {
   moveStep,
   needsSave,
   openStep,
+  openTimerPanel,
+  pickPanelTime,
   pressEnter,
+  pressPanelStepper,
   realSteps,
-  refreshOpenCandidates,
   routineInput,
   setColor,
   setStepText,
@@ -75,12 +78,6 @@ import {
 } from './routineEditorModel';
 import { routineColor } from './routineColors';
 import { countLine } from './timerFormat';
-import {
-  chipCandidates,
-  initialStepper,
-  pressStepper,
-  type StepperState,
-} from './timers';
 import type { DeletedRoutine, Routine } from './types';
 import { scrollToKeepAboveKeyboard } from './keepAboveKeyboard';
 import { CHIP_FOLD_MS, STEP_MAKE_ROOM, STEP_OPEN_MS } from './motion';
@@ -107,12 +104,6 @@ export type RoutineEditorProps = {
   onCancel: () => void;
 };
 
-type PanelState = {
-  stepId: string;
-  openedValue: number | null;
-  stepper: StepperState;
-  quickPicks: number[];
-};
 type Sheet = 'leave' | 'delete' | null;
 
 /**
@@ -167,7 +158,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
     setModel(next);
     return next;
   };
-  const focus = useStepFocus(model.openId);
+  const focus = useStepFocus(model.openId, () => !!modelRef.current.panel);
   /** A tap or Enter: the model changes and the keyboard follows the open step. */
   const updateAndHandOff = (change: (state: EditorState) => EditorState) => {
     const from = modelRef.current.openId;
@@ -187,7 +178,6 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const contentYOfStepsCard = (y: number) => sectionY.current + groupY.current + y;
   const scrollToId = useRef<string | null>(null);
 
-  const [panel, setPanel] = useState<PanelState | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [colorsOpen, setColorsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -291,44 +281,27 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
     if (seconds) void rememberTimerSeconds(seconds);
   };
 
+  // The timer panel's rules are the model's; the panel puts typing aside
+  // while it's up.
   const openPanel = (id: string) => {
-    const step = steps.find((candidate) => candidate.localId === id);
-    if (!step) return;
+    update((state) => openTimerPanel(state, id, recent));
     focus.putTypingAside();
-    setPanel({
-      stepId: id,
-      openedValue: step.timerSeconds,
-      stepper: initialStepper(),
-      quickPicks: chipCandidates(step.timerSeconds, recent),
-    });
   };
 
+  const panel = model.panel;
   const panelStep = panel ? steps.find((step) => step.localId === panel.stepId) : undefined;
 
   const closePanel = () => {
-    if (!panel) return;
-    const value = panelStep?.timerSeconds ?? null;
-    if (value && value !== panel.openedValue) void rememberTimerSeconds(value);
-    setPanel(null);
-    const stepId = panel.stepId;
-    // Back to typing, with the step's times again, its new one among them.
-    update((state) => refreshOpenCandidates(state, recent));
+    const stepId = modelRef.current.panel?.stepId;
+    if (!stepId) return;
+    let remember: number | null = null;
+    update((state) => {
+      const closed = closeTimerPanel(state, recent);
+      remember = closed.remember;
+      return closed.state;
+    });
+    if (remember) void rememberTimerSeconds(remember);
     focus.resumeTyping(stepId);
-  };
-
-  const stepPanel = (dir: -1 | 1) => {
-    if (!panel || !panelStep) return;
-    const next = pressStepper(panel.stepper, panelStep.timerSeconds, dir);
-    setPanel({ ...panel, stepper: next.state });
-    update((state) => setStepTimer(state, panel.stepId, next.value));
-  };
-
-  // Picking the time the step already has does nothing (the stepper keeps
-  // its level).
-  const pickPanelTime = (seconds: number | null) => {
-    if (!panel || seconds === (panelStep?.timerSeconds ?? null)) return;
-    setPanel({ ...panel, stepper: initialStepper() });
-    update((state) => setStepTimer(state, panel.stepId, seconds));
   };
 
   const removeStep = (id: string, height: number) => {
@@ -645,9 +618,9 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
             value={panelStep.timerSeconds}
             stepper={panel.stepper}
             quickPicks={panel.quickPicks}
-            onStep={stepPanel}
-            onPick={(seconds) => pickPanelTime(seconds)}
-            onClear={() => pickPanelTime(null)}
+            onStep={(dir) => update((state) => pressPanelStepper(state, dir))}
+            onPick={(seconds) => update((state) => pickPanelTime(state, seconds))}
+            onClear={() => update((state) => pickPanelTime(state, null))}
             onDone={closePanel}
           />
         ) : null}

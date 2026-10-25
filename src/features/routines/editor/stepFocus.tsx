@@ -15,13 +15,11 @@ type Field = ComponentRef<typeof TextInput>;
  * while its field is still there. The timer panel puts typing aside while
  * its step stays open.
  */
-export function useStepFocus(openId: string | null) {
+export function useStepFocus(openId: string | null, panelIsUp: () => boolean) {
   const holderRef = useRef<Field>(null);
   const fields = useRef<Record<string, Field | null>>({});
   const openIdRef = useRef(openId);
   openIdRef.current = openId;
-  // The timer panel is up: the open step's field has let go on purpose.
-  const panelUp = useRef(false);
 
   useEffect(() => {
     if (!openId) return;
@@ -39,15 +37,13 @@ export function useStepFocus(openId: string | null) {
       if (to && to !== from) holderRef.current?.focus();
       else if (from && !to) Keyboard.dismiss();
     },
-    /** The timer panel opens over the open step. */
+    /** The timer panel has opened over the open step. */
     putTypingAside() {
-      panelUp.current = true;
       Keyboard.dismiss();
     },
     /** The timer panel closed: back to typing in step `id` if it's still open. */
     resumeTyping(id: string) {
       requestAnimationFrame(() => {
-        panelUp.current = false;
         if (openIdRef.current === id) fields.current[id]?.focus();
       });
     },
@@ -56,9 +52,9 @@ export function useStepFocus(openId: string | null) {
      * field has it again (focus moving between views), `close` runs.
      */
     fieldBlurred(id: string, close: () => void) {
-      if (panelUp.current) return;
+      if (panelIsUp()) return;
       setTimeout(() => {
-        if (panelUp.current || fields.current[id]?.isFocused?.()) return;
+        if (panelIsUp() || fields.current[id]?.isFocused?.()) return;
         close();
       }, 0);
     },

@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 
 import { moveItem } from './reorder';
-import { chipCandidates } from './timers';
+import { chipCandidates, initialStepper, pressStepper, type StepperState } from './timers';
 import type { Routine, RoutineInput } from './types';
 
 export type EditorStep = {
@@ -37,6 +37,17 @@ export type EditorState = {
    * the finger; none while no step is open.
    */
   openCandidates: number[];
+  /** The timer panel, open over the open step. */
+  panel: TimerPanelSession | null;
+};
+
+export type TimerPanelSession = {
+  stepId: string;
+  /** The step's time when the panel opened. */
+  openedValue: number | null;
+  stepper: StepperState;
+  /** Fixed while the panel is open. */
+  quickPicks: number[];
 };
 
 /** A new routine starts with its color; an existing one with what's saved. */
@@ -58,6 +69,7 @@ export function createEditorState(start: EditorStart): EditorState {
     openId: null,
     openedText: '',
     openCandidates: [],
+    panel: null,
   };
 }
 
@@ -94,7 +106,7 @@ function removeRow(state: EditorState, id: string): EditorState {
 export function leaveOpenStep(state: EditorState): EditorState {
   const id = state.openId;
   if (!id) return state;
-  const closed = { ...state, openId: null, openedText: '', openCandidates: [] };
+  const closed = { ...state, openId: null, openedText: '', openCandidates: [], panel: null };
   const step = findStep(state, id);
   if (!step) return closed;
   const hasWords = step.text.trim().length > 0;
@@ -267,4 +279,56 @@ export function canRun(state: EditorState, savedSnapshot: string): boolean {
 /** The routine's name as shown: as typed, else `savedTitle`, else "Untitled routine". */
 export function displayTitle(state: EditorState, savedTitle?: string): string {
   return state.title.trim() || savedTitle || 'Untitled routine';
+}
+
+/** The timer panel opens on step `id`, with a fresh stepper and its quick picks. */
+export function openTimerPanel(state: EditorState, id: string, recent: readonly number[]): EditorState {
+  const step = findStep(state, id);
+  if (!step) return state;
+  return {
+    ...state,
+    panel: {
+      stepId: id,
+      openedValue: step.timerSeconds,
+      stepper: initialStepper(),
+      quickPicks: chipCandidates(step.timerSeconds, recent),
+    },
+  };
+}
+
+/** One press of the panel's − or +. */
+export function pressPanelStepper(state: EditorState, dir: -1 | 1): EditorState {
+  const panel = state.panel;
+  const step = panel ? findStep(state, panel.stepId) : undefined;
+  if (!panel || !step) return state;
+  const next = pressStepper(panel.stepper, step.timerSeconds, dir);
+  return { ...setStepTimer(state, panel.stepId, next.value), panel: { ...panel, stepper: next.state } };
+}
+
+/**
+ * A quick pick, or "No timer" (null): sets the step's time and starts the
+ * stepper afresh. Picking the time the step already has does nothing.
+ */
+export function pickPanelTime(state: EditorState, seconds: number | null): EditorState {
+  const panel = state.panel;
+  const step = panel ? findStep(state, panel.stepId) : undefined;
+  if (!panel || !step || seconds === step.timerSeconds) return state;
+  return { ...setStepTimer(state, panel.stepId, seconds), panel: { ...panel, stepper: initialStepper() } };
+}
+
+/**
+ * Done: back to typing in the step, with its times again (its new one
+ * among them), and the time to remember as used, if it changed and isn't Off.
+ */
+export function closeTimerPanel(
+  state: EditorState,
+  recent: readonly number[],
+): { state: EditorState; remember: number | null } {
+  const panel = state.panel;
+  if (!panel) return { state, remember: null };
+  const value = findStep(state, panel.stepId)?.timerSeconds ?? null;
+  return {
+    state: refreshOpenCandidates({ ...state, panel: null }, recent),
+    remember: value && value !== panel.openedValue ? value : null,
+  };
 }

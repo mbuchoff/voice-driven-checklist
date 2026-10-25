@@ -2,6 +2,7 @@ import {
   addStep,
   canRun,
   canSave,
+  closeTimerPanel,
   countedStepCount,
   createEditorState,
   deleteStep,
@@ -13,6 +14,9 @@ import {
   moveStep,
   needsSave,
   openStep,
+  openTimerPanel,
+  pickPanelTime,
+  pressPanelStepper,
   pressEnter,
   realSteps,
   refreshOpenCandidates,
@@ -65,6 +69,51 @@ describe('routine editor model', () => {
 
       state = leaveOpenStep(state);
       expect(state.openCandidates).toEqual([]);
+    });
+  });
+
+  describe('the timer panel', () => {
+    function panelOnNeckRolls() {
+      let state = createEditorState({ kind: 'edit', routine: saved });
+      const neck = realSteps(state)[0].localId;
+      state = openStep(state, neck, RECENT);
+      return { state: openTimerPanel(state, neck, RECENT), neck };
+    }
+    const timer = (state: EditorState, id: string) => realSteps(state).find((step) => step.localId === id)!.timerSeconds;
+
+    it('opens on a step with a fresh stepper and its quick picks', () => {
+      const { state } = panelOnNeckRolls();
+      expect(state.panel).toMatchObject({ openedValue: 30, quickPicks: [30, 90, 60, 120] });
+      expect(state.panel?.stepper).toEqual({ level: 0, dir: 0, run: 0 });
+    });
+
+    it('steps the step’s time with − and +', () => {
+      const { state, neck } = panelOnNeckRolls();
+      const stepped = pressPanelStepper(pressPanelStepper(state, 1), 1);
+      expect(timer(stepped, neck)).toBe(150);
+      expect(stepped.panel?.stepper.dir).toBe(1);
+    });
+
+    it('sets a quick pick and starts the stepper afresh, except for the one already set', () => {
+      const { state, neck } = panelOnNeckRolls();
+      // + makes it 90; then 120 is picked.
+      const stepped = pressPanelStepper(state, 1);
+      const set = pickPanelTime(stepped, 120);
+      expect(set.panel?.stepper).toEqual({ level: 0, dir: 0, run: 0 });
+      expect(timer(set, neck)).toBe(120);
+      expect(pickPanelTime(stepped, 90)).toBe(stepped);
+    });
+
+    it('closes back to typing with the step’s times again, remembering a changed time but not Off', () => {
+      const { state, neck } = panelOnNeckRolls();
+      const changed = closeTimerPanel(pickPanelTime(state, 120), RECENT);
+      expect(changed.remember).toBe(120);
+      expect(changed.state.panel).toBeNull();
+      expect(changed.state.openId).toBe(neck);
+      expect(changed.state.openCandidates[0]).toBe(120);
+
+      expect(closeTimerPanel(state, RECENT).remember).toBeNull();
+      expect(closeTimerPanel(pickPanelTime(state, null), RECENT).remember).toBeNull();
     });
   });
 
