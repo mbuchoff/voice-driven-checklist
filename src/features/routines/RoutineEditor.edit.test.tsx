@@ -176,6 +176,20 @@ describe('RoutineEditor', () => {
         expect([0, 1, 2].map((index) => glide(`step-row-${index}`))).toEqual([undefined, undefined, undefined]);
       });
 
+      it('are followed by one slot, the same view all along, so it can glide too', async () => {
+        await threeSteps();
+        const gesture = await beginRowDrag(0, 25, 75);
+        const slot = screen.getByTestId('step-drop-target-1');
+
+        await act(async () => {
+          gesture.handlers.onUpdate?.({ absoluteY: 125 } as never);
+          await flushGestureCommit();
+        });
+
+        expect(screen.getByTestId('step-drop-target-2')).toBe(slot);
+        await cancelRowDrag(gesture);
+      });
+
       it('move without gliding once the drop has landed', async () => {
         await threeSteps();
         const gesture = await beginRowDrag(0, 25, 125);

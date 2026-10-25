@@ -1,5 +1,4 @@
 import {
-  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -545,7 +544,8 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
                 <Text style={{ color: colors.muted, fontSize: 15 }}>Tap + to add your first step</Text>
               </View>
             ) : null}
-            {editorRows(model.rows, drag?.localId).map((item) => {
+            {/* One flat list of keyed siblings, so the slot stays one view as it moves. */}
+            {[...editorRows(model.rows, drag?.localId).flatMap((item) => {
               if (item.kind === 'deleted') {
                 const { row, rowIndex } = item;
                 return (
@@ -569,49 +569,47 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
               // timer panel shows); every time's chip is measured ahead, so
               // they're ready the moment it opens.
               const chipsOpen = isOpen && !panel;
-              return (
-                <Fragment key={row.localId}>
-                  {slot}
-                  <StepRow
-                    colors={colors}
-                    index={index}
-                    number={numbers[row.localId] ?? index + 1}
-                    localId={row.localId}
-                    text={row.text}
-                    timerSeconds={row.timerSeconds}
-                    open={isOpen}
-                    first={rowIndex === 0 && !slot}
-                    hidden={isActive}
-                    makesRoom={reorder.makingRoom && row.localId !== reorder.heldId}
-                    holdGesture={reorder.gestureFor({ localId: row.localId, text: row.text }, index)}
-                    inputRef={focus.fieldRef(row.localId)}
-                    onLayout={(event) => onRowLayout(row.localId, event)}
-                    onOpen={() => open(row.localId)}
-                    onChangeText={(text) => update((state) => setStepText(state, row.localId, text))}
-                    onEnter={enter}
-                    onBlur={() => onStepBlur(row.localId)}
-                    onDelete={(height) => removeStep(row.localId, height)}
-                    onMoveEarlier={() => reorder.moveItemByAction(index, -1)}
-                    onMoveLater={() => reorder.moveItemByAction(index, 1)}
-                    chips={
-                      <StepTimerChips
-                        colors={colors}
-                        index={index}
-                        open={chipsOpen}
-                        candidates={isOpen ? model.openCandidates : NO_CANDIDATES}
-                        widths={chipWidths.widths}
-                        room={chipStripRoom(rowWidth)}
-                        selected={row.timerSeconds}
-                        stepNumber={numbers[row.localId] ?? index + 1}
-                        onPick={(seconds) => pickChip(row.localId, seconds)}
-                        onMore={() => openPanel(row.localId)}
-                      />
-                    }
-                  />
-                </Fragment>
+              const stepRow = (
+                <StepRow
+                  key={row.localId}
+                  colors={colors}
+                  index={index}
+                  number={numbers[row.localId] ?? index + 1}
+                  localId={row.localId}
+                  text={row.text}
+                  timerSeconds={row.timerSeconds}
+                  open={isOpen}
+                  first={rowIndex === 0 && !slot}
+                  hidden={isActive}
+                  makesRoom={reorder.makingRoom && row.localId !== reorder.heldId}
+                  holdGesture={reorder.gestureFor({ localId: row.localId, text: row.text }, index)}
+                  inputRef={focus.fieldRef(row.localId)}
+                  onLayout={(event) => onRowLayout(row.localId, event)}
+                  onOpen={() => open(row.localId)}
+                  onChangeText={(text) => update((state) => setStepText(state, row.localId, text))}
+                  onEnter={enter}
+                  onBlur={() => onStepBlur(row.localId)}
+                  onDelete={(height) => removeStep(row.localId, height)}
+                  onMoveEarlier={() => reorder.moveItemByAction(index, -1)}
+                  onMoveLater={() => reorder.moveItemByAction(index, 1)}
+                  chips={
+                    <StepTimerChips
+                      colors={colors}
+                      index={index}
+                      open={chipsOpen}
+                      candidates={isOpen ? model.openCandidates : NO_CANDIDATES}
+                      widths={chipWidths.widths}
+                      room={chipStripRoom(rowWidth)}
+                      selected={row.timerSeconds}
+                      stepNumber={numbers[row.localId] ?? index + 1}
+                      onPick={(seconds) => pickChip(row.localId, seconds)}
+                      onMore={() => openPanel(row.localId)}
+                    />
+                  }
+                />
               );
-            })}
-            {renderDropSlot(steps.length - 1)}
+              return slot ? [slot, stepRow] : [stepRow];
+            }), renderDropSlot(steps.length - 1)]}
           </View>
 
           <Text style={{ color: colors.muted2, fontSize: 15, lineHeight: 20, paddingHorizontal: 4 }}>
