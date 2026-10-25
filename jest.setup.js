@@ -42,3 +42,11 @@ Reanimated.useFrameCallback = (_callback, autostart = true) => {
   }
   return controller.current;
 };
+
+// A stand-in for the app's Android power module (modules/voice-checklist-power),
+// for tests that run as Android: no wake lock, and the test's own clock.
+globalThis.expo.modules.VoiceChecklistPower = {
+  acquireCountdownWakeLock: () => {},
+  releaseCountdownWakeLock: () => {},
+  elapsedRealtimeMillis: () => performance.now(),
+};

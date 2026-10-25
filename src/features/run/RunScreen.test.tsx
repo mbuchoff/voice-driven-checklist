@@ -3,6 +3,7 @@ import { BackHandler, Platform, StyleSheet } from 'react-native';
 
 import {
   flushRunEffects as flush,
+  runSnapshot,
   setupRunScreen as setup,
 } from './RunScreen.testSupport';
 const defaultPlatformOS = Platform.OS;
@@ -33,6 +34,16 @@ describe('RunScreen', () => {
       configurable: true,
       get: () => defaultPlatformVersion,
     });
+  });
+
+  it('counts a timed step down on Android, with its power module', async () => {
+    useAndroidHardwareBack();
+    setup({
+      snapshot: { ...runSnapshot, steps: runSnapshot.steps.map((step) => ({ ...step, timerSeconds: 30 })) },
+    });
+    await flush();
+
+    expect(screen.getByTestId('run-countdown')).toHaveTextContent('0:30');
   });
 
   describe('initial render', () => {
