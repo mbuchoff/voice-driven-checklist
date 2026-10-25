@@ -1,5 +1,6 @@
 import { act, fireEvent, screen } from '@testing-library/react-native';
 import { Dimensions, StyleSheet } from 'react-native';
+import * as Reanimated from 'react-native-reanimated';
 
 import {
   existing,
@@ -51,24 +52,32 @@ describe('RoutineEditor', () => {
     }
     const initialFontScale = Dimensions.get('window').fontScale;
     afterEach(() => setFontScale(initialFontScale));
+    // Jest's Reanimated stand-in ends an animation at once; here a glide
+    // ends when the test says.
+    let animationEnds: ((finished: boolean) => void)[] = [];
+    beforeEach(() => {
+      animationEnds = [];
+      jest.spyOn(Reanimated, 'withTiming').mockImplementation(((value, _config, callback) => {
+        if (callback) animationEnds.push(callback);
+        return value;
+      }) as typeof Reanimated.withTiming);
+    });
+    const glidesEnd = () => act(async () => {
+      animationEnds.splice(0).forEach((end) => end(true));
+    });
 
     it('glide to their new lines as the step opens, then the field takes over', async () => {
       await longStep();
       layOutWords(0, ['closed', 'opened'], [CLOSED_LINES, OPENED_LINES]);
-      jest.useFakeTimers();
-      try {
-        tapToEdit(0);
+      tapToEdit(0);
 
-        expect(screen.getByTestId('word-glide-0')).toBeOnTheScreen();
-        expect(fieldOpacity()).toBe(0);
+      expect(screen.getByTestId('word-glide-0')).toBeOnTheScreen();
+      expect(fieldOpacity()).toBe(0);
 
-        act(() => jest.advanceTimersByTime(160 + 8 * 12 + 50));
+      await glidesEnd();
 
-        expect(screen.queryByTestId('word-glide-0')).toBeNull();
-        expect(fieldOpacity()).not.toBe(0);
-      } finally {
-        jest.useRealTimers();
-      }
+      expect(screen.queryByTestId('word-glide-0')).toBeNull();
+      expect(fieldOpacity()).not.toBe(0);
     });
 
     it('hand the field back at once when it is typed into during the glide', async () => {

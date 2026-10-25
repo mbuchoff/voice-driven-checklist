@@ -1,7 +1,7 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import { Gesture } from 'react-native-gesture-handler';
-import { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 /** A swipe starts after this much mostly-sideways movement. */
@@ -31,6 +31,15 @@ export function useStepSwipe({
   const translateX = useSharedValue(0);
   const direction = useSharedValue(0);
   const deleteRow = () => onDelete(rowHeight.current);
+  // A fling that ends after the row has gone (the editor left) deletes nothing.
+  const mounted = useRef(true);
+  useEffect(() => () => {
+    mounted.current = false;
+    cancelAnimation(translateX);
+  }, [translateX]);
+  const deleteAfterFling = () => {
+    if (mounted.current) deleteRow();
+  };
 
   const gesture = Gesture.Pan()
     .withTestId(testId)
@@ -55,7 +64,7 @@ export function useStepSwipe({
       // A cancelled swipe (an interruption, another gesture) slides back.
       if (success && width > 0 && Math.abs(translateX.value) > width * SWIPE_DELETE_SHARE) {
         translateX.value = withTiming(direction.value * (width + 40), { duration: SWIPE_MS }, (finished) => {
-          if (finished) scheduleOnRN(deleteRow);
+          if (finished) scheduleOnRN(deleteAfterFling);
         });
       } else {
         translateX.value = withTiming(0, { duration: SWIPE_MS });

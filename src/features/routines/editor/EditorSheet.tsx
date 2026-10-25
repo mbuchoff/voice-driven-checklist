@@ -6,8 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { EditorColors } from '../editorColors';
 import { FADE_IN, FADE_OUT } from '../motion';
 
-// Sheets fade in over 150 ms and out over 75 ms, like the prototype's.
-
 /** A bottom sheet over a dimmed screen; tapping the dim area calls onDismiss. */
 export function EditorSheet({
   colors,

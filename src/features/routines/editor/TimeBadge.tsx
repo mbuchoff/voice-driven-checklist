@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
 
@@ -47,7 +47,7 @@ export function TimeBadge({
   onWidth: (width: number) => void;
 }) {
   const width = useSharedValue(0);
-  const [measured, setMeasured] = useState(0);
+  const reported = useRef(0);
   const slotStyle = useAnimatedStyle(() => ({
     width: width.value > 0 ? width.value * (1 - progress.value) : progress.value > 0 ? 0 : undefined,
     marginLeft: -ROW_GAP * progress.value,
@@ -68,8 +68,8 @@ export function TimeBadge({
         onLayout={(event) => {
           const next = event.nativeEvent.layout.width;
           width.value = next;
-          if (Math.abs(next - measured) > 0.5) {
-            setMeasured(next);
+          if (Math.abs(next - reported.current) > 0.5) {
+            reported.current = next;
             onWidth(next);
           }
         }}

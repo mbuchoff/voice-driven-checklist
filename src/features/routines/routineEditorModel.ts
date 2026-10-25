@@ -99,6 +99,11 @@ function removeRow(state: EditorState, id: string): EditorState {
   return { ...state, rows: state.rows.filter((row) => row.localId !== id) };
 }
 
+/** No step open: no words to give back, no times, no timer panel. */
+function withNoStepOpen(state: EditorState): EditorState {
+  return { ...state, openId: null, openedText: '', openCandidates: [], panel: null };
+}
+
 /**
  * Closes the open step. A new step left blank goes away (with any timer set
  * on it); a new step with words becomes an ordinary step; an existing step
@@ -107,7 +112,7 @@ function removeRow(state: EditorState, id: string): EditorState {
 export function leaveOpenStep(state: EditorState): EditorState {
   const id = state.openId;
   if (!id) return state;
-  const closed = { ...state, openId: null, openedText: '', openCandidates: [], panel: null };
+  const closed = withNoStepOpen(state);
   const step = findStep(state, id);
   if (!step) return closed;
   const hasWords = step.text.trim().length > 0;
@@ -178,7 +183,7 @@ export function setColor(state: EditorState, colorKey: RoutineColorKey): EditorS
 
 /** Swipe-delete: the step's place, at its height, becomes an undo row. */
 export function deleteStep(state: EditorState, id: string, height: number): EditorState {
-  const closed = state.openId === id ? { ...state, openId: null, openedText: '', openCandidates: [] } : state;
+  const closed = state.openId === id ? withNoStepOpen(state) : state;
   return {
     ...closed,
     rows: closed.rows.map((row) =>
