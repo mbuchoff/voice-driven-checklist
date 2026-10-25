@@ -1,4 +1,4 @@
-import { fadeThrough, glideLength, planWordGlide, wordProgress, type WordSpot } from './wordGlidePlan';
+import { fadeThrough, glideLength, planWordGlide, spotsFromLefts, wordProgress, type WordSpot } from './wordGlidePlan';
 
 const LINE = 26;
 
@@ -64,5 +64,15 @@ describe('timing', () => {
     expect(fadeThrough(0.775).atStart).toBe(false);
     expect(fadeThrough(0.775).opacity).toBeCloseTo(0.5);
     expect(fadeThrough(1)).toEqual({ opacity: 1, atStart: false });
+  });
+});
+
+describe('finding each word’s line from where it starts', () => {
+  it('starts a new line wherever a word starts back at the left', () => {
+    expect(spotsFromLefts([0, 51, 67, 100, 153, 0, 55, 118, 0])).toEqual([
+      { x: 0, line: 0 }, { x: 51, line: 0 }, { x: 67, line: 0 }, { x: 100, line: 0 }, { x: 153, line: 0 },
+      { x: 0, line: 1 }, { x: 55, line: 1 }, { x: 118, line: 1 },
+      { x: 0, line: 2 },
+    ]);
   });
 });

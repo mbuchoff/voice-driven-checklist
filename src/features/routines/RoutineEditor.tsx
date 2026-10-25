@@ -309,7 +309,6 @@ export function RoutineEditor({
     if (!step) return;
     keepOpenOnBlur.current = true;
     Keyboard.dismiss();
-    setChips(null);
     setPanel({
       stepId: id,
       openedValue: step.timerSeconds,
@@ -603,7 +602,14 @@ export function RoutineEditor({
               const slot = isActive ? null : renderDropSlot(dropIndex);
               if (!isActive) dropIndex += 1;
               const isOpen = model.openId === row.localId;
-              const chipsOpen = isOpen && chips?.stepId === row.localId;
+              // The open step's times fold open with it (and away while the
+              // timer panel shows). Every step's chips are measured ahead of
+              // time, so they're ready the moment it opens; the open step's
+              // set then stays fixed.
+              const chipsOpen = isOpen && !panel;
+              const candidates = chips?.stepId === row.localId
+                ? chips.candidates
+                : chipCandidates(row.timerSeconds, preferences.recentTimerSeconds);
               return (
                 <Fragment key={row.localId}>
                   {slot}
@@ -639,7 +645,7 @@ export function RoutineEditor({
                         colors={colors}
                         index={index}
                         open={chipsOpen}
-                        candidates={chips?.stepId === row.localId ? chips.candidates : EMPTY}
+                        candidates={candidates}
                         selected={row.timerSeconds}
                         stepNumber={numbers[row.localId] ?? index + 1}
                         onPick={(seconds) => pickChip(row.localId, seconds)}
@@ -795,8 +801,6 @@ export function RoutineEditor({
     </SafeAreaView>
   );
 }
-
-const EMPTY: number[] = [];
 
 function DragPreview({
   colors,

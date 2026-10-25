@@ -367,21 +367,24 @@ describe('RoutineEditor', () => {
 
   describe('a long step’s words', () => {
     const LONG = 'Drink a full glass of water before making breakfast';
-    /** Jest doesn't lay out views: where each word sits, closed and open. */
-    function layOutWords(index: number, lines: { before: number[]; after: number[] }) {
-      fireEvent(screen.getByTestId(`word-space-${index}`, HIDDEN), 'layout', {
+    const CLOSED_LINES = [0, 0, 0, 0, 0, 1, 1, 1, 2];
+    const OPENED_LINES = [0, 0, 0, 0, 0, 0, 0, 0, 1];
+    /** Jest doesn't lay out views: where each word sits in the two layouts. */
+    function layOutWords(index: number, names: [string, string], lines: [number[], number[]]) {
+      fireEvent(screen.getByTestId(`word-space-${index}-${names[0]}`, HIDDEN), 'layout', {
         nativeEvent: { layout: { x: 0, y: 0, width: 5, height: 26 } },
       });
-      for (const side of ['before', 'after'] as const) {
+      names.forEach((name, side) => {
+        // Each line's words start at the left again.
         lines[side].forEach((line, i) => {
-          fireEvent(screen.getByTestId(`word-measure-${index}-${side}-${i}`, HIDDEN), 'layout', {
-            nativeEvent: { layout: { x: i * 10, y: line * 26, width: 9, height: 26 } },
+          const firstOnLine = lines[side].indexOf(line);
+          fireEvent(screen.getByTestId(`word-measure-${index}-${name}-${i}`, HIDDEN), 'layout', {
+            nativeEvent: { layout: { x: (i - firstOnLine) * 10, y: line * 26, width: 9, height: 26 } },
           });
         });
-      }
+      });
     }
-
-    it('glide to their new lines when the step opens, then the field takes over', async () => {
+    async function longStep() {
       const database = await setupDb();
       await renderEditor(
         { initialRoutine: await existing(database, { steps: [{ text: LONG, timerSeconds: null }] }) },
@@ -390,35 +393,48 @@ describe('RoutineEditor', () => {
       fireEvent(screen.getByTestId('item-textbox-0'), 'layout', {
         nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 100 } },
       });
+    }
+    const fieldOpacity = () => StyleSheet.flatten(screen.getByTestId('item-text-0').props.style).opacity;
+
+    it('glide to their new lines as the step opens, then the field takes over', async () => {
+      await longStep();
+      layOutWords(0, ['closed', 'opened'], [CLOSED_LINES, OPENED_LINES]);
       jest.useFakeTimers();
       try {
         tapToEdit(0);
-        layOutWords(0, { before: [0, 0, 0, 0, 0, 1, 1, 1, 2], after: [0, 0, 0, 0, 0, 0, 0, 0, 1] });
 
         expect(screen.getByTestId('word-glide-0')).toBeOnTheScreen();
-        expect(StyleSheet.flatten(screen.getByTestId('item-text-0').props.style).opacity).toBe(0);
+        expect(fieldOpacity()).toBe(0);
 
         act(() => jest.advanceTimersByTime(160 + 8 * 12 + 50));
 
         expect(screen.queryByTestId('word-glide-0')).toBeNull();
-        expect(StyleSheet.flatten(screen.getByTestId('item-text-0').props.style).opacity).not.toBe(0);
+        expect(fieldOpacity()).not.toBe(0);
       } finally {
         jest.useRealTimers();
       }
     });
 
     it('stay put when their lines don’t change', async () => {
-      const database = await setupDb();
-      await renderEditor({ initialRoutine: await existing(database) }, { database });
-      fireEvent(screen.getByTestId('item-textbox-1'), 'layout', {
-        nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 48 } },
-      });
+      await longStep();
+      layOutWords(0, ['closed', 'opened'], [CLOSED_LINES, CLOSED_LINES]);
 
-      tapToEdit(1);
-      layOutWords(1, { before: [0], after: [0] });
+      tapToEdit(0);
 
-      expect(screen.queryByTestId('word-glide-1')).toBeNull();
-      expect(StyleSheet.flatten(screen.getByTestId('item-text-1').props.style).opacity).not.toBe(0);
+      expect(screen.queryByTestId('word-glide-0')).toBeNull();
+      expect(fieldOpacity()).not.toBe(0);
+    });
+
+    it('hold their old lines until they’re measured, when the step opens before that', async () => {
+      await longStep();
+
+      tapToEdit(0);
+
+      expect(screen.getByTestId('word-hold-0')).toHaveTextContent(LONG);
+      expect(fieldOpacity()).toBe(0);
+      layOutWords(0, ['before', 'after'], [CLOSED_LINES, OPENED_LINES]);
+      expect(screen.queryByTestId('word-hold-0')).toBeNull();
+      expect(screen.getByTestId('word-glide-0')).toBeOnTheScreen();
     });
   });
 

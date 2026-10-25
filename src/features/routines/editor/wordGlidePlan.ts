@@ -11,6 +11,19 @@ export const WORD_GLIDE_STAGGER_MS = 12;
 /** A word's place in its text box: its line, and where it starts on it. */
 export type WordSpot = { x: number; line: number };
 
+/**
+ * Each word's line, from where the words start in a wrapping row: a word
+ * starting no further right than the one before it begins a new line.
+ * (Measured heights of the words aren't reliable enough to tell.)
+ */
+export function spotsFromLefts(lefts: readonly number[]): WordSpot[] {
+  let line = 0;
+  return lefts.map((x, i) => {
+    if (i > 0 && x <= lefts[i - 1]) line += 1;
+    return { x, line };
+  });
+}
+
 /** How a word gets from its old spot to its new one, offset (dx, dy) from it. */
 export type WordMove = {
   kind: 'slide' | 'fade';

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Animated, {
-  Easing,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -11,6 +10,7 @@ import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
 import { fitChips, formatTimerLong, formatTimerWords } from '../timers';
+import { CSS_EASE } from './motion';
 
 type ChipLook = {
   minHeight: number;
@@ -178,7 +178,7 @@ export function StepTimerChips({
   }, [shown, times]);
   const visibleTimes = shown ? times : foldingTimes;
   useEffect(() => {
-    height.value = withTiming(shown ? contentHeight : 0, { duration: FOLD_MS, easing: Easing.ease });
+    height.value = withTiming(shown ? contentHeight : 0, { duration: FOLD_MS, easing: CSS_EASE });
   }, [contentHeight, height, shown]);
   const foldStyle = useAnimatedStyle(() => ({ height: height.value }));
 

@@ -12,7 +12,6 @@ import {
   type GestureType,
 } from 'react-native-gesture-handler';
 import Animated, {
-  Easing,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -24,7 +23,9 @@ import { Icon } from '@/src/components/Icon';
 import type { EditorColors } from '../editorColors';
 import { STEP_MAKE_ROOM, STEP_REORDER_HOLD_MS } from '../useStepReorder';
 import { formatTimerLong, formatTimerWords } from '../timers';
-import { STEP_WORDS, WordGlide } from './StepWordGlide';
+import { CSS_EASE } from './motion';
+import { makeGlide, STEP_WORDS, WordGlide, WordLayouts, type WordSpots } from './StepWordGlide';
+import type { WordSpot } from './wordGlidePlan';
 
 /** A swipe starts after this much mostly-sideways movement. */
 const SWIPE_START = 8;
@@ -95,33 +96,39 @@ export function StepRow(props: StepRowProps) {
   const swipeDirection = useSharedValue(0);
   const openProgress = useSharedValue(open ? 1 : 0);
   const timeWidth = useSharedValue(0);
-  const timeWidthNow = useRef(0);
+  // Also as state: the words are measured again once the time's width is known.
+  const [timeBadgeWidth, setTimeBadgeWidth] = useState(0);
   // The text box's width with the step closed, and a glide of its words
-  // when it opens or closes and they change lines (Round 27).
-  const closedBoxWidth = useRef(0);
-  const openedRoom = () => -OPEN_BOX_SHIFT + (timerSeconds ? timeWidthNow.current + 8 : 0);
-  const [glide, setGlide] = useState<{ id: number; target: 0 | 1 } | null>(null);
-  const [glideShown, setGlideShown] = useState(false);
+  // when it opens or closes and they change lines (Round 27). The words are
+  // measured ahead of time, while the row is at rest, so a glide starts with
+  // the number and time.
+  const [closedBoxWidth, setClosedBoxWidth] = useState(0);
+  const openedRoom = () => -OPEN_BOX_SHIFT + (timerSeconds ? timeBadgeWidth + 8 : 0);
+  const words = text.trim();
+  const layoutsKey = `${closedBoxWidth}|${openedRoom()}|${words}`;
+  const measured = useRef<{ key: string; closed: WordSpot[]; opened: WordSpot[] } | null>(null);
+  const [glide, setGlide] = useState<{ id: number; target: 0 | 1; spots?: WordSpots } | null>(null);
   const glideCount = useRef(0);
-  const mounted = useRef(false);
-  useEffect(() => {
-    if (!mounted.current) {
-      mounted.current = true;
-      return;
-    }
+  // The glide starts in the very render where the step opens or closes, so no
+  // frame shows the step's own text re-split before it.
+  const [glideFor, setGlideFor] = useState(open);
+  if (open !== glideFor) {
+    setGlideFor(open);
     glideCount.current += 1;
-    setGlideShown(false);
-    setGlide(text.trim() && closedBoxWidth.current > 0 ? { id: glideCount.current, target: open ? 1 : 0 } : null);
-    // Only an open or close starts a glide; the words are read then.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-  const endGlide = () => {
-    setGlide(null);
-    setGlideShown(false);
-  };
+    const target = open ? 1 : 0;
+    const ready = measured.current?.key === layoutsKey ? measured.current : null;
+    const spots = ready
+      ? (target === 1 ? { before: ready.closed, after: ready.opened } : { before: ready.opened, after: ready.closed })
+      : undefined;
+    // Without words or a measured box, or measured with no word changing
+    // lines, the words just ride along.
+    const rides = !words || !closedBoxWidth || (spots && !makeGlide(spots, target === 1 ? OPEN_BOX_SHIFT : -OPEN_BOX_SHIFT));
+    setGlide(rides ? null : { id: glideCount.current, target, spots });
+  }
+  const endGlide = () => setGlide(null);
 
   useEffect(() => {
-    openProgress.value = withTiming(open ? 1 : 0, { duration: OPEN_MS, easing: Easing.ease });
+    openProgress.value = withTiming(open ? 1 : 0, { duration: OPEN_MS, easing: CSS_EASE });
   }, [open, openProgress]);
 
   const deleteRow = () => props.onDelete(rowHeight.current);
@@ -297,21 +304,34 @@ export function StepRow(props: StepRowProps) {
                   // Only at rest: while the number and time move, it's changing.
                   if (Math.abs(openProgress.value - (open ? 1 : 0)) > 0.001) return;
                   const width = event.nativeEvent.layout.width;
-                  closedBoxWidth.current = open ? width - openedRoom() : width;
+                  const closed = open ? width - openedRoom() : width;
+                  if (Math.abs(closed - closedBoxWidth) > 0.5) setClosedBoxWidth(closed);
                 }}
               >
+                {!glide && words && closedBoxWidth ? (
+                  <WordLayouts
+                    key={layoutsKey}
+                    index={index}
+                    text={words}
+                    widths={[closedBoxWidth, closedBoxWidth + openedRoom()]}
+                    names={['closed', 'opened']}
+                    onMeasured={(closed, opened) => {
+                      measured.current = { key: layoutsKey, closed, opened };
+                    }}
+                  />
+                ) : null}
                 {glide ? (
                   <WordGlide
                     key={glide.id}
                     index={index}
                     text={text}
                     color={colors.text}
-                    fromWidth={closedBoxWidth.current + (glide.target === 1 ? 0 : openedRoom())}
-                    toWidth={closedBoxWidth.current + (glide.target === 1 ? openedRoom() : 0)}
+                    fromWidth={closedBoxWidth + (glide.target === 1 ? 0 : openedRoom())}
+                    toWidth={closedBoxWidth + (glide.target === 1 ? openedRoom() : 0)}
                     boxShift={glide.target === 1 ? OPEN_BOX_SHIFT : -OPEN_BOX_SHIFT}
                     progress={openProgress}
                     target={glide.target}
-                    onPlan={(plan) => setGlideShown(!!plan)}
+                    spots={glide.spots}
                     onDone={endGlide}
                   />
                 ) : null}
@@ -339,7 +359,7 @@ export function StepRow(props: StepRowProps) {
                         paddingVertical: 11,
                         ...STEP_WORDS,
                       },
-                      glideShown ? UNDER_GLIDE : null,
+                      glide ? UNDER_GLIDE : null,
                     ]}
                   />
                 ) : (
@@ -369,7 +389,7 @@ export function StepRow(props: StepRowProps) {
                         paddingVertical: 11,
                         ...STEP_WORDS,
                       },
-                      glideShown ? UNDER_GLIDE : null,
+                      glide ? UNDER_GLIDE : null,
                     ]}
                   >
                     {text.trim() || 'Tap to describe this step'}
@@ -390,8 +410,9 @@ export function StepRow(props: StepRowProps) {
                 accessibilityElementsHidden
                 importantForAccessibility="no-hide-descendants"
                 onLayout={(event) => {
-                  timeWidth.value = event.nativeEvent.layout.width;
-                  timeWidthNow.current = event.nativeEvent.layout.width;
+                  const width = event.nativeEvent.layout.width;
+                  timeWidth.value = width;
+                  if (Math.abs(width - timeBadgeWidth) > 0.5) setTimeBadgeWidth(width);
                 }}
                 style={[TIME_BADGE, { position: 'absolute', opacity: 0 }]}
               >
@@ -469,7 +490,7 @@ export function DeletedStepRow({
 }) {
   const progress = useSharedValue(1);
   useEffect(() => {
-    if (closing) progress.value = withTiming(0, { duration: CLOSE_UP_MS, easing: Easing.ease });
+    if (closing) progress.value = withTiming(0, { duration: CLOSE_UP_MS, easing: CSS_EASE });
   }, [closing, progress]);
   const style = useAnimatedStyle(() => ({
     height: Math.max(52, height) * progress.value,
