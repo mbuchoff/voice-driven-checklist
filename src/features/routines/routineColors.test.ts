@@ -3,7 +3,6 @@ import { dark, light } from '@/src/theme/palette';
 import {
   ROUTINE_COLORS,
   isRoutineColorKey,
-  legacyRoutineColorKey,
   pickRoutineColorKey,
   routineColorShades,
 } from './routineColors';
@@ -22,16 +21,6 @@ function contrast(a: string, b: string) {
 }
 
 describe('routine colors', () => {
-  it('maps each of the five colors routines showed before colors were stored to its nearest hue', () => {
-    // Ids whose old hashed card fills were recorded from the previous app:
-    // routine-a coral, routine-b blue, routine-c purple, routine-d olive, routine-e green.
-    expect(legacyRoutineColorKey('routine-a')).toBe('orange-1');
-    expect(legacyRoutineColorKey('routine-b')).toBe('cyan-2');
-    expect(legacyRoutineColorKey('routine-c')).toBe('violet-2');
-    expect(legacyRoutineColorKey('routine-d')).toBe('lime-1');
-    expect(legacyRoutineColorKey('routine-e')).toBe('green-2');
-  });
-
   it('offers thirty distinct colors, each with light and dark shades', () => {
     const keys = ROUTINE_COLORS.map((color) => color.key);
     expect(new Set(keys).size).toBe(30);

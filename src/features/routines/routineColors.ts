@@ -73,8 +73,11 @@ export function isRoutineColorKey(key: unknown): key is string {
   return typeof key === 'string' && BY_KEY.has(key);
 }
 
+/** What an unknown key shows as: the stored color column's default. */
+const FALLBACK_COLOR_KEY = 'green-2';
+
 export function routineColor(key: string): RoutineColor {
-  return BY_KEY.get(key) ?? BY_KEY.get(LEGACY_COLOR_KEYS[0])!;
+  return BY_KEY.get(key) ?? BY_KEY.get(FALLBACK_COLOR_KEY)!;
 }
 
 export function routineColorShades(
@@ -82,19 +85,6 @@ export function routineColorShades(
   mode: Palette['mode'],
 ): RoutineColorShades {
   return routineColor(key)[mode];
-}
-
-// Before colors were stored, a routine's card color came from a hash of its
-// id into five colors (green, coral, blue, purple, olive). Each maps to the
-// nearest hue of the thirty.
-const LEGACY_COLOR_KEYS = ['green-2', 'orange-1', 'cyan-2', 'violet-2', 'lime-1'];
-
-export function legacyRoutineColorKey(id: string): string {
-  let hash = 0;
-  for (let index = 0; index < id.length; index += 1) {
-    hash = (hash * 31 + id.charCodeAt(index)) % 100000;
-  }
-  return LEGACY_COLOR_KEYS[hash % LEGACY_COLOR_KEYS.length];
 }
 
 /** A random color for a new routine, avoiding `avoid` while any color is left. */

@@ -1,6 +1,5 @@
-import { legacyRoutineColorKey } from '@/src/features/routines/routineColors';
-
 import type { Database, DatabaseQueries } from './database';
+import { legacyRoutineColorKey } from './legacyRoutineColors';
 
 const CHECKLIST_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS checklists (
