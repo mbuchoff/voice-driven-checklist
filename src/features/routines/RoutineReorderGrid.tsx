@@ -53,6 +53,7 @@ import {
 import type { LibraryRoutine } from './types';
 import { mapRoutineSlots, useRoutineDragState, type RoutineDragState, type SlotMap } from './useRoutineDragState';
 import { useRoutinePressGuard } from './useRoutinePressGuard';
+import { activateAfterHold } from './holdToActivate';
 import { QUICK_THEN_GENTLE } from './motion';
 
 const CARD_MOVE_DURATION_MS = 190;
@@ -515,11 +516,7 @@ export function RoutineReorderGrid({
           viewportHeight.value = viewport.height;
         }
         motion.edgeThresholds.value = getRoutineScrollThresholds(touch.absoluteY, motion.viewportTop.value, motion.viewportTop.value + viewportHeight.value);
-        motion.holdActivation.value = 0;
-        motion.holdActivation.value = withDelay(ROUTINE_HOLD_ACTIVATION_MS,
-          withTiming(1, { duration: 0 }, (finished) => {
-            if (finished) manager.activate();
-          }));
+        activateAfterHold(motion.holdActivation, ROUTINE_HOLD_ACTIVATION_MS, manager);
       })
       .onTouchesMove((event, manager) => {
         'worklet';

@@ -18,13 +18,13 @@ import {
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 
 import { getEdgeAutoscrollDelta as calculateEdgeAutoscrollDelta } from './edgeAutoscroll';
+import { activateAfterHold } from './holdToActivate';
 import { QUICK_THEN_GENTLE, STEP_MAKE_ROOM_MS } from './motion';
 
 export const STEP_REORDER_HOLD_MS = 350;
@@ -481,15 +481,50 @@ export function useStepReorder({
   const holdStartX = useSharedValue(0);
   const holdStartY = useSharedValue(0);
 
-  const dragHandlers = <T extends ReturnType<typeof Gesture.Pan>>(
-    gesture: T,
-    item: ReorderStep,
-    stepIndex: number,
-  ) =>
-    gesture
+  /**
+   * Holding a step for STEP_REORDER_HOLD_MS lifts it. The finger may drift
+   * up to STEP_REORDER_HOLD_DRIFT on either axis first; more than that lets
+   * the list scroll (or a sideways swipe take over) instead.
+   */
+  const gestureFor = (item: ReorderStep, stepIndex: number) =>
+    Gesture.Pan()
+      .withTestId(`step-hold-gesture-${item.localId}-${stepIndex}`)
+      .manualActivation(true)
       .maxPointers(1)
       .shouldCancelWhenOutside(false)
       .blocksExternalGesture(scrollRef as never)
+      .simultaneousWithExternalGesture(scrollRef as never)
+      .onTouchesDown((event, manager) => {
+        'worklet';
+        if (event.numberOfTouches !== 1 || dragActive.value) {
+          manager.fail();
+          return;
+        }
+        const touch = event.allTouches[0];
+        holdStartX.value = touch.absoluteX;
+        holdStartY.value = touch.absoluteY;
+        activateAfterHold(holdActivation, STEP_REORDER_HOLD_MS, manager);
+      })
+      .onTouchesMove((event, manager) => {
+        'worklet';
+        if (dragActive.value) return;
+        const touch = event.allTouches[0];
+        if (!touch) return;
+        if (
+          Math.abs(touch.absoluteX - holdStartX.value) > STEP_REORDER_HOLD_DRIFT ||
+          Math.abs(touch.absoluteY - holdStartY.value) > STEP_REORDER_HOLD_DRIFT
+        ) {
+          cancelAnimation(holdActivation);
+          manager.fail();
+        }
+      })
+      .onTouchesUp((_event, manager) => {
+        'worklet';
+        if (!dragActive.value) {
+          cancelAnimation(holdActivation);
+          manager.fail();
+        }
+      })
       .onStart((event) => {
         'worklet';
         const layout = rowLayoutsValue.value[stepIndex];
@@ -556,58 +591,6 @@ export function useStepReorder({
           );
         }
       });
-
-  /**
-   * Holding a step for STEP_REORDER_HOLD_MS lifts it. The finger may drift
-   * up to STEP_REORDER_HOLD_DRIFT on either axis first; more than that lets
-   * the list scroll (or a sideways swipe take over) instead.
-   */
-  const gestureFor = (item: ReorderStep, stepIndex: number) =>
-    dragHandlers(
-      Gesture.Pan()
-        .withTestId(`step-hold-gesture-${item.localId}-${stepIndex}`)
-        .manualActivation(true)
-        .simultaneousWithExternalGesture(scrollRef as never)
-        .onTouchesDown((event, manager) => {
-          'worklet';
-          if (event.numberOfTouches !== 1 || dragActive.value) {
-            manager.fail();
-            return;
-          }
-          const touch = event.allTouches[0];
-          holdStartX.value = touch.absoluteX;
-          holdStartY.value = touch.absoluteY;
-          holdActivation.value = 0;
-          holdActivation.value = withDelay(
-            STEP_REORDER_HOLD_MS,
-            withTiming(1, { duration: 0 }, (finished) => {
-              if (finished) manager.activate();
-            }),
-          );
-        })
-        .onTouchesMove((event, manager) => {
-          'worklet';
-          if (dragActive.value) return;
-          const touch = event.allTouches[0];
-          if (!touch) return;
-          if (
-            Math.abs(touch.absoluteX - holdStartX.value) > STEP_REORDER_HOLD_DRIFT ||
-            Math.abs(touch.absoluteY - holdStartY.value) > STEP_REORDER_HOLD_DRIFT
-          ) {
-            cancelAnimation(holdActivation);
-            manager.fail();
-          }
-        })
-        .onTouchesUp((_event, manager) => {
-          'worklet';
-          if (!dragActive.value) {
-            cancelAnimation(holdActivation);
-            manager.fail();
-          }
-        }),
-      item,
-      stepIndex,
-    );
 
   useEffect(
     () => () => {
