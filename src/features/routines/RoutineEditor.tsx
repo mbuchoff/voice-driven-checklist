@@ -72,6 +72,7 @@ import {
   openStep,
   pressEnter,
   realSteps,
+  refreshOpenCandidates,
   routineInput,
   setColor,
   setStepText,
@@ -117,7 +118,6 @@ export function focusEditorInput(input: { focus: () => void } | null) {
   input?.focus();
 }
 
-type ChipsState = { stepId: string; candidates: number[] };
 type PanelState = {
   stepId: string;
   openedValue: number | null;
@@ -167,7 +167,6 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const scrollToId = useRef<string | null>(null);
   const keepOpenOnBlur = useRef(false);
 
-  const [chips, setChips] = useState<ChipsState | null>(null);
   const [panel, setPanel] = useState<PanelState | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [colorsOpen, setColorsOpen] = useState(false);
@@ -240,18 +239,6 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
     return () => cancelAnimationFrame(frame);
   }, [model.openId, keyboardClearance, scrollOpenStepIntoView]);
 
-  // An open step shows its times, which stay the same while it's open so
-  // they don't change under the finger.
-  const recentTimes = useRef(preferences.recentTimerSeconds);
-  recentTimes.current = preferences.recentTimerSeconds;
-  const chipsFor = useCallback((id: string | null): ChipsState | null => {
-    const step = id ? realSteps(modelRef.current).find((candidate) => candidate.localId === id) : undefined;
-    return step ? { stepId: step.localId, candidates: chipCandidates(step.timerSeconds, recentTimes.current) } : null;
-  }, []);
-  useEffect(() => {
-    setChips(chipsFor(model.openId));
-  }, [chipsFor, model.openId]);
-
   // Before a sheet opens or the editor leaves: a native tap doesn't blur
   // the field being typed in, so the keyboard would stay up over the sheet.
   const settle = useCallback((): EditorState => {
@@ -265,7 +252,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const open = (id: string) => {
     holdKeyboard();
     setColorsOpen(false);
-    setModel((state) => openStep(state, id));
+    setModel((state) => openStep(state, id, preferences.recentTimerSeconds));
   };
 
   const add = () => {
@@ -273,7 +260,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
     holdKeyboard();
     setColorsOpen(false);
     scrollToId.current = id;
-    setModel((state) => addStep(state, id));
+    setModel((state) => addStep(state, id, preferences.recentTimerSeconds));
   };
 
   const onStepBlur = (id: string) => {
@@ -315,7 +302,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
     setPanel(null);
     const stepId = panel.stepId;
     // Back to typing, with the step's times again, its new one among them.
-    if (modelRef.current.openId === stepId) setChips(chipsFor(stepId));
+    setModel((state) => refreshOpenCandidates(state, preferences.recentTimerSeconds));
     requestAnimationFrame(() => {
       keepOpenOnBlur.current = false;
       if (modelRef.current.openId === stepId) focusEditorInput(inputRefs.current[stepId]);
@@ -338,7 +325,6 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   };
 
   const removeStep = (id: string, height: number) => {
-    setChips((current) => (current?.stepId === id ? null : current));
     setModel((state) => deleteStep(state, id, height));
     void AccessibilityInfo.announceForAccessibility?.('Step deleted');
   };
@@ -569,8 +555,8 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
               // time, so they're ready the moment it opens; the open step's
               // set then stays fixed.
               const chipsOpen = isOpen && !panel;
-              const candidates = chips?.stepId === row.localId
-                ? chips.candidates
+              const candidates = isOpen
+                ? model.openCandidates
                 : chipCandidates(row.timerSeconds, preferences.recentTimerSeconds);
               return (
                 <Fragment key={row.localId}>
@@ -593,10 +579,10 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
                     onChangeText={(text) => setModel((state) => setStepText(state, row.localId, text))}
                     onEnter={() => {
                       const id = uuidv4();
-                      if (pressEnter(modelRef.current, id).openId) holdKeyboard();
+                      if (pressEnter(modelRef.current, id, preferences.recentTimerSeconds).openId) holdKeyboard();
                       else releaseOpenStep();
                       scrollToId.current = id;
-                      setModel((state) => pressEnter(state, id));
+                      setModel((state) => pressEnter(state, id, preferences.recentTimerSeconds));
                     }}
                     onBlur={() => onStepBlur(row.localId)}
                     onDelete={(height) => removeStep(row.localId, height)}

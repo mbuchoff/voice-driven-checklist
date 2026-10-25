@@ -395,13 +395,14 @@ describe('RoutineEditor', () => {
     }
     async function longStep() {
       const database = await setupDb();
-      await renderEditor(
+      const editor = await renderEditor(
         { initialRoutine: await existing(database, { steps: [{ text: LONG, timerSeconds: null }] }) },
         { database },
       );
       fireEvent(screen.getByTestId('step-textbox-0'), 'layout', {
         nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 100 } },
       });
+      return editor;
     }
     const fieldOpacity = () => StyleSheet.flatten(screen.getByTestId('step-text-0').props.style).opacity;
     /** Android's font size setting, as the phone reports it. */
@@ -457,10 +458,11 @@ describe('RoutineEditor', () => {
 
     it('glide on lines as tall as the enlarged text when the font size is larger', async () => {
       setFontScale(1.5);
-      await longStep();
+      const { renderAgain } = await longStep();
       layOutWords(0, ['closed', 'opened'], [CLOSED_LINES, OPENED_LINES]);
 
       tapToEdit(0);
+      renderAgain();
 
       // It eases to the opened words' two lines, each 26 × 1.5 tall, inside the box's padding.
       expect(StyleSheet.flatten(screen.getByTestId('word-glide-0').props.style).height).toBe(2 * 26 * 1.5 + 2 * 11);

@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 
 import { moveItem } from './reorder';
+import { chipCandidates } from './timers';
 import type { Routine, RoutineInput } from './types';
 
 export type EditorStep = {
@@ -31,6 +32,11 @@ export type EditorState = {
   openId: string | null;
   /** The open step's words when it was opened, to give back if emptied. */
   openedText: string;
+  /**
+   * The open step's times, fixed when it opens so they don't change under
+   * the finger; none while no step is open.
+   */
+  openCandidates: number[];
 };
 
 /** A new routine starts with its color; an existing one with what's saved. */
@@ -51,6 +57,7 @@ export function createEditorState(start: EditorStart): EditorState {
     })),
     openId: null,
     openedText: '',
+    openCandidates: [],
   };
 }
 
@@ -87,7 +94,7 @@ function removeRow(state: EditorState, id: string): EditorState {
 export function leaveOpenStep(state: EditorState): EditorState {
   const id = state.openId;
   if (!id) return state;
-  const closed = { ...state, openId: null, openedText: '' };
+  const closed = { ...state, openId: null, openedText: '', openCandidates: [] };
   const step = findStep(state, id);
   if (!step) return closed;
   const hasWords = step.text.trim().length > 0;
@@ -102,32 +109,40 @@ export function leaveOpenStep(state: EditorState): EditorState {
     : removeRow(closed, id);
 }
 
-export function openStep(state: EditorState, id: string): EditorState {
+/** Opens a step for typing, with its times from `recent` (the lengths used most recently). */
+export function openStep(state: EditorState, id: string, recent: readonly number[]): EditorState {
   if (state.openId === id) return state;
   const left = leaveOpenStep(state);
   const step = findStep(left, id);
   if (!step) return left;
-  return { ...left, openId: id, openedText: step.text };
+  return { ...left, openId: id, openedText: step.text, openCandidates: chipCandidates(step.timerSeconds, recent) };
 }
 
 /** Appends a blank step at the end and opens it. */
-export function addStep(state: EditorState, newId: string): EditorState {
+export function addStep(state: EditorState, newId: string, recent: readonly number[]): EditorState {
   const left = leaveOpenStep(state);
   return {
     ...left,
     rows: [...left.rows, { kind: 'step', localId: newId, text: '', timerSeconds: null, fresh: true }],
     openId: newId,
     openedText: '',
+    openCandidates: chipCandidates(null, recent),
   };
+}
+
+/** The open step's times again, its own time among them (back from the timer panel). */
+export function refreshOpenCandidates(state: EditorState, recent: readonly number[]): EditorState {
+  const step = state.openId ? findStep(state, state.openId) : undefined;
+  return step ? { ...state, openCandidates: chipCandidates(step.timerSeconds, recent) } : state;
 }
 
 /**
  * Enter never adds a line break: it closes an existing step, keeps a new step
  * with words and opens another new step, and removes a blank new step.
  */
-export function pressEnter(state: EditorState, newId: string): EditorState {
+export function pressEnter(state: EditorState, newId: string, recent: readonly number[]): EditorState {
   const step = state.openId ? findStep(state, state.openId) : undefined;
-  if (step?.fresh && step.text.trim()) return addStep(state, newId);
+  if (step?.fresh && step.text.trim()) return addStep(state, newId, recent);
   return leaveOpenStep(state);
 }
 
@@ -150,7 +165,7 @@ export function setColor(state: EditorState, colorKey: string): EditorState {
 
 /** Swipe-delete: the step's place, at its height, becomes an undo row. */
 export function deleteStep(state: EditorState, id: string, height: number): EditorState {
-  const closed = state.openId === id ? { ...state, openId: null, openedText: '' } : state;
+  const closed = state.openId === id ? { ...state, openId: null, openedText: '', openCandidates: [] } : state;
   return {
     ...closed,
     rows: closed.rows.map((row) =>

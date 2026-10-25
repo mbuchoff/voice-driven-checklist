@@ -15,6 +15,7 @@ import {
   openStep,
   pressEnter,
   realSteps,
+  refreshOpenCandidates,
   routineInput,
   setStepText,
   setStepTimer,
@@ -24,6 +25,9 @@ import {
   type EditorState,
 } from './routineEditorModel';
 import type { Routine } from './types';
+
+/** The timer lengths used most recently. */
+const RECENT = [90, 30];
 
 const saved: Routine = {
   id: 'r1',
@@ -40,11 +44,35 @@ function texts(state: EditorState) {
 }
 
 describe('routine editor model', () => {
+  describe('the open step’s times', () => {
+    it('are its own time, then the recent ones, fixed while it stays open', () => {
+      let state = createEditorState({ kind: 'edit', routine: saved });
+      const neck = realSteps(state)[0].localId;
+      state = openStep(state, neck, RECENT);
+      expect(state.openCandidates).toEqual([30, 90, 60, 120]);
+
+      state = setStepTimer(state, neck, 45);
+      expect(state.openCandidates).toEqual([30, 90, 60, 120]);
+
+      // Back from the timer panel, its new time is among them.
+      state = refreshOpenCandidates(state, [45, ...RECENT]);
+      expect(state.openCandidates).toEqual([45, 90, 30, 60]);
+    });
+
+    it('are the recent ones for a new step, and none once no step is open', () => {
+      let state = addStep(createEditorState({ kind: 'edit', routine: saved }), 'n1', RECENT);
+      expect(state.openCandidates).toEqual([90, 30, 60, 120]);
+
+      state = leaveOpenStep(state);
+      expect(state.openCandidates).toEqual([]);
+    });
+  });
+
   describe('leaving a step', () => {
     it('gives an emptied existing step back the words it had when opened', () => {
       let state = createEditorState({ kind: 'edit', routine: saved });
       const id = realSteps(state)[0].localId;
-      state = openStep(state, id);
+      state = openStep(state, id, RECENT);
       state = setStepText(state, id, '');
       state = leaveOpenStep(state);
       expect(texts(state)).toEqual(['Neck rolls', 'Breathe']);
@@ -53,7 +81,7 @@ describe('routine editor model', () => {
 
     it('drops a new step left blank, including a timer set on it', () => {
       let state = createEditorState({ kind: 'edit', routine: saved });
-      state = addStep(state, 'n1');
+      state = addStep(state, 'n1', RECENT);
       state = setStepTimer(state, 'n1', 45);
       state = leaveOpenStep(state);
       expect(texts(state)).toEqual(['Neck rolls', 'Breathe']);
@@ -61,9 +89,9 @@ describe('routine editor model', () => {
 
     it('keeps a new step once it has words', () => {
       let state = createEditorState({ kind: 'edit', routine: saved });
-      state = addStep(state, 'n1');
+      state = addStep(state, 'n1', RECENT);
       state = setStepText(state, 'n1', 'Plank');
-      state = openStep(state, realSteps(state)[0].localId);
+      state = openStep(state, realSteps(state)[0].localId, RECENT);
       expect(texts(state)).toEqual(['Neck rolls', 'Breathe', 'Plank']);
     });
   });
@@ -71,25 +99,25 @@ describe('routine editor model', () => {
   describe('Enter', () => {
     it('closes an existing step', () => {
       let state = createEditorState({ kind: 'edit', routine: saved });
-      state = openStep(state, realSteps(state)[1].localId);
-      state = pressEnter(state, 'unused');
+      state = openStep(state, realSteps(state)[1].localId, RECENT);
+      state = pressEnter(state, 'unused', RECENT);
       expect(state.openId).toBeNull();
       expect(texts(state)).toEqual(['Neck rolls', 'Breathe']);
     });
 
     it('keeps a new step with words and opens another new step at the end', () => {
       let state = createEditorState({ kind: 'edit', routine: saved });
-      state = addStep(state, 'n1');
+      state = addStep(state, 'n1', RECENT);
       state = setStepText(state, 'n1', 'Plank');
-      state = pressEnter(state, 'n2');
+      state = pressEnter(state, 'n2', RECENT);
       expect(state.openId).toBe('n2');
       expect(realSteps(state).map((step) => step.localId).slice(-2)).toEqual(['n1', 'n2']);
     });
 
     it('removes a blank new step', () => {
       let state = createEditorState({ kind: 'edit', routine: saved });
-      state = addStep(state, 'n1');
-      state = pressEnter(state, 'n2');
+      state = addStep(state, 'n1', RECENT);
+      state = pressEnter(state, 'n2', RECENT);
       expect(state.openId).toBeNull();
       expect(texts(state)).toEqual(['Neck rolls', 'Breathe']);
     });
@@ -98,7 +126,7 @@ describe('routine editor model', () => {
   describe('counting', () => {
     it('counts a new step only once it has words', () => {
       let state = createEditorState({ kind: 'edit', routine: saved });
-      state = addStep(state, 'n1');
+      state = addStep(state, 'n1', RECENT);
       expect(countedStepCount(state)).toBe(2);
       state = setStepText(state, 'n1', 'P');
       expect(countedStepCount(state)).toBe(3);
@@ -152,7 +180,7 @@ describe('routine editor model', () => {
 
     it('moves a step among the real steps, skipping undo rows', () => {
       let state = createEditorState({ kind: 'edit', routine: saved });
-      state = addStep(state, 'n1');
+      state = addStep(state, 'n1', RECENT);
       state = setStepText(state, 'n1', 'Plank');
       state = leaveOpenStep(state);
       state = deleteStep(state, realSteps(state)[1].localId, 56);
@@ -167,7 +195,7 @@ describe('routine editor model', () => {
       expect(canSave(fresh)).toBe(false);
       fresh = setTitle(fresh, 'Night');
       expect(canSave(fresh)).toBe(false);
-      fresh = addStep(fresh, 'n1');
+      fresh = addStep(fresh, 'n1', RECENT);
       fresh = setStepText(fresh, 'n1', 'Lights off');
       expect(canSave(fresh)).toBe(true);
 
@@ -185,7 +213,7 @@ describe('routine editor model', () => {
     it('saves trimmed words and timers, dropping steps without words', () => {
       let state = createEditorState({ kind: 'edit', routine: saved });
       state = setTitle(state, '  Evening stretch ');
-      state = addStep(state, 'n1');
+      state = addStep(state, 'n1', RECENT);
       state = setStepTimer(state, 'n1', 60);
       state = setStepText(state, realSteps(state)[1].localId, ' Breathe deeply ');
       expect(routineInput(state)).toEqual({
@@ -203,7 +231,7 @@ describe('routine editor model', () => {
       const baseline = editorSnapshot(start);
       expect(isDirty(start, baseline)).toBe(false);
 
-      let blankTimed = addStep(start, 'n1');
+      let blankTimed = addStep(start, 'n1', RECENT);
       blankTimed = setStepTimer(blankTimed, 'n1', 30);
       expect(isDirty(blankTimed, baseline)).toBe(false);
 
@@ -229,7 +257,7 @@ describe('routine editor model', () => {
       expect(canRun(setTitle(start, 'Evening stretch'), baseline)).toBe(false);
 
       const fresh = createEditorState({ kind: 'new', colorKey: 'teal-1' });
-      expect(canRun(setStepText(addStep(setTitle(fresh, 'New'), 'n1'), 'n1', 'Go'), editorSnapshot(fresh))).toBe(false);
+      expect(canRun(setStepText(addStep(setTitle(fresh, 'New'), 'n1', RECENT), 'n1', 'Go'), editorSnapshot(fresh))).toBe(false);
 
       const wordless: Routine = { ...saved, steps: [] };
       const empty = createEditorState({ kind: 'edit', routine: wordless });
