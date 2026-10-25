@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ComponentRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import {
   Pressable,
   Text,
@@ -24,6 +24,7 @@ import { Icon } from '@/src/components/Icon';
 import type { EditorColors } from '../editorColors';
 import { STEP_MAKE_ROOM, STEP_REORDER_HOLD_MS } from '../useStepReorder';
 import { formatTimerLong, formatTimerWords } from '../timers';
+import { STEP_WORDS, WordGlide } from './StepWordGlide';
 
 /** A swipe starts after this much mostly-sideways movement. */
 const SWIPE_START = 8;
@@ -45,6 +46,10 @@ const TIME_BADGE = {
 } as const;
 /** Where an open step's words sit from the row's edge. */
 export const EDIT_INSET = 18;
+/** How far the text box's left edge moves when a step opens (the number's place closes). */
+const OPEN_BOX_SHIFT = EDIT_INSET - 22 - 30;
+/** The step's own text steps aside, unseen, while its words glide (it keeps focus). */
+const UNDER_GLIDE = { position: 'absolute', top: 0, left: 0, right: 0, opacity: 0 } as const;
 
 export type StepRowProps = {
   colors: EditorColors;
@@ -90,6 +95,30 @@ export function StepRow(props: StepRowProps) {
   const swipeDirection = useSharedValue(0);
   const openProgress = useSharedValue(open ? 1 : 0);
   const timeWidth = useSharedValue(0);
+  const timeWidthNow = useRef(0);
+  // The text box's width with the step closed, and a glide of its words
+  // when it opens or closes and they change lines (Round 27).
+  const closedBoxWidth = useRef(0);
+  const openedRoom = () => -OPEN_BOX_SHIFT + (timerSeconds ? timeWidthNow.current + 8 : 0);
+  const [glide, setGlide] = useState<{ id: number; target: 0 | 1 } | null>(null);
+  const [glideShown, setGlideShown] = useState(false);
+  const glideCount = useRef(0);
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    glideCount.current += 1;
+    setGlideShown(false);
+    setGlide(text.trim() && closedBoxWidth.current > 0 ? { id: glideCount.current, target: open ? 1 : 0 } : null);
+    // Only an open or close starts a glide; the words are read then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const endGlide = () => {
+    setGlide(null);
+    setGlideShown(false);
+  };
 
   useEffect(() => {
     openProgress.value = withTiming(open ? 1 : 0, { duration: OPEN_MS, easing: Easing.ease });
@@ -261,7 +290,31 @@ export function StepRow(props: StepRowProps) {
                   <Text style={{ color: colors.ink, fontSize: 15, fontWeight: '800' }}>{number}</Text>
                 </Animated.View>
               </Animated.View>
-              <View style={{ flex: 1, minWidth: 0 }}>
+              <View
+                testID={`item-textbox-${index}`}
+                style={{ flex: 1, minWidth: 0 }}
+                onLayout={(event) => {
+                  // Only at rest: while the number and time move, it's changing.
+                  if (Math.abs(openProgress.value - (open ? 1 : 0)) > 0.001) return;
+                  const width = event.nativeEvent.layout.width;
+                  closedBoxWidth.current = open ? width - openedRoom() : width;
+                }}
+              >
+                {glide ? (
+                  <WordGlide
+                    key={glide.id}
+                    index={index}
+                    text={text}
+                    color={colors.text}
+                    fromWidth={closedBoxWidth.current + (glide.target === 1 ? 0 : openedRoom())}
+                    toWidth={closedBoxWidth.current + (glide.target === 1 ? openedRoom() : 0)}
+                    boxShift={glide.target === 1 ? OPEN_BOX_SHIFT : -OPEN_BOX_SHIFT}
+                    progress={openProgress}
+                    target={glide.target}
+                    onPlan={(plan) => setGlideShown(!!plan)}
+                    onDone={endGlide}
+                  />
+                ) : null}
                 {open ? (
                   <TextInput
                     ref={props.inputRef}
@@ -278,13 +331,16 @@ export function StepRow(props: StepRowProps) {
                     placeholder="Describe this step"
                     placeholderTextColor={colors.muted}
                     textAlignVertical="center"
-                    style={{
-                      color: colors.text,
-                      paddingHorizontal: 6,
-                      paddingVertical: 11,
-                      fontSize: 20,
-                      lineHeight: 26,
-                    }}
+                    textBreakStrategy="simple"
+                    style={[
+                      {
+                        color: colors.text,
+                        paddingHorizontal: 6,
+                        paddingVertical: 11,
+                        ...STEP_WORDS,
+                      },
+                      glideShown ? UNDER_GLIDE : null,
+                    ]}
                   />
                 ) : (
                   <Text
@@ -305,13 +361,16 @@ export function StepRow(props: StepRowProps) {
                         case 'delete': deleteRow(); break;
                       }
                     }}
-                    style={{
-                      color: text.trim() ? colors.text : colors.muted,
-                      paddingHorizontal: 6,
-                      paddingVertical: 11,
-                      fontSize: 20,
-                      lineHeight: 26,
-                    }}
+                    textBreakStrategy="simple"
+                    style={[
+                      {
+                        color: text.trim() ? colors.text : colors.muted,
+                        paddingHorizontal: 6,
+                        paddingVertical: 11,
+                        ...STEP_WORDS,
+                      },
+                      glideShown ? UNDER_GLIDE : null,
+                    ]}
                   >
                     {text.trim() || 'Tap to describe this step'}
                   </Text>
@@ -330,7 +389,10 @@ export function StepRow(props: StepRowProps) {
                 pointerEvents="none"
                 accessibilityElementsHidden
                 importantForAccessibility="no-hide-descendants"
-                onLayout={(event) => { timeWidth.value = event.nativeEvent.layout.width; }}
+                onLayout={(event) => {
+                  timeWidth.value = event.nativeEvent.layout.width;
+                  timeWidthNow.current = event.nativeEvent.layout.width;
+                }}
                 style={[TIME_BADGE, { position: 'absolute', opacity: 0 }]}
               >
                 <TimeLabel colors={colors} seconds={timerSeconds} />

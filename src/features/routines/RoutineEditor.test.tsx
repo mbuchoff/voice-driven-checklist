@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react-native';
-import { Alert, BackHandler, Keyboard, Platform, TextInput } from 'react-native';
+import { Alert, BackHandler, Keyboard, Platform, StyleSheet, TextInput } from 'react-native';
 import { State } from 'react-native-gesture-handler';
 import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 
@@ -362,6 +362,63 @@ describe('RoutineEditor', () => {
 
       expect(screen.getByTestId('item-label-1')).toHaveTextContent('Breathe');
       expect(screen.queryByTestId('save')).toBeNull();
+    });
+  });
+
+  describe('a long step’s words', () => {
+    const LONG = 'Drink a full glass of water before making breakfast';
+    /** Jest doesn't lay out views: where each word sits, closed and open. */
+    function layOutWords(index: number, lines: { before: number[]; after: number[] }) {
+      fireEvent(screen.getByTestId(`word-space-${index}`, HIDDEN), 'layout', {
+        nativeEvent: { layout: { x: 0, y: 0, width: 5, height: 26 } },
+      });
+      for (const side of ['before', 'after'] as const) {
+        lines[side].forEach((line, i) => {
+          fireEvent(screen.getByTestId(`word-measure-${index}-${side}-${i}`, HIDDEN), 'layout', {
+            nativeEvent: { layout: { x: i * 10, y: line * 26, width: 9, height: 26 } },
+          });
+        });
+      }
+    }
+
+    it('glide to their new lines when the step opens, then the field takes over', async () => {
+      const database = await setupDb();
+      await renderEditor(
+        { initialRoutine: await existing(database, { steps: [{ text: LONG, timerSeconds: null }] }) },
+        { database },
+      );
+      fireEvent(screen.getByTestId('item-textbox-0'), 'layout', {
+        nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 100 } },
+      });
+      jest.useFakeTimers();
+      try {
+        tapToEdit(0);
+        layOutWords(0, { before: [0, 0, 0, 0, 0, 1, 1, 1, 2], after: [0, 0, 0, 0, 0, 0, 0, 0, 1] });
+
+        expect(screen.getByTestId('word-glide-0')).toBeOnTheScreen();
+        expect(StyleSheet.flatten(screen.getByTestId('item-text-0').props.style).opacity).toBe(0);
+
+        act(() => jest.advanceTimersByTime(160 + 8 * 12 + 50));
+
+        expect(screen.queryByTestId('word-glide-0')).toBeNull();
+        expect(StyleSheet.flatten(screen.getByTestId('item-text-0').props.style).opacity).not.toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('stay put when their lines don’t change', async () => {
+      const database = await setupDb();
+      await renderEditor({ initialRoutine: await existing(database) }, { database });
+      fireEvent(screen.getByTestId('item-textbox-1'), 'layout', {
+        nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 48 } },
+      });
+
+      tapToEdit(1);
+      layOutWords(1, { before: [0], after: [0] });
+
+      expect(screen.queryByTestId('word-glide-1')).toBeNull();
+      expect(StyleSheet.flatten(screen.getByTestId('item-text-1').props.style).opacity).not.toBe(0);
     });
   });
 

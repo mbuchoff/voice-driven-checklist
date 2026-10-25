@@ -24,6 +24,11 @@ Reanimated.useSharedValue = (initialValue) => {
   return sharedValue.current;
 };
 
+// The mock's Easing.bezierFn returns its first argument instead of an easing
+// function; give back a function (straight-line progress), as the native one
+// returns its curve.
+Reanimated.Easing.bezierFn = () => (t) => t;
+
 // The Reanimated 4 Jest mock does not expose the UI-frame hook. Frame-driven
 // behavior is covered through its pure calculations and connected-device E2E.
 Reanimated.useFrameCallback = (_callback, autostart = true) => {
