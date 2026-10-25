@@ -173,6 +173,8 @@ export function RunScreen({
         action === 'next' &&
         state.snapshot != null &&
         state.currentStepIndex === state.snapshot.steps.length - 1;
+      // The cue starts here, with the command, so the reading that follows
+      // can wait for it (completing plays the completion chime instead).
       cueStartedRef.current = onCue && !completes
         ? Promise.resolve(onCue(action)).then(
             (audible) => audible !== false,
