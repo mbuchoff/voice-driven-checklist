@@ -11,21 +11,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
 import { Icon, type IconName } from '@/src/components/Icon';
+import { formatTimerWords } from '@/src/features/routines/timerFormat';
 import { ScreenBackground } from '@/src/components/ScreenBackground';
 import type { Palette } from '@/src/theme/palette';
 
 import {
-  RUN_ITEM_GAP,
+  formatCountdownClock,
+  RUN_STEP_GAP,
   RUN_TRANSITION_CONFIG,
-  getRunItemPresentation,
-  getRunItemStatus,
+  getRunStepPresentation,
+  getRunStepStatus,
   getRunProgressPalette,
   getRunTrackOffset,
-  type RunItemBackgroundStatus,
-  type RunItemStatus,
+  type RunStepBackgroundStatus,
+  type RunStepStatus,
 } from './runPresentation';
 import { StopRunControl } from './StopRunControl';
-import type { ChecklistRunState } from './types';
+import type { RoutineRunState } from './types';
+import type { StepCountdown } from './useStepCountdown';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -43,8 +46,11 @@ export function ActiveRunView({
   onReleaseStopHold,
   onRequestStop,
   onAction,
+  countdown = null,
 }: {
-  state: ChecklistRunState;
+  /** The current step's countdown, for a timed step. */
+  countdown?: StepCountdown | null;
+  state: RoutineRunState;
   theme: Palette;
   androidApi: number;
   talkBackEnabled: boolean;
@@ -56,8 +62,8 @@ export function ActiveRunView({
   onRequestStop: () => void | Promise<void>;
   onAction: (action: RunCommand) => void;
 }) {
-  const totalItems = state.snapshot?.items.length ?? 0;
-  const items = state.snapshot?.items ?? [];
+  const totalSteps = state.snapshot?.steps.length ?? 0;
+  const steps = state.snapshot?.steps ?? [];
   const progressPalette = getRunProgressPalette(theme.mode);
   const trackStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: getRunTrackOffset(animatedCurrentIndex.value) }],
@@ -118,15 +124,15 @@ export function ActiveRunView({
                 width: '100%',
               }}
             >
-              {state.snapshot?.checklistTitle}
+              {state.snapshot?.routineTitle}
             </Text>
           ) : null}
         </View>
       </View>
 
       <ProgressOrbit
-        current={state.currentItemIndex + 1}
-        total={totalItems}
+        current={state.currentStepIndex + 1}
+        total={totalSteps}
         animatedCurrentIndex={animatedCurrentIndex}
         color={theme.runText}
         mutedColor={progressPalette.track}
@@ -135,9 +141,10 @@ export function ActiveRunView({
         centerBorderColor={progressPalette.centerBorder}
         labelOpacity={progressPalette.labelOpacity}
         shadow={progressPalette.shadow}
+        timeUsed={countdown ? 1 - countdown.remainingSeconds / countdown.totalSeconds : null}
       />
 
-      <View testID="run-items-stage" style={{ flex: 1, overflow: 'visible' }}>
+      <View testID="run-steps-stage" style={{ flex: 1, overflow: 'visible' }}>
         <Animated.View
           testID="run-track"
           style={[
@@ -150,14 +157,17 @@ export function ActiveRunView({
             trackStyle,
           ]}
         >
-          {items.map((item, index) => (
-            <RunItem
-              key={item.id}
+          {steps.map((step, index) => (
+            <RunStep
+              key={step.id}
               index={index}
-              status={getRunItemStatus(index, state.currentItemIndex)}
-              text={item.text}
+              status={getRunStepStatus(index, state.currentStepIndex)}
+              text={step.text}
               androidApi={androidApi}
               textColor={theme.runText}
+              countdownSeconds={
+                index === state.currentStepIndex && countdown ? countdown.remainingSeconds : null
+              }
             />
           ))}
         </Animated.View>
@@ -177,7 +187,7 @@ export function ActiveRunView({
             testID="playback-unavailable"
             style={{ color: theme.danger, textAlign: 'center' }}
           >
-            Spoken playback unavailable — the item text remains visible above.
+            Spoken playback unavailable — the step text remains visible above.
           </Text>
         ) : null}
 
@@ -281,23 +291,26 @@ export function ActiveRunView({
   );
 }
 
-const RunItem = memo(function RunItem({
+const RunStep = memo(function RunStep({
   index,
   status,
   text,
   androidApi,
   textColor,
+  countdownSeconds = null,
 }: {
   index: number;
-  status: RunItemStatus;
+  status: RunStepStatus;
   text: string;
   androidApi: number;
   textColor: string;
+  /** Time left on this step's countdown, shown under its text. */
+  countdownSeconds?: number | null;
 }) {
   const selected = status === 'current';
   const focusProgress = useSharedValue(selected ? 1 : 0);
   const previousStatus = useRef(status);
-  const backgroundStatus: RunItemBackgroundStatus = selected
+  const backgroundStatus: RunStepBackgroundStatus = selected
     ? previousStatus.current === 'past'
       ? 'past'
       : 'upcoming'
@@ -309,7 +322,7 @@ const RunItem = memo(function RunItem({
   }, [focusProgress, selected, status]);
 
   const animatedStyle = useAnimatedStyle(() => {
-    const presentation = getRunItemPresentation(
+    const presentation = getRunStepPresentation(
       backgroundStatus,
       focusProgress.value,
       androidApi,
@@ -330,14 +343,14 @@ const RunItem = memo(function RunItem({
 
   return (
     <Animated.View
-      testID={`run-item-${index}`}
+      testID={`run-step-${index}`}
       accessibilityState={{ selected }}
       accessible={selected}
       importantForAccessibility={selected ? 'yes' : 'no-hide-descendants'}
       style={[
         {
           position: 'absolute',
-          top: index * RUN_ITEM_GAP,
+          top: index * RUN_STEP_GAP,
           left: 0,
           right: 0,
           minHeight: 136,
@@ -361,6 +374,23 @@ const RunItem = memo(function RunItem({
       >
         {text}
       </Text>
+      {countdownSeconds != null ? (
+        <Text
+          testID="run-countdown"
+          accessibilityLabel={`${formatTimerWords(countdownSeconds)} left`}
+          style={{
+            marginTop: 8,
+            color: textColor,
+            opacity: 0.72,
+            fontSize: 24,
+            lineHeight: 28,
+            fontWeight: '700',
+            fontVariant: ['tabular-nums'],
+          }}
+        >
+          {formatCountdownClock(countdownSeconds)}
+        </Text>
+      ) : null}
     </Animated.View>
   );
 });
@@ -376,7 +406,10 @@ function ProgressOrbit({
   centerBorderColor,
   labelOpacity,
   shadow,
+  timeUsed = null,
 }: {
+  /** For a timed step, the share of its countdown used; fills the ring. */
+  timeUsed?: number | null;
   current: number;
   total: number;
   animatedCurrentIndex: SharedValue<number>;
@@ -392,10 +425,17 @@ function ProgressOrbit({
   const strokeWidth = 9;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
+  const countdownProgress = useSharedValue(timeUsed ?? 0);
+  const counting = timeUsed != null;
+  useEffect(() => {
+    if (timeUsed == null) return;
+    countdownProgress.value = withTiming(timeUsed, { duration: 250 });
+  }, [countdownProgress, timeUsed]);
   const animatedProgressProps = useAnimatedProps(() => ({
-    strokeDashoffset:
-      circumference *
-      (1 - (animatedCurrentIndex.value + 1) / Math.max(total, 1)),
+    strokeDashoffset: counting
+      ? circumference * (1 - countdownProgress.value)
+      : circumference *
+        (1 - (animatedCurrentIndex.value + 1) / Math.max(total, 1)),
   }));
   return (
     <View
@@ -473,7 +513,7 @@ function ProgressOrbit({
         </Text>
       </View>
       <Text style={{ position: 'absolute', opacity: 0 }}>
-        Item {current} of {total}
+        Step {current} of {total}
       </Text>
     </View>
   );

@@ -12,15 +12,15 @@ import {
   useAccount,
   type AccountContextValue,
 } from '@/src/features/account/AccountProvider';
-import { parseBackup, serializeBackup } from '@/src/features/checklists/backup';
+import { parseBackup, serializeBackup } from '@/src/features/routines/backup';
 import {
   exportBackupFile,
   pickBackupFile,
-} from '@/src/features/checklists/backupIO';
+} from '@/src/features/routines/backupIO';
 import {
-  exportAllChecklists,
-  importChecklists,
-} from '@/src/features/checklists/repository';
+  exportAllRoutines,
+  importRoutines,
+} from '@/src/features/routines/repository';
 import {
   SOUND_OPTIONS,
   type CueAction,
@@ -90,9 +90,9 @@ export function SettingsContent({
 
   const exportBackup = async () => {
     try {
-      const inputs = await exportAllChecklists(database);
+      const inputs = await exportAllRoutines(database);
       if (inputs.length === 0) {
-        await notify('Nothing to export', 'Create a checklist first.');
+        await notify('Nothing to export', 'Create a routine first.');
         return;
       }
       await exportBackupFile(
@@ -104,7 +104,7 @@ export function SettingsContent({
         'Export failed',
         reason instanceof Error
           ? reason.message
-          : 'Could not export your checklists.',
+          : 'Could not export your routines.',
       );
     }
   };
@@ -114,10 +114,10 @@ export function SettingsContent({
       const text = await pickBackupFile();
       if (text == null) return;
       const inputs = parseBackup(text);
-      const count = await importChecklists(database, inputs);
+      const count = await importRoutines(database, inputs);
       await notify(
         'Import complete',
-        count === 1 ? '1 checklist added.' : `${count} checklists added.`,
+        count === 1 ? '1 routine added.' : `${count} routines added.`,
       );
     } catch (reason) {
       await notify(
@@ -153,7 +153,7 @@ export function SettingsContent({
     >
       <ScreenBackground variant="settings" />
       <SettingsTopBar
-        backLabel="Back to my checklists"
+        backLabel="Back to my routines"
         onBack={onBack}
         title="SETTINGS"
       />
@@ -172,7 +172,7 @@ export function SettingsContent({
           Settings
         </Text>
         <Text style={{ color: theme.textMuted, fontSize: 14, lineHeight: 21 }}>
-          Appearance, sounds, your checklist data, and account.
+          Appearance, sounds, your routine data, and account.
         </Text>
       </View>
 
@@ -260,7 +260,7 @@ export function SettingsContent({
           <AccountChoice
             initials="VC"
             name="This device"
-            detail="Local checklist library"
+            detail="Local routine library"
             selected={account.state.status === 'local'}
             disabled={busy}
             onPress={() => {

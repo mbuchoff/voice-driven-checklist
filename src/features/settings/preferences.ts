@@ -10,19 +10,42 @@ export type DevicePreferences = {
   theme: ThemePreference;
   sound: SoundPreference;
   routineReorderHintDismissed: boolean;
+  /** Timer lengths (seconds) last used on this device, most recent first. */
+  recentTimerSeconds: number[];
 };
+
+/** How many timer lengths are remembered as used most recently. */
+export const RECENT_TIMER_LIMIT = 4;
+
+/** Using a timer length moves it to the front of the remembered ones. */
+export function rememberTime(recent: readonly number[], seconds: number): number[] {
+  return [seconds, ...recent.filter((time) => time !== seconds)].slice(0, RECENT_TIMER_LIMIT);
+}
 
 export const DEFAULT_DEVICE_PREFERENCES: DevicePreferences = {
   theme: 'system',
   sound: 'chime',
   routineReorderHintDismissed: false,
+  recentTimerSeconds: [],
 };
+
+function parseRecentTimerSeconds(json: string | null | undefined): number[] {
+  try {
+    const parsed: unknown = JSON.parse(json ?? '[]');
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is number => Number.isInteger(value) && value > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 export interface DevicePreferenceStore {
   load(): Promise<DevicePreferences>;
   saveTheme(theme: ThemePreference): Promise<void>;
   saveSound(sound: SoundPreference): Promise<void>;
   dismissRoutineReorderHint(): Promise<void>;
+  saveRecentTimerSeconds(recent: number[]): Promise<void>;
 }
 
 export class SqliteDevicePreferenceStore implements DevicePreferenceStore {
@@ -33,8 +56,9 @@ export class SqliteDevicePreferenceStore implements DevicePreferenceStore {
       theme: ThemePreference;
       sound: SoundPreference;
       routine_reorder_hint_dismissed: number;
+      recent_timer_seconds: string;
     }>(
-      `SELECT theme, sound, routine_reorder_hint_dismissed
+      `SELECT theme, sound, routine_reorder_hint_dismissed, recent_timer_seconds
        FROM device_preferences
        WHERE id = 1`,
     );
@@ -44,6 +68,7 @@ export class SqliteDevicePreferenceStore implements DevicePreferenceStore {
       sound: preferences.sound,
       routineReorderHintDismissed:
         preferences.routine_reorder_hint_dismissed === 1,
+      recentTimerSeconds: parseRecentTimerSeconds(preferences.recent_timer_seconds),
     };
   }
 
@@ -71,6 +96,14 @@ export class SqliteDevicePreferenceStore implements DevicePreferenceStore {
     );
     if (result.changes !== 1) throw new Error('Device preferences are missing.');
   }
+
+  async saveRecentTimerSeconds(recent: number[]): Promise<void> {
+    const result = await this.database.runAsync(
+      `UPDATE device_preferences SET recent_timer_seconds = ? WHERE id = 1`,
+      JSON.stringify(recent),
+    );
+    if (result.changes !== 1) throw new Error('Device preferences are missing.');
+  }
 }
 
 export class MemoryDevicePreferenceStore implements DevicePreferenceStore {
@@ -93,5 +126,9 @@ export class MemoryDevicePreferenceStore implements DevicePreferenceStore {
       ...this.preferences,
       routineReorderHintDismissed: true,
     };
+  }
+
+  async saveRecentTimerSeconds(recent: number[]): Promise<void> {
+    this.preferences = { ...this.preferences, recentTimerSeconds: [...recent] };
   }
 }

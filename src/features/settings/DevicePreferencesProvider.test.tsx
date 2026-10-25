@@ -6,9 +6,11 @@ import {
   DevicePreferencesProvider,
   useDevicePreferences,
 } from './DevicePreferencesProvider';
-import type {
-  DevicePreferences,
-  DevicePreferenceStore,
+import {
+  DEFAULT_DEVICE_PREFERENCES,
+  MemoryDevicePreferenceStore,
+  type DevicePreferences,
+  type DevicePreferenceStore,
 } from './preferences';
 
 function preferenceStore(
@@ -19,17 +21,27 @@ function preferenceStore(
     saveTheme: async () => undefined,
     saveSound: async () => undefined,
     dismissRoutineReorderHint: async () => undefined,
+    saveRecentTimerSeconds: async () => undefined,
   };
 }
 
 function PreferenceConsumer() {
-  const { preferences, dismissRoutineReorderHint } = useDevicePreferences();
+  const { preferences, dismissRoutineReorderHint, rememberTimerSeconds } = useDevicePreferences();
   return (
     <>
       <Text>{`${preferences.theme}:${preferences.sound}:${preferences.routineReorderHintDismissed}`}</Text>
+      <Text testID="recent-times">{preferences.recentTimerSeconds.join(',')}</Text>
       <Pressable
         testID="dismiss-routine-reorder-hint"
         onPress={() => void dismissRoutineReorderHint()}
+      />
+      <Pressable testID="use-90" onPress={() => void rememberTimerSeconds(90)} />
+      <Pressable
+        testID="use-45-then-120"
+        onPress={() => {
+          void rememberTimerSeconds(45);
+          void rememberTimerSeconds(120);
+        }}
       />
     </>
   );
@@ -76,6 +88,7 @@ describe('DevicePreferencesProvider', () => {
       theme: 'dark',
       sound: 'wood',
       routineReorderHintDismissed: false,
+      recentTimerSeconds: [],
     });
     await waitFor(() =>
       expect(screen.getByText('dark:wood:false')).toBeOnTheScreen(),
@@ -89,12 +102,14 @@ describe('DevicePreferencesProvider', () => {
         theme: 'system',
         sound: 'chime',
         routineReorderHintDismissed: persisted,
+        recentTimerSeconds: [],
       }),
       saveTheme: async () => undefined,
       saveSound: async () => undefined,
       dismissRoutineReorderHint: async () => {
         persisted = true;
       },
+      saveRecentTimerSeconds: async () => undefined,
     };
     render(
       <DevicePreferencesProvider store={store}>
@@ -108,6 +123,42 @@ describe('DevicePreferencesProvider', () => {
     await waitFor(() =>
       expect(screen.getByText('system:chime:true')).toBeOnTheScreen(),
     );
+  });
+
+  it('remembers a used timer length first and saves the list', async () => {
+    const store = new MemoryDevicePreferenceStore({
+      ...DEFAULT_DEVICE_PREFERENCES,
+      recentTimerSeconds: [30, 90, 60, 120],
+    });
+    render(
+      <DevicePreferencesProvider store={store}>
+        <PreferenceConsumer />
+      </DevicePreferencesProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('recent-times')).toHaveTextContent('30,90,60,120'));
+
+    fireEvent.press(screen.getByTestId('use-90'));
+
+    await waitFor(() => expect(screen.getByTestId('recent-times')).toHaveTextContent('90,30,60,120'));
+    await expect(store.load()).resolves.toMatchObject({ recentTimerSeconds: [90, 30, 60, 120] });
+  });
+
+  it('keeps both of two timer lengths remembered back to back', async () => {
+    const store = new MemoryDevicePreferenceStore({
+      ...DEFAULT_DEVICE_PREFERENCES,
+      recentTimerSeconds: [30, 90, 60, 120],
+    });
+    render(
+      <DevicePreferencesProvider store={store}>
+        <PreferenceConsumer />
+      </DevicePreferencesProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('recent-times')).toHaveTextContent('30,90,60,120'));
+
+    fireEvent.press(screen.getByTestId('use-45-then-120'));
+
+    await waitFor(() => expect(screen.getByTestId('recent-times')).toHaveTextContent('120,45,30,90'));
+    await expect(store.load()).resolves.toMatchObject({ recentTimerSeconds: [120, 45, 30, 90] });
   });
 
   it('surfaces preference load failures to the app error boundary', async () => {

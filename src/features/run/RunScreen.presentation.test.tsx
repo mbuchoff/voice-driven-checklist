@@ -11,8 +11,8 @@ import {
   getHeldStopControlSize,
   getStopControlPosition,
 } from './StopRunControl';
-import { RUN_ITEM_GAP } from './runPresentation';
-import type { ChecklistRunSnapshot } from './types';
+import { RUN_STEP_GAP } from './runPresentation';
+import type { RoutineRunSnapshot } from './types';
 const defaultPlatformOS = Platform.OS;
 const defaultPlatformVersion = Platform.Version;
 
@@ -31,13 +31,13 @@ describe('RunScreen presentation', () => {
   });
 
   describe('initial render', () => {
-    it('shows the checklist title, current item, and progress label', async () => {
+    it('shows the routine title, current item, and progress label', async () => {
       setup();
       await flush();
 
       expect(screen.getByText('Demo')).toBeOnTheScreen();
       expect(screen.getByText('Item one')).toBeOnTheScreen();
-      expect(screen.getByText(/item 1 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 1 of 3/i)).toBeOnTheScreen();
     });
 
     it('exposes only stop and the three run actions as buttons', async () => {
@@ -55,7 +55,7 @@ describe('RunScreen presentation', () => {
       expect(screen.getByTestId('stop-run-icon')).toBeOnTheScreen();
     });
 
-    it('renders continuous arcs for checklist and stop progress', async () => {
+    it('renders continuous arcs for routine and stop progress', async () => {
       setup();
       await flush();
 
@@ -82,7 +82,7 @@ describe('RunScreen presentation', () => {
       expect(center.r).toBeLessThan(track.r);
     });
 
-    it('stacks the progress orbit above overflowing checklist rows', async () => {
+    it('stacks the progress orbit above overflowing routine rows', async () => {
       setup();
       await flush();
 
@@ -90,7 +90,7 @@ describe('RunScreen presentation', () => {
         screen.getByTestId('run-progress-orbit').props.style,
       );
       const stageStyle = StyleSheet.flatten(
-        screen.getByTestId('run-items-stage').props.style,
+        screen.getByTestId('run-steps-stage').props.style,
       );
       expect(orbitStyle.zIndex).toBeGreaterThan(stageStyle.zIndex ?? 0);
     });
@@ -156,25 +156,26 @@ describe('RunScreen presentation', () => {
     });
 
     it('keeps every snapshot item mounted while only the current row is selected', async () => {
-      const longSnapshot: ChecklistRunSnapshot = {
-        checklistId: 'long',
-        checklistTitle: 'Long routine',
-        items: Array.from({ length: 17 }, (_, index) => ({
+      const longSnapshot: RoutineRunSnapshot = {
+        routineId: 'long',
+        routineTitle: 'Long routine',
+        steps: Array.from({ length: 17 }, (_, index) => ({
           id: `long-${index}`,
           text: `Step ${index + 1}`,
           order: index,
+          timerSeconds: null,
         })),
       };
       setup({ snapshot: longSnapshot });
       await flush();
 
       expect(
-        screen.getAllByTestId(/run-item-/, { includeHiddenElements: true }),
+        screen.getAllByTestId(/run-step-/, { includeHiddenElements: true }),
       ).toHaveLength(17);
       expect(
         screen.getByText('Step 17', { includeHiddenElements: true }),
       ).toBeOnTheScreen();
-      expect(screen.getByTestId('run-item-0').props.accessibilityState).toMatchObject({
+      expect(screen.getByTestId('run-step-0').props.accessibilityState).toMatchObject({
         selected: true,
       });
 
@@ -182,9 +183,9 @@ describe('RunScreen presentation', () => {
       await flush();
 
       expect(
-        screen.getAllByTestId(/run-item-/, { includeHiddenElements: true }),
+        screen.getAllByTestId(/run-step-/, { includeHiddenElements: true }),
       ).toHaveLength(17);
-      expect(screen.getByTestId('run-item-1').props.accessibilityState).toMatchObject({
+      expect(screen.getByTestId('run-step-1').props.accessibilityState).toMatchObject({
         selected: true,
       });
     });
@@ -194,7 +195,7 @@ describe('RunScreen presentation', () => {
       await flush();
 
       const stageStyle = StyleSheet.flatten(
-        screen.getByTestId('run-items-stage').props.style,
+        screen.getByTestId('run-steps-stage').props.style,
       );
       expect(stageStyle.overflow ?? 'visible').toBe('visible');
     });
@@ -214,7 +215,7 @@ describe('RunScreen presentation', () => {
       fireEvent.press(screen.getByTestId('manual-next'));
       await flush();
 
-      expect(screen.getByTestId('run-item-1').props.accessibilityState).toMatchObject({
+      expect(screen.getByTestId('run-step-1').props.accessibilityState).toMatchObject({
         selected: true,
       });
     });
@@ -223,27 +224,28 @@ describe('RunScreen presentation', () => {
       setup({
         snapshot: {
           ...snapshot,
-          items: [
+          steps: [
             {
               id: 'long',
               text: 'A long step that wraps across several lines on a phone screen',
               order: 0,
+              timerSeconds: null,
             },
-            { id: 'short', text: 'Short step', order: 1 },
+            { id: 'short', text: 'Short step', order: 1, timerSeconds: null },
           ],
         },
       });
       await flush();
 
       const firstStyle = StyleSheet.flatten(
-        screen.getByTestId('run-item-0').props.style,
+        screen.getByTestId('run-step-0').props.style,
       );
       const secondStyle = StyleSheet.flatten(
-        screen.getByTestId('run-item-1', { includeHiddenElements: true }).props
+        screen.getByTestId('run-step-1', { includeHiddenElements: true }).props
           .style,
       );
       expect(firstStyle.top).toBe(0);
-      expect(secondStyle.top).toBe(RUN_ITEM_GAP);
+      expect(secondStyle.top).toBe(RUN_STEP_GAP);
       expect(firstStyle.transform).toContainEqual({ translateY: '-50%' });
       expect(secondStyle.transform).toContainEqual({ translateY: '-50%' });
     });
@@ -252,11 +254,12 @@ describe('RunScreen presentation', () => {
       setup({
         snapshot: {
           ...snapshot,
-          items: [
+          steps: [
             {
               id: 'glass',
               text: 'Drink a full glass of water',
               order: 0,
+              timerSeconds: null,
             },
           ],
         },

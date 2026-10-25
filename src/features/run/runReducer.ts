@@ -1,52 +1,59 @@
 import type {
-  ChecklistRunSnapshot,
-  ChecklistRunState,
+  RoutineRunSnapshot,
+  RoutineRunState,
   RunAction,
   RunStatus,
 } from './types';
 
-type CommandableState = ChecklistRunState & { snapshot: ChecklistRunSnapshot };
+type CommandableState = RoutineRunState & { snapshot: RoutineRunSnapshot };
 
-function statusForActiveItem(state: ChecklistRunState): RunStatus {
+function statusForActiveStep(state: RoutineRunState): RunStatus {
   if (state.spokenPlaybackAvailable) return 'speaking';
   if (state.voiceControlAvailable) return 'listening';
   return 'manual';
 }
 
-function canAcceptCommand(state: ChecklistRunState): state is CommandableState {
-  return state.status === 'speaking' || state.status === 'listening' || state.status === 'manual';
+/** The run is on a step: reading it, listening, or waiting for a tap. */
+export function isRunActive(status: RunStatus): boolean {
+  return status === 'speaking' || status === 'listening' || status === 'manual';
+}
+
+function canAcceptCommand(state: RoutineRunState): state is CommandableState {
+  return isRunActive(state.status);
 }
 
 export function initialRunState(
-  snapshot: ChecklistRunSnapshot,
+  snapshot: RoutineRunSnapshot,
   options: { voiceControlAvailable: boolean; spokenPlaybackAvailable: boolean },
-): ChecklistRunState {
-  const base: ChecklistRunState = {
+): RoutineRunState {
+  const base: RoutineRunState = {
     status: 'idle',
     snapshot,
-    currentItemIndex: 0,
+    currentStepIndex: 0,
     voiceControlAvailable: options.voiceControlAvailable,
     spokenPlaybackAvailable: options.spokenPlaybackAvailable,
     latestRecognizedPhrase: '',
     playbackTick: 1,
+    arrival: 1,
   };
-  return { ...base, status: statusForActiveItem(base) };
+  return { ...base, status: statusForActiveStep(base) };
 }
 
-export function runReducer(state: ChecklistRunState, action: RunAction): ChecklistRunState {
+export function runReducer(state: RoutineRunState, action: RunAction): RoutineRunState {
   switch (action.type) {
     case 'NEXT': {
-      if (!canAcceptCommand(state)) return state;
-      const lastIndex = state.snapshot.items.length - 1;
-      if (state.currentItemIndex >= lastIndex) {
+      if (!canAcceptCommand(state) || action.arrival !== state.arrival) return state;
+      const lastIndex = state.snapshot.steps.length - 1;
+      if (state.currentStepIndex >= lastIndex) {
         return { ...state, status: 'completed', latestRecognizedPhrase: '' };
       }
       return {
         ...state,
-        currentItemIndex: state.currentItemIndex + 1,
+        currentStepIndex: state.currentStepIndex + 1,
         latestRecognizedPhrase: '',
         playbackTick: state.playbackTick + 1,
-        status: statusForActiveItem(state),
+        arrival: state.arrival + 1,
+        status: statusForActiveStep(state),
       };
     }
 
@@ -56,18 +63,19 @@ export function runReducer(state: ChecklistRunState, action: RunAction): Checkli
         ...state,
         latestRecognizedPhrase: '',
         playbackTick: state.playbackTick + 1,
-        status: statusForActiveItem(state),
+        status: statusForActiveStep(state),
       };
     }
 
     case 'PREVIOUS': {
-      if (!canAcceptCommand(state)) return state;
+      if (!canAcceptCommand(state) || action.arrival !== state.arrival) return state;
       return {
         ...state,
-        currentItemIndex: Math.max(0, state.currentItemIndex - 1),
+        currentStepIndex: Math.max(0, state.currentStepIndex - 1),
         latestRecognizedPhrase: '',
         playbackTick: state.playbackTick + 1,
-        status: statusForActiveItem(state),
+        arrival: state.arrival + 1,
+        status: statusForActiveStep(state),
       };
     }
 
@@ -75,10 +83,11 @@ export function runReducer(state: ChecklistRunState, action: RunAction): Checkli
       if (state.status !== 'completed') return state;
       return {
         ...state,
-        currentItemIndex: 0,
+        currentStepIndex: 0,
         latestRecognizedPhrase: '',
         playbackTick: state.playbackTick + 1,
-        status: statusForActiveItem(state),
+        arrival: state.arrival + 1,
+        status: statusForActiveStep(state),
       };
     }
 
@@ -115,11 +124,12 @@ export function runReducer(state: ChecklistRunState, action: RunAction): Checkli
       return {
         status: 'idle',
         snapshot: null,
-        currentItemIndex: 0,
+        currentStepIndex: 0,
         voiceControlAvailable: state.voiceControlAvailable,
         spokenPlaybackAvailable: state.spokenPlaybackAvailable,
         latestRecognizedPhrase: '',
         playbackTick: 0,
+        arrival: 0,
       };
     }
   }

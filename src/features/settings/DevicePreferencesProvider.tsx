@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -11,6 +12,7 @@ import { useDatabase } from '@/src/db/DatabaseProvider';
 
 import {
   DEFAULT_DEVICE_PREFERENCES,
+  rememberTime,
   SqliteDevicePreferenceStore,
   type DevicePreferences,
   type DevicePreferenceStore,
@@ -23,6 +25,8 @@ type DevicePreferencesContextValue = {
   setTheme(theme: ThemePreference): Promise<void>;
   setSound(sound: SoundPreference): Promise<void>;
   dismissRoutineReorderHint(): Promise<void>;
+  /** Moves a timer length to the front of the ones used most recently. */
+  rememberTimerSeconds(seconds: number): Promise<void>;
 };
 
 const DevicePreferencesContext =
@@ -52,6 +56,8 @@ export function DevicePreferencesProvider({
 }) {
   const [preferences, setPreferences] = useState<DevicePreferences | null>(null);
   const [initializationError, setInitializationError] = useState<Error | null>(null);
+  // The latest list, so lengths remembered back to back build on each other.
+  const recentTimerSeconds = useRef<readonly number[]>(DEFAULT_DEVICE_PREFERENCES.recentTimerSeconds);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,7 +65,9 @@ export function DevicePreferencesProvider({
     setInitializationError(null);
     void store.load().then(
       (loaded) => {
-        if (!cancelled) setPreferences(loaded);
+        if (cancelled) return;
+        recentTimerSeconds.current = loaded.recentTimerSeconds;
+        setPreferences(loaded);
       },
       (reason) => {
         if (!cancelled) {
@@ -101,6 +109,18 @@ export function DevicePreferencesProvider({
           ...(current ?? DEFAULT_DEVICE_PREFERENCES),
           routineReorderHintDismissed: true,
         }));
+      },
+      async rememberTimerSeconds(seconds) {
+        const recent = rememberTime(
+          recentTimerSeconds.current,
+          seconds,
+        );
+        recentTimerSeconds.current = recent;
+        setPreferences((current) => ({
+          ...(current ?? DEFAULT_DEVICE_PREFERENCES),
+          recentTimerSeconds: recent,
+        }));
+        await store.saveRecentTimerSeconds(recent);
       },
     }),
     [preferences, store],

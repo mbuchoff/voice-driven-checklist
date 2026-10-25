@@ -6,14 +6,18 @@ export type IconName =
   | 'arrowRight'
   | 'check'
   | 'checkCircle'
+  | 'clock'
   | 'close'
   | 'download'
   | 'edit'
   | 'mic'
+  | 'minus'
   | 'moon'
   | 'monitor'
+  | 'more'
   | 'plus'
   | 'play'
+  | 'playFilled'
   | 'repeat'
   | 'settings'
   | 'sound'
@@ -67,6 +71,13 @@ function pathFor(name: IconName, color: string): ReactNode {
           <Path d="m8 12 2.5 2.5L16 9" />
         </>
       );
+    case 'clock':
+      return (
+        <>
+          <Circle cx="12" cy="12" r="9" />
+          <Path d="M12 7v5l3 2" />
+        </>
+      );
     case 'close':
       return <Path d="m18 6-12 12M6 6l12 12" />;
     case 'download':
@@ -83,6 +94,8 @@ function pathFor(name: IconName, color: string): ReactNode {
           <Path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
         </>
       );
+    case 'minus':
+      return <Path d="M5 12h14" />;
     case 'mic':
       return (
         <>
@@ -99,10 +112,20 @@ function pathFor(name: IconName, color: string): ReactNode {
           <Path d="M8 21h8m-4-4v4" />
         </>
       );
+    case 'more':
+      return (
+        <>
+          {[5, 12, 19].map((cx) => (
+            <Circle key={cx} cx={cx} cy="12" r="1.9" fill={color} stroke="none" />
+          ))}
+        </>
+      );
     case 'plus':
       return <Path d="M12 5v14M5 12h14" />;
     case 'play':
       return <Path d="m8 5 11 7-11 7Z" />;
+    case 'playFilled':
+      return <Path d="m8 5 11 7-11 7Z" fill={color} />;
     case 'repeat':
       return (
         <>

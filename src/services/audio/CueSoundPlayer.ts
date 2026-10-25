@@ -2,10 +2,8 @@ import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 
 import type { SoundPreference } from '@/src/features/settings/preferences';
 
-import { CUE_ACTIONS, type CueAction } from './cues';
+import type { CueAction } from './cues';
 export { CUE_ACTIONS, SOUND_OPTIONS, type CueAction } from './cues';
-
-const CUE_START_TIMEOUT_MS = 300;
 
 const SOURCES: Record<Exclude<SoundPreference, 'quiet'>, Record<CueAction, number>> = {
   chime: {
@@ -28,74 +26,80 @@ const SOURCES: Record<Exclude<SoundPreference, 'quiet'>, Record<CueAction, numbe
   },
 };
 
+// A cue that never reports its end is freed after this long anyway.
+const CUE_MAX_MS = 3000;
+
 export class CueSoundPlayer {
   private family: SoundPreference | null = null;
-  private players = new Map<CueAction, AudioPlayer>();
-  private playRequest = 0;
+  // Each sounding cue's player, with the watchdog that frees it if it never
+  // reports its end.
+  private sounding = new Map<AudioPlayer, ReturnType<typeof setTimeout>>();
 
-  prepare(family: SoundPreference): void {
+  /** The sound family cues play from (Quiet plays none). */
+  setFamily(family: SoundPreference): void {
     if (this.family === family) return;
-    this.release();
-    if (family === 'quiet') {
-      this.family = family;
-      return;
-    }
-
-    const players = new Map<CueAction, AudioPlayer>();
-    try {
-      for (const action of CUE_ACTIONS) {
-        players.set(action, createAudioPlayer(SOURCES[family][action]));
-      }
-      this.players = players;
-      this.family = family;
-    } catch {
-      this.releasePlayers(players);
-    }
+    this.stopSounding();
+    this.family = family;
   }
 
+  // Every cue gets a new player. A player prepared earlier keeps the audio
+  // track it made then, and after the phone locks that track can be gone:
+  // the first play after the lock then sounds like nothing at all.
+  //
+  // Each cue's result is logged as the player reports it (requested,
+  // playing, finished, timed out or failed), so a silent cue shows up.
   async play(action: CueAction): Promise<boolean> {
-    const player = this.players.get(action);
-    if (!player) return false;
-    const request = ++this.playRequest;
-    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const family = this.family;
+    if (!family || family === 'quiet') return false;
+    this.stopSounding();
+    let player: AudioPlayer | null = null;
     try {
-      const ready = await Promise.race([
-        Promise.resolve(player.seekTo(0)).then(() => true),
-        new Promise<boolean>((resolve) => {
-          timeout = setTimeout(() => resolve(false), CUE_START_TIMEOUT_MS);
-        }),
-      ]);
-      if (
-        !ready ||
-        request !== this.playRequest ||
-        this.players.get(action) !== player
-      ) {
-        return false;
-      }
-      player.play();
+      const created = createAudioPlayer(SOURCES[family][action]);
+      player = created;
+      this.sounding.set(created, setTimeout(() => {
+        console.warn(`[cue] ${action} timed out`);
+        this.free(created);
+      }, CUE_MAX_MS));
+      let playing = false;
+      created.addListener('playbackStatusUpdate', (status) => {
+        if (status.playing && !playing) {
+          playing = true;
+          console.info(`[cue] ${action} playing`);
+        }
+        if (status.didJustFinish && this.sounding.has(created)) {
+          console.info(`[cue] ${action} finished`);
+          this.free(created);
+        }
+      });
+      created.play();
+      console.info(`[cue] ${action} requested`);
       return true;
     } catch {
       // A cue must never prevent navigation, speech, or completion.
+      console.warn(`[cue] ${action} failed`);
+      if (player) this.free(player);
       return false;
-    } finally {
-      if (timeout) clearTimeout(timeout);
     }
   }
 
   release(): void {
-    this.playRequest += 1;
-    this.releasePlayers();
+    this.stopSounding();
     this.family = null;
   }
 
-  private releasePlayers(players = this.players): void {
-    for (const player of players.values()) {
-      try {
-        player.release?.();
-      } catch {
-        // Releasing audio is best effort during navigation and app teardown.
-      }
+  private stopSounding(): void {
+    for (const player of [...this.sounding.keys()]) this.free(player);
+  }
+
+  private free(player: AudioPlayer): void {
+    const watchdog = this.sounding.get(player);
+    if (watchdog === undefined) return;
+    clearTimeout(watchdog);
+    this.sounding.delete(player);
+    try {
+      player.release();
+    } catch {
+      // Releasing audio is best effort during navigation and app teardown.
     }
-    players.clear();
   }
 }

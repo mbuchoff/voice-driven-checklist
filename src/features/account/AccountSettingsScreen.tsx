@@ -69,7 +69,7 @@ export function AccountSettingsContent({
     const confirmed = await confirmAction({
       title: 'Delete Voice Checklist account?',
       message:
-        'This deletes the Voice Checklist profile used for Google sign-in. It does not delete your Google account. Checklists on this device will be preserved.',
+        'This deletes the Voice Checklist profile used for Google sign-in. It does not delete your Google account. Routines on this device will be preserved.',
       confirmLabel: 'Delete account',
       destructive: true,
     });
@@ -147,7 +147,7 @@ export function AccountSettingsContent({
                   This device
                 </Text>
                 <Text style={{ color: theme.textMuted, fontSize: 13, lineHeight: 19 }}>
-                  No account is required. Your checklists stay available offline.
+                  No account is required. Your routines stay available offline.
                 </Text>
               </>
             ) : account.state.status === 'google' ? (
@@ -167,7 +167,7 @@ export function AccountSettingsContent({
           {account.state.status === 'google' &&
           account.state.sessionStatus === 'temporarily-unavailable' ? (
             <Text accessibilityRole="alert" style={{ color: theme.danger }}>
-              Google could not be reached. Your checklists remain available on this
+              Google could not be reached. Your routines remain available on this
               device.
             </Text>
           ) : null}

@@ -25,6 +25,16 @@ particular run. Record build-specific results and remaining gaps in the PR.
 | Responsive states | Capture System, Dark, Light, 17-card, long-content, and temporary 1.3 font-scale / 720×1600 viewport states; restore device settings | Inspect supported phone sizes and functional landscape/tablet behavior |
 | Startup failure | Real SQLite integration and UI tests verify non-destructive failure plus Retry | None; no hidden production fault switch is added for E2E |
 
+## GH-39 additions (routine editor and step timers)
+
+| Area | Automated physical-device evidence | Assisted acceptance |
+| --- | --- | --- |
+| Upgrade to version 4 | The schema-v2 upgrade group now runs through migration 4 (routines/steps tables, timers, stored colors) | Confirm an existing library keeps its steps and each card's color family |
+| Editor timers and backup | Edit the last step, set a timer from its chips and another from the timer panel, save, export, and verify the file's `timer` fields | Compare chip fitting at ≈360 dp and the panel's hold-to-repeat feel |
+| Create/delete with UNDO | Create a routine in the empty new-routine state, delete it from the sheet, undo from the routines screen, delete again | None |
+| Editor gestures | Swipe a step away and undo it; swipe again and leave (the editor asks; Discard keeps the step); drag by the grip; pick a color and save | Feel the 350 ms hold, 12 dp drift, swipe threshold, haptics and animations; compare with the prototype side by side |
+| Timed run | Run a two-step routine of 5 s timers with the app in the background and reach the completion screen | Lock the phone during voice runs, including with forced deep idle and one full 60-minute step: each step moves on on time (logcat), the next cue is audible (also the first after locking), and the next step is read |
+
 The normal package must not be installed or upgraded for assisted acceptance
 until its current library has a safety backup and the user gives fresh
 permission, as agreed in GH-36.

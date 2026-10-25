@@ -1,4 +1,5 @@
 import type { Database, DatabaseQueries } from './database';
+import { legacyRoutineColorKey } from './legacyRoutineColors';
 
 const CHECKLIST_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS checklists (
@@ -76,16 +77,16 @@ const migrations: Migration[] = [
     await db.execAsync(
       'ALTER TABLE checklists ADD COLUMN library_position INTEGER;',
     );
-    const checklists = await db.getAllAsync<{ id: string }>(
+    const routines = await db.getAllAsync<{ id: string }>(
       `SELECT id
        FROM checklists
        ORDER BY updated_at DESC, title ASC, id ASC`,
     );
-    for (const [position, checklist] of checklists.entries()) {
+    for (const [position, routine] of routines.entries()) {
       await db.runAsync(
         'UPDATE checklists SET library_position = ? WHERE id = ?',
         position,
-        checklist.id,
+        routine.id,
       );
     }
     await db.execAsync(`
@@ -97,6 +98,34 @@ const migrations: Migration[] = [
         ADD COLUMN routine_reorder_hint_dismissed INTEGER NOT NULL DEFAULT 0
         CHECK (routine_reorder_hint_dismissed IN (0, 1));
     `);
+  },
+  // Routines and steps (the glossary's terms), step timers, stored routine
+  // colors, and the timer lengths used most recently on this device.
+  async (db) => {
+    await db.execAsync(`
+      ALTER TABLE checklists RENAME TO routines;
+      ALTER TABLE checklist_items RENAME TO steps;
+      ALTER TABLE steps RENAME COLUMN checklist_id TO routine_id;
+      DROP INDEX checklist_items_unique_position;
+      CREATE UNIQUE INDEX steps_unique_position ON steps (routine_id, position);
+      DROP INDEX checklists_unique_library_position;
+      CREATE UNIQUE INDEX routines_unique_library_position
+        ON routines (library_position);
+      ALTER TABLE steps ADD COLUMN timer_seconds INTEGER
+        CHECK (timer_seconds IS NULL OR timer_seconds BETWEEN 1 AND 3600);
+      ALTER TABLE routines ADD COLUMN color TEXT NOT NULL DEFAULT 'green-2';
+      ALTER TABLE device_preferences
+        ADD COLUMN recent_timer_seconds TEXT NOT NULL DEFAULT '[]';
+    `);
+    // Keep the color each card showed before colors were stored.
+    const routines = await db.getAllAsync<{ id: string }>('SELECT id FROM routines');
+    for (const { id } of routines) {
+      await db.runAsync(
+        'UPDATE routines SET color = ? WHERE id = ?',
+        legacyRoutineColorKey(id),
+        id,
+      );
+    }
   },
 ];
 

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { Text } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 
-import { createChecklist, getChecklist } from '@/src/features/checklists/repository';
+import { createRoutine, getRoutine } from '@/src/features/routines/repository';
 import { createTestDatabaseConnection } from '@/src/test/createTestDatabase';
 
 import { AppDatabaseProvider } from './DatabaseProvider';
@@ -15,9 +15,9 @@ it('retries the production opener and preserves the existing library and prefere
   const connection = createTestDatabaseConnection();
   const database = serializeDatabase(connection);
   await runMigrations(database);
-  const routine = await createChecklist(database, {
+  const routine = await createRoutine(database, {
     title: 'Kept routine',
-    items: [{ text: 'Kept step' }],
+    steps: [{ text: 'Kept step' }],
   });
   await database.execAsync(`
     UPDATE device_preferences
@@ -42,7 +42,7 @@ it('retries the production opener and preserves the existing library and prefere
       expect(SQLite.openDatabaseAsync).toHaveBeenCalledTimes(2);
       expect(screen.getByTestId('opened-library')).toBeOnTheScreen();
     });
-    await expect(getChecklist(database, routine.id)).resolves.toEqual(routine);
+    await expect(getRoutine(database, routine.id)).resolves.toEqual(routine);
     await expect(database.getFirstAsync(
       'SELECT theme, sound, routine_reorder_hint_dismissed FROM device_preferences',
     )).resolves.toEqual({ theme: 'dark', sound: 'wood', routine_reorder_hint_dismissed: 1 });

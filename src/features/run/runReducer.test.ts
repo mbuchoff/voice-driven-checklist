@@ -1,13 +1,13 @@
 import { initialRunState, runReducer } from './runReducer';
-import type { ChecklistRunSnapshot, ChecklistRunState } from './types';
+import type { RoutineRunSnapshot, RoutineRunState } from './types';
 
-const snapshot: ChecklistRunSnapshot = {
-  checklistId: 'cl-1',
-  checklistTitle: 'Demo',
-  items: [
-    { id: 'i1', text: 'Item one', order: 0 },
-    { id: 'i2', text: 'Item two', order: 1 },
-    { id: 'i3', text: 'Item three', order: 2 },
+const snapshot: RoutineRunSnapshot = {
+  routineId: 'cl-1',
+  routineTitle: 'Demo',
+  steps: [
+    { id: 'i1', text: 'Item one', order: 0, timerSeconds: null },
+    { id: 'i2', text: 'Item two', order: 1, timerSeconds: null },
+    { id: 'i3', text: 'Item three', order: 2, timerSeconds: null },
   ],
 };
 
@@ -16,18 +16,21 @@ function start(
     voiceControlAvailable: boolean;
     spokenPlaybackAvailable: boolean;
   }> = {},
-): ChecklistRunState {
+): RoutineRunState {
   return initialRunState(snapshot, {
     voiceControlAvailable: overrides.voiceControlAvailable ?? true,
     spokenPlaybackAvailable: overrides.spokenPlaybackAvailable ?? true,
   });
 }
 
+const next = (state: RoutineRunState) => runReducer(state, { type: 'NEXT', arrival: state.arrival });
+const previous = (state: RoutineRunState) => runReducer(state, { type: 'PREVIOUS', arrival: state.arrival });
+
 describe('initialRunState', () => {
   it('starts in speaking when both speech paths are available', () => {
     const state = start();
     expect(state.status).toBe('speaking');
-    expect(state.currentItemIndex).toBe(0);
+    expect(state.currentStepIndex).toBe(0);
     expect(state.snapshot).toBe(snapshot);
     expect(state.latestRecognizedPhrase).toBe('');
   });
@@ -45,54 +48,48 @@ describe('initialRunState', () => {
 
 describe('runReducer NEXT', () => {
   it('advances to the next item and re-enters speaking when playback is available', () => {
-    const state = runReducer(start(), { type: 'NEXT' });
-    expect(state.currentItemIndex).toBe(1);
+    const state = next(start());
+    expect(state.currentStepIndex).toBe(1);
     expect(state.status).toBe('speaking');
   });
 
   it('clears the latest recognized phrase when advancing', () => {
-    const phrasing = runReducer(
-      { ...start({ spokenPlaybackAvailable: false }), latestRecognizedPhrase: 'next' },
-      { type: 'NEXT' },
-    );
+    const phrasing = next({ ...start({ spokenPlaybackAvailable: false }), latestRecognizedPhrase: 'next' });
     expect(phrasing.latestRecognizedPhrase).toBe('');
   });
 
   it('transitions to listening when playback is unavailable but voice is available', () => {
-    const state = runReducer(start({ spokenPlaybackAvailable: false }), { type: 'NEXT' });
+    const state = next(start({ spokenPlaybackAvailable: false }));
     expect(state.status).toBe('listening');
   });
 
   it('transitions to manual when neither speech path is available', () => {
-    const state = runReducer(
-      start({ voiceControlAvailable: false, spokenPlaybackAvailable: false }),
-      { type: 'NEXT' },
-    );
+    const state = next(start({ voiceControlAvailable: false, spokenPlaybackAvailable: false }));
     expect(state.status).toBe('manual');
   });
 
   it('completes the run when called on the final item', () => {
     let state = start();
-    state = runReducer(state, { type: 'NEXT' }); // -> 1
-    state = runReducer(state, { type: 'NEXT' }); // -> 2
-    state = runReducer(state, { type: 'NEXT' }); // -> completed
+    state = next(state); // -> 1
+    state = next(state); // -> 2
+    state = next(state); // -> completed
     expect(state.status).toBe('completed');
-    expect(state.currentItemIndex).toBe(2);
+    expect(state.currentStepIndex).toBe(2);
     expect(state.latestRecognizedPhrase).toBe('');
   });
 
   it('is a no-op once the run is completed', () => {
     let state = start();
-    for (let i = 0; i < snapshot.items.length; i++) state = runReducer(state, { type: 'NEXT' });
+    for (let i = 0; i < snapshot.steps.length; i++) state = next(state);
     const completed = state;
-    expect(runReducer(completed, { type: 'NEXT' })).toBe(completed);
+    expect(next(completed)).toBe(completed);
   });
 });
 
 describe('runReducer REPEAT', () => {
   it('keeps the same index and re-enters speaking when playback is available', () => {
-    const state = runReducer({ ...start(), currentItemIndex: 1 }, { type: 'REPEAT' });
-    expect(state.currentItemIndex).toBe(1);
+    const state = runReducer({ ...start(), currentStepIndex: 1 }, { type: 'REPEAT' });
+    expect(state.currentStepIndex).toBe(1);
     expect(state.status).toBe('speaking');
   });
 
@@ -120,20 +117,20 @@ describe('runReducer REPEAT', () => {
 
 describe('runReducer PREVIOUS', () => {
   it('moves back one item and re-enters speaking', () => {
-    const state = runReducer({ ...start(), currentItemIndex: 2 }, { type: 'PREVIOUS' });
-    expect(state.currentItemIndex).toBe(1);
+    const state = previous({ ...start(), currentStepIndex: 2 });
+    expect(state.currentStepIndex).toBe(1);
     expect(state.status).toBe('speaking');
   });
 
   it('stays on the first item and re-enters speaking when already at index 0', () => {
-    const state = runReducer({ ...start(), currentItemIndex: 0 }, { type: 'PREVIOUS' });
-    expect(state.currentItemIndex).toBe(0);
+    const state = previous({ ...start(), currentStepIndex: 0 });
+    expect(state.currentStepIndex).toBe(0);
     expect(state.status).toBe('speaking');
   });
 
   it('is a no-op when completed', () => {
-    const completed = { ...start(), status: 'completed' as const, currentItemIndex: 2 };
-    expect(runReducer(completed, { type: 'PREVIOUS' })).toBe(completed);
+    const completed = { ...start(), status: 'completed' as const, currentStepIndex: 2 };
+    expect(previous(completed)).toBe(completed);
   });
 });
 
@@ -229,10 +226,10 @@ describe('runReducer PLAYBACK_FINISHED', () => {
 
 describe('runReducer RESTART', () => {
   it('resets to the first item and re-enters speaking when invoked from completed', () => {
-    const completed = { ...start(), status: 'completed' as const, currentItemIndex: 2 };
+    const completed = { ...start(), status: 'completed' as const, currentStepIndex: 2 };
     const next = runReducer(completed, { type: 'RESTART' });
     expect(next.status).toBe('speaking');
-    expect(next.currentItemIndex).toBe(0);
+    expect(next.currentStepIndex).toBe(0);
     expect(next.latestRecognizedPhrase).toBe('');
     expect(next.snapshot).toBe(snapshot);
   });
@@ -247,13 +244,13 @@ describe('runReducer playbackTick', () => {
   it('bumps the tick on NEXT advance', () => {
     const state = start();
     expect(state.playbackTick).toBe(1);
-    expect(runReducer(state, { type: 'NEXT' }).playbackTick).toBe(2);
+    expect(next(state).playbackTick).toBe(2);
   });
 
   it('does not bump the tick when NEXT completes the run', () => {
-    let state = { ...start(), currentItemIndex: 2 };
+    let state = { ...start(), currentStepIndex: 2 };
     const tickBefore = state.playbackTick;
-    state = runReducer(state, { type: 'NEXT' });
+    state = next(state);
     expect(state.status).toBe('completed');
     expect(state.playbackTick).toBe(tickBefore);
   });
@@ -261,10 +258,10 @@ describe('runReducer playbackTick', () => {
   it('bumps the tick on REPEAT, PREVIOUS, and RESTART', () => {
     const state = start();
     expect(runReducer(state, { type: 'REPEAT' }).playbackTick).toBe(state.playbackTick + 1);
-    expect(runReducer({ ...state, currentItemIndex: 1 }, { type: 'PREVIOUS' }).playbackTick).toBe(
+    expect(previous({ ...state, currentStepIndex: 1 }).playbackTick).toBe(
       state.playbackTick + 1,
     );
-    const completed = { ...state, status: 'completed' as const, currentItemIndex: 2 };
+    const completed = { ...state, status: 'completed' as const, currentStepIndex: 2 };
     expect(runReducer(completed, { type: 'RESTART' }).playbackTick).toBe(
       completed.playbackTick + 1,
     );
@@ -288,13 +285,43 @@ describe('runReducer DISCARD_RUN', () => {
     const listening = {
       ...start({ spokenPlaybackAvailable: false }),
       status: 'listening' as const,
-      currentItemIndex: 1,
+      currentStepIndex: 1,
       latestRecognizedPhrase: 'something',
     };
-    const next = runReducer(listening, { type: 'DISCARD_RUN' });
-    expect(next.status).toBe('idle');
-    expect(next.snapshot).toBeNull();
-    expect(next.currentItemIndex).toBe(0);
-    expect(next.latestRecognizedPhrase).toBe('');
+    const discarded = runReducer(listening, { type: 'DISCARD_RUN' });
+    expect(discarded.status).toBe('idle');
+    expect(discarded.snapshot).toBeNull();
+    expect(discarded.currentStepIndex).toBe(0);
+    expect(discarded.latestRecognizedPhrase).toBe('');
+  });
+
+  describe('arrivals', () => {
+    it('counts arriving at a step by next, previous or restart, but not a repeat', () => {
+      let state = initialRunState(snapshot, { voiceControlAvailable: true, spokenPlaybackAvailable: true });
+      const first = state.arrival;
+
+      state = runReducer(state, { type: 'REPEAT' });
+      expect(state.arrival).toBe(first);
+
+      state = next(state);
+      expect(state.arrival).toBe(first + 1);
+      state = previous(state);
+      expect(state.arrival).toBe(first + 2);
+
+      state = next(next(next(state)));
+      expect(state.status).toBe('completed');
+      const finished = state.arrival;
+      state = runReducer(state, { type: 'RESTART' });
+      expect(state.arrival).toBe(finished + 1);
+    });
+
+    it('moves on once from an arrival, ignoring a second next or previous meant for it', () => {
+      const arrived = start();
+      const moved = next(arrived);
+
+      expect(runReducer(moved, { type: 'NEXT', arrival: arrived.arrival })).toBe(moved);
+      expect(runReducer(moved, { type: 'PREVIOUS', arrival: arrived.arrival })).toBe(moved);
+      expect(next(moved).currentStepIndex).toBe(2);
+    });
   });
 });

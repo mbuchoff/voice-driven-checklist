@@ -2,9 +2,9 @@ export type ParsedCommand = 'next' | 'repeat' | 'previous' | null;
 
 const COMMANDS = new Set(['next', 'repeat', 'previous']);
 const INTERIM_SUFFIXES: Record<Exclude<ParsedCommand, null>, Set<string>> = {
-  next: new Set(['item', 'one', 'please']),
+  next: new Set(['step', 'item', 'one', 'please']),
   repeat: new Set(['that', 'please']),
-  previous: new Set(['item', 'one', 'please']),
+  previous: new Set(['step', 'item', 'one', 'please']),
 };
 
 function wordsFor(input: string): string[] {
