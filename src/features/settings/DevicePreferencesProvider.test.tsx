@@ -36,6 +36,13 @@ function PreferenceConsumer() {
         onPress={() => void dismissRoutineReorderHint()}
       />
       <Pressable testID="use-90" onPress={() => void rememberTimerSeconds(90)} />
+      <Pressable
+        testID="use-45-then-120"
+        onPress={() => {
+          void rememberTimerSeconds(45);
+          void rememberTimerSeconds(120);
+        }}
+      />
     </>
   );
 }
@@ -134,6 +141,24 @@ describe('DevicePreferencesProvider', () => {
 
     await waitFor(() => expect(screen.getByTestId('recent-times')).toHaveTextContent('90,30,60,120'));
     await expect(store.load()).resolves.toMatchObject({ recentTimerSeconds: [90, 30, 60, 120] });
+  });
+
+  it('keeps both of two timer lengths remembered back to back', async () => {
+    const store = new MemoryDevicePreferenceStore({
+      ...DEFAULT_DEVICE_PREFERENCES,
+      recentTimerSeconds: [30, 90, 60, 120],
+    });
+    render(
+      <DevicePreferencesProvider store={store}>
+        <PreferenceConsumer />
+      </DevicePreferencesProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('recent-times')).toHaveTextContent('30,90,60,120'));
+
+    fireEvent.press(screen.getByTestId('use-45-then-120'));
+
+    await waitFor(() => expect(screen.getByTestId('recent-times')).toHaveTextContent('120,45,30,90'));
+    await expect(store.load()).resolves.toMatchObject({ recentTimerSeconds: [120, 45, 30, 90] });
   });
 
   it('surfaces preference load failures to the app error boundary', async () => {

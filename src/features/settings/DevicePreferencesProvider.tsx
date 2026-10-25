@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -55,6 +56,8 @@ export function DevicePreferencesProvider({
 }) {
   const [preferences, setPreferences] = useState<DevicePreferences | null>(null);
   const [initializationError, setInitializationError] = useState<Error | null>(null);
+  // The latest list, so lengths remembered back to back build on each other.
+  const recentTimerSeconds = useRef<readonly number[]>(DEFAULT_DEVICE_PREFERENCES.recentTimerSeconds);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +65,9 @@ export function DevicePreferencesProvider({
     setInitializationError(null);
     void store.load().then(
       (loaded) => {
-        if (!cancelled) setPreferences(loaded);
+        if (cancelled) return;
+        recentTimerSeconds.current = loaded.recentTimerSeconds;
+        setPreferences(loaded);
       },
       (reason) => {
         if (!cancelled) {
@@ -107,9 +112,10 @@ export function DevicePreferencesProvider({
       },
       async rememberTimerSeconds(seconds) {
         const recent = rememberTime(
-          (preferences ?? DEFAULT_DEVICE_PREFERENCES).recentTimerSeconds,
+          recentTimerSeconds.current,
           seconds,
         );
+        recentTimerSeconds.current = recent;
         setPreferences((current) => ({
           ...(current ?? DEFAULT_DEVICE_PREFERENCES),
           recentTimerSeconds: recent,
