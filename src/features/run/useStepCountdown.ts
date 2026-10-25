@@ -53,27 +53,29 @@ export function useStepCountdown({
   backgroundRef.current = keepsRunningInBackground;
   // The run screen opens in front; app state changes keep this current.
   const inFrontRef = useRef(true);
-  const deadlineRef = useRef(0);
-  const timed = active && !!timerSeconds;
+  // The current countdown's check, run again when the app comes back to front.
+  const tickRef = useRef<(() => void) | null>(null);
+  // The step's time while the run is on it.
+  const seconds = active && timerSeconds ? timerSeconds : null;
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       inFrontRef.current = state === 'active';
+      if (state === 'active') tickRef.current?.();
     });
     return () => subscription.remove();
   }, []);
 
   useEffect(() => {
-    if (!timed || !timerSeconds) return;
-    const deadline = elapsedRealtimeMs() + timerSeconds * 1000;
-    deadlineRef.current = deadline;
+    if (!seconds) return;
+    const deadline = elapsedRealtimeMs() + seconds * 1000;
     let fired = false;
     const tick = () => {
       if (fired) return;
       const remaining = deadline - elapsedRealtimeMs();
-      const seconds = Math.max(0, Math.ceil(remaining / 1000));
+      const shown = Math.max(0, Math.ceil(remaining / 1000));
       setLeft((current) =>
-        current?.arrival === arrival && current.seconds === seconds ? current : { arrival, seconds });
+        current?.arrival === arrival && current.seconds === shown ? current : { arrival, seconds: shown });
       if (remaining > 0) return;
       // Without the listening service, a countdown that ran out while the
       // app was in the background moves the run on once it's back in front.
@@ -82,32 +84,27 @@ export function useStepCountdown({
       clearInterval(interval);
       onExpireRef.current(arrival);
     };
+    tickRef.current = tick;
     const interval = setInterval(tick, TICK_MS);
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        inFrontRef.current = true;
-        tick();
-      }
-    });
     return () => {
       clearInterval(interval);
-      subscription.remove();
+      if (tickRef.current === tick) tickRef.current = null;
     };
-  }, [arrival, timed, timerSeconds]);
+  }, [arrival, seconds]);
 
   // A voice run holds a wake lock while it's on a timed step, from arrival
   // until it moves on (the next step's lock takes over without a gap), and
-  // lets go if voice is lost.
-  const holdsWakeLock = timed && keepsRunningInBackground;
+  // lets go if voice is lost. Its timeout is only a safety net.
+  const holdsWakeLock = !!seconds && keepsRunningInBackground;
   useEffect(() => {
-    if (!holdsWakeLock) return;
-    acquireCountdownWakeLock(deadlineRef.current - elapsedRealtimeMs() + WAKE_LOCK_MARGIN_MS);
+    if (!holdsWakeLock || !seconds) return;
+    acquireCountdownWakeLock(seconds * 1000 + WAKE_LOCK_MARGIN_MS);
     return releaseCountdownWakeLock;
-  }, [arrival, holdsWakeLock]);
+  }, [arrival, holdsWakeLock, seconds]);
 
-  if (!timed || !timerSeconds) return null;
+  if (!seconds) return null;
   return {
-    remainingSeconds: left?.arrival === arrival ? left.seconds : timerSeconds,
-    totalSeconds: timerSeconds,
+    remainingSeconds: left?.arrival === arrival ? left.seconds : seconds,
+    totalSeconds: seconds,
   };
 }

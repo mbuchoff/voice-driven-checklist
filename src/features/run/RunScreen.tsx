@@ -156,16 +156,17 @@ export function RunScreen({
   const statusRef = useRef(state.status);
   statusRef.current = state.status;
   // Each arrival is left once: "next" heard as its countdown runs out (or
-  // two taps) moves on, and cues, a single time.
+  // two taps) moves on, and cues, a single time. A move names the arrival
+  // it leaves (by default the current one); one for an arrival that isn't
+  // current, or was already left, does nothing.
   const arrivalRef = useRef(state.arrival);
   arrivalRef.current = state.arrival;
   const leftArrivalRef = useRef<number | null>(null);
 
   const runAction = useCallback(
-    (action: 'next' | 'previous' | 'repeat') => {
-      const arrival = arrivalRef.current;
+    (action: 'next' | 'previous' | 'repeat', arrival: number = arrivalRef.current) => {
       if (action !== 'repeat') {
-        if (!isRunActive(statusRef.current) || leftArrivalRef.current === arrival) return;
+        if (!isRunActive(statusRef.current) || arrival !== arrivalRef.current || leftArrivalRef.current === arrival) return;
         leftArrivalRef.current = arrival;
       }
       const completes =
@@ -371,9 +372,7 @@ export function RunScreen({
     arrival: state.arrival,
     active: isRunActive(state.status),
     keepsRunningInBackground: voiceRunActive,
-    onExpire: (arrival) => {
-      if (arrival === arrivalRef.current) runActionRef.current('next');
-    },
+    onExpire: (arrival) => runActionRef.current('next', arrival),
   });
 
   useEffect(() => {
