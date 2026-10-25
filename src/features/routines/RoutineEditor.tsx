@@ -56,16 +56,19 @@ import { createRoutine, deleteRoutine, updateRoutine } from './repository';
 import { moveItem } from './reorder';
 import {
   addStep,
+  canRun,
   canSave,
   countedStepCount,
   createEditorState,
   deleteStep,
+  displayTitle,
   editorSnapshot,
   expireDeletedStep,
   expireDeletedSteps,
   isDirty,
   leaveOpenStep,
   moveStep,
+  needsSave,
   openStep,
   pressEnter,
   realSteps,
@@ -92,16 +95,22 @@ import { STEP_MAKE_ROOM, useStepReorder } from './useStepReorder';
 
 const EDITOR_KEYBOARD_OFFSET = 24;
 
+/** A new routine, with the color it starts with, or a saved one to edit. */
+export type EditorMode =
+  | { kind: 'new'; colorKey: string }
+  | {
+      kind: 'edit';
+      routine: Routine;
+      onDeleted: (deleted: DeletedRoutine) => void;
+      /** Start a run of the saved routine. */
+      onRun: (routine: Routine) => void;
+    };
+
 export type RoutineEditorProps = {
-  initialRoutine?: Routine;
-  /** The color a new routine starts with. */
-  newColorKey?: string;
+  mode: EditorMode;
   onSaved: (saved: Routine) => void;
   /** Leave without saving (nothing changed, or the changes were discarded). */
   onCancel: () => void;
-  onDeleted?: (deleted: DeletedRoutine) => void;
-  /** Start a run of the saved routine. */
-  onRun?: (routine: Routine) => void;
 };
 
 export function focusEditorInput(input: { focus: () => void } | null) {
@@ -117,20 +126,13 @@ type PanelState = {
 };
 type Sheet = 'leave' | 'delete' | null;
 
-export function RoutineEditor({
-  initialRoutine,
-  newColorKey,
-  onSaved,
-  onCancel,
-  onDeleted,
-  onRun,
-}: RoutineEditorProps) {
+export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const database = useDatabase();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { preferences, rememberTimerSeconds } = useDevicePreferences();
   const [model, setModel] = useState<EditorState>(() =>
-    createEditorState({ routine: initialRoutine, colorKey: newColorKey }),
+    createEditorState(mode),
   );
   const [baseline] = useState(() => editorSnapshot(model));
   const modelRef = useRef(model);
@@ -177,10 +179,9 @@ export function RoutineEditor({
   const steps = realSteps(model);
   const counted = countedStepCount(model);
   const summary = countLine(counted, timedTotal(model));
-  const dirty = isDirty(model, baseline);
-  const wantsSave = model.isNew || dirty;
+  const wantsSave = needsSave(model, baseline);
   const saveAllowed = canSave(model);
-  const canRun = !model.isNew && !dirty && steps.some((step) => step.text.trim());
+  const runnable = canRun(model, baseline);
   const colorLabel = routineColor(model.colorKey).name;
 
   const reorder = useStepReorder({
@@ -344,8 +345,8 @@ export function RoutineEditor({
 
   const persist = async (state: EditorState): Promise<Routine> => {
     const input = routineInput(state);
-    return initialRoutine
-      ? updateRoutine(database, initialRoutine.id, input)
+    return mode.kind === 'edit'
+      ? updateRoutine(database, mode.routine.id, input)
       : createRoutine(database, input);
   };
 
@@ -363,7 +364,7 @@ export function RoutineEditor({
   // ▶ only shows when nothing is unsaved, so the saved routine is what runs.
   const play = () => {
     Keyboard.dismiss();
-    if (initialRoutine && onRun) onRun(initialRoutine);
+    if (mode.kind === 'edit') mode.onRun(mode.routine);
   };
 
   const back = () => {
@@ -373,11 +374,11 @@ export function RoutineEditor({
   };
 
   const confirmDelete = async () => {
-    if (!initialRoutine || !onDeleted) return;
+    if (mode.kind !== 'edit') return;
     setSheet(null);
     try {
-      const deleted = await deleteRoutine(database, initialRoutine.id);
-      if (deleted) onDeleted(deleted);
+      const deleted = await deleteRoutine(database, mode.routine.id);
+      if (deleted) mode.onDeleted(deleted);
       else onCancel();
     } catch {
       await notify('Delete failed', 'Your routine was not deleted. Try again.');
@@ -452,9 +453,9 @@ export function RoutineEditor({
         colors={colors}
         collapsed={collapsed}
         isNew={model.isNew}
-        title={model.title}
+        title={displayTitle(model)}
         countLine={summary}
-        canRun={canRun}
+        canRun={runnable}
         onBack={back}
         onDelete={() => {
           settle();
@@ -745,7 +746,7 @@ export function RoutineEditor({
         <EditorSheet colors={colors} onDismiss={() => setSheet(null)} testID="delete-sheet">
           <SheetTitle colors={colors}>Delete this routine?</SheetTitle>
           <SheetBody colors={colors}>
-            {`“${model.title.trim() || initialRoutine?.title || 'Untitled routine'}” and its steps will be gone.`}
+            {`“${displayTitle(model, mode.kind === 'edit' ? mode.routine.title : undefined)}” and its steps will be gone.`}
           </SheetBody>
           <SheetActions>
             <SheetButton colors={colors} variant="keep" label="Cancel" testID="delete-cancel" onPress={() => setSheet(null)} />

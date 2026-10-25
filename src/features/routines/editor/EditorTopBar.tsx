@@ -73,6 +73,7 @@ export function EditorTopBar({
   colors: EditorColors;
   collapsed: boolean;
   isNew: boolean;
+  /** The routine's name as shown (see displayTitle). */
   title: string;
   countLine: string;
   /** ▶ shows only for a saved routine with nothing unsaved that can run. */
@@ -132,7 +133,7 @@ export function EditorTopBar({
               numberOfLines={1}
               style={{ maxWidth: '100%', color: colors.text, fontSize: 19, lineHeight: 23, fontWeight: '800' }}
             >
-              {title.trim() || 'Untitled routine'}
+              {title}
             </Text>
             <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 15, lineHeight: 18, fontWeight: '700' }}>
               {countLine}

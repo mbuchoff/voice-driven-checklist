@@ -33,17 +33,15 @@ export type EditorState = {
   openedText: string;
 };
 
-export function createEditorState({
-  routine,
-  colorKey,
-}: {
-  routine?: Routine;
-  colorKey?: string;
-}): EditorState {
+/** A new routine starts with its color; an existing one with what's saved. */
+export type EditorStart = { kind: 'new'; colorKey: string } | { kind: 'edit'; routine: Routine };
+
+export function createEditorState(start: EditorStart): EditorState {
+  const routine = start.kind === 'edit' ? start.routine : null;
   return {
     isNew: !routine,
     title: routine?.title ?? '',
-    colorKey: routine?.colorKey ?? colorKey ?? '',
+    colorKey: routine?.colorKey ?? (start.kind === 'new' ? start.colorKey : ''),
     rows: (routine?.steps ?? []).map((step) => ({
       kind: 'step',
       localId: uuidv4(),
@@ -239,4 +237,19 @@ export function editorSnapshot(state: EditorState): string {
 /** True when saving would change what's stored. */
 export function isDirty(state: EditorState, savedSnapshot: string): boolean {
   return editorSnapshot(state) !== savedSnapshot;
+}
+
+/** The Save bar shows for a new routine, or when saving would change what's stored. */
+export function needsSave(state: EditorState, savedSnapshot: string): boolean {
+  return state.isNew || isDirty(state, savedSnapshot);
+}
+
+/** ▶ runs the saved routine, so it shows only with nothing unsaved and a step with words. */
+export function canRun(state: EditorState, savedSnapshot: string): boolean {
+  return !state.isNew && !isDirty(state, savedSnapshot) && realSteps(state).some(hasWords);
+}
+
+/** The routine's name as shown: as typed, else `savedTitle`, else "Untitled routine". */
+export function displayTitle(state: EditorState, savedTitle?: string): string {
+  return state.title.trim() || savedTitle || 'Untitled routine';
 }

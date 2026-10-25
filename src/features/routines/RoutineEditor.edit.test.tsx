@@ -20,6 +20,7 @@ import {
   getByGestureTestId,
   primeRowLayouts,
   releaseRowDrag,
+  editing,
   rowGesture,
   setupEditorDatabase as setupDb,
   tapToEdit,
@@ -61,7 +62,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -97,7 +98,7 @@ describe('RoutineEditor', () => {
       const database = await setupDb();
       const existing = await createRoutine(database, { title: 'hint', steps: [{ text: 'a' }] });
       await renderWithDatabase(
-        <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
+        <RoutineEditor mode={editing(existing)} onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
 
@@ -113,7 +114,7 @@ describe('RoutineEditor', () => {
       const onSaved = jest.fn();
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={onSaved}
           onCancel={jest.fn()}
         />,
@@ -137,7 +138,7 @@ describe('RoutineEditor', () => {
           steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }],
         });
         await renderWithDatabase(
-          <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
+          <RoutineEditor mode={editing(existing)} onSaved={jest.fn()} onCancel={jest.fn()} />,
           { database },
         );
         primeRowLayouts([50, 50, 50]);
@@ -177,7 +178,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -214,7 +215,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -247,7 +248,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -285,7 +286,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -323,7 +324,7 @@ describe('RoutineEditor', () => {
       await renderWithDatabase(
         <Profiler id="editor" onRender={onRender}>
           <RoutineEditor
-            initialRoutine={existing}
+            mode={editing(existing)}
             onSaved={jest.fn()}
             onCancel={jest.fn()}
           />
@@ -353,7 +354,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -386,7 +387,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -420,7 +421,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -451,7 +452,7 @@ describe('RoutineEditor', () => {
           steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }, { text: 'd' }],
         });
         await renderWithDatabase(
-          <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
+          <RoutineEditor mode={editing(existing)} onSaved={jest.fn()} onCancel={jest.fn()} />,
           { database },
         );
       }
@@ -530,7 +531,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -562,7 +563,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -591,7 +592,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -632,7 +633,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -672,7 +673,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -720,7 +721,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -759,7 +760,7 @@ describe('RoutineEditor', () => {
       });
       await renderWithDatabase(
         <RoutineEditor
-          initialRoutine={existing}
+          mode={editing(existing)}
           onSaved={jest.fn()}
           onCancel={jest.fn()}
         />,
@@ -781,7 +782,7 @@ describe('RoutineEditor', () => {
         steps: [{ text: 'a' }, { text: 'b' }],
       });
       await renderWithDatabase(
-        <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
+        <RoutineEditor mode={editing(existing)} onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
       fireEvent(screen.getByTestId('step-row-0'), 'layout', {
@@ -817,7 +818,7 @@ describe('RoutineEditor', () => {
         steps: [{ text: 'hold this text' }],
       });
       await renderWithDatabase(
-        <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
+        <RoutineEditor mode={editing(existing)} onSaved={jest.fn()} onCancel={jest.fn()} />,
         { database },
       );
       expect(screen.queryByTestId('step-text-0')).toBeNull();

@@ -17,7 +17,7 @@ import { createRoutine, getRoutine } from './repository';
 import type { Routine } from './types';
 
 async function renderEditor(
-  props: Partial<Parameters<typeof RoutineEditor>[0]> = {},
+  { initialRoutine, newColorKey = 'teal-1' }: { initialRoutine?: Routine; newColorKey?: string } = {},
   options: { database?: Database; preferences?: MemoryDevicePreferenceStore } = {},
 ) {
   const database = options.database ?? (await setupDb());
@@ -27,12 +27,18 @@ async function renderEditor(
     onDeleted: jest.fn(),
     onRun: jest.fn(),
   };
-  const view = await renderWithDatabase(
-    <RoutineEditor newColorKey="teal-1" {...callbacks} {...props} />,
-    { database, preferences: options.preferences },
+  const editor = () => (
+    <RoutineEditor
+      mode={initialRoutine
+        ? { kind: 'edit', routine: initialRoutine, onDeleted: callbacks.onDeleted, onRun: callbacks.onRun }
+        : { kind: 'new', colorKey: newColorKey }}
+      onSaved={callbacks.onSaved}
+      onCancel={callbacks.onCancel}
+    />
   );
+  const view = await renderWithDatabase(editor(), { database, preferences: options.preferences });
   // Jest's Reanimated stand-in reads an animated style when its view renders.
-  const renderAgain = () => view.rerender(<RoutineEditor newColorKey="teal-1" {...callbacks} {...props} />);
+  const renderAgain = () => view.rerender(editor());
   return { database, ...callbacks, renderAgain };
 }
 

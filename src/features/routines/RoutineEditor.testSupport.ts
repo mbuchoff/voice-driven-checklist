@@ -4,9 +4,17 @@ import { type GestureType } from 'react-native-gesture-handler';
 import { runMigrations } from '@/src/db/migrations';
 import { createTestDatabase } from '@/src/test/createTestDatabase';
 
+import type { EditorMode } from './RoutineEditor';
+import type { Routine } from './types';
+
 export const { getByGestureTestId } = jest.requireActual(
   'react-native-gesture-handler/lib/commonjs/jestUtils',
 ) as typeof import('react-native-gesture-handler/lib/typescript/jestUtils');
+
+/** Editing a saved routine, with its delete and run callbacks stubbed. */
+export function editing(routine: Routine): EditorMode {
+  return { kind: 'edit', routine, onDeleted: jest.fn(), onRun: jest.fn() };
+}
 
 export async function setupEditorDatabase() {
   const database = createTestDatabase();

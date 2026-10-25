@@ -37,14 +37,17 @@ export default function EditRoutineRoute() {
 
   return (
     <RoutineEditor
-      initialRoutine={state.routine}
-      onSaved={() => router.back()}
-      onDeleted={(deleted) => {
-        offerRoutineUndo(deleted);
-        router.dismissTo('/');
+      mode={{
+        kind: 'edit',
+        routine: state.routine,
+        onDeleted: (deleted) => {
+          offerRoutineUndo(deleted);
+          router.dismissTo('/');
+        },
+        onRun: (routine) => router.replace({ pathname: '/run/[id]', params: { id: routine.id } }),
       }}
+      onSaved={() => router.back()}
       onCancel={() => router.back()}
-      onRun={(routine) => router.replace({ pathname: '/run/[id]', params: { id: routine.id } })}
     />
   );
 }

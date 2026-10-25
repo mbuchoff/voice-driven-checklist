@@ -31,10 +31,9 @@ export default function NewRoutineRoute() {
 
   return (
     <RoutineEditor
-      newColorKey={colorKey}
+      mode={{ kind: 'new', colorKey }}
       onSaved={() => router.back()}
       onCancel={() => router.back()}
-      onRun={(routine) => router.replace({ pathname: '/run/[id]', params: { id: routine.id } })}
     />
   );
 }
