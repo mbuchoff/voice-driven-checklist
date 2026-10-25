@@ -5,11 +5,12 @@ import { ActivityIndicator, View } from 'react-native';
 import { useDatabase } from '@/src/db/DatabaseProvider';
 import { RoutineEditor } from '@/src/features/routines/RoutineEditor';
 import { newRoutineColorKey } from '@/src/features/routines/repository';
+import type { RoutineColorKey } from '@/src/features/routines/routineColors';
 
 export default function NewRoutineRoute() {
   const router = useRouter();
   const db = useDatabase();
-  const [colorKey, setColorKey] = useState<string | null>(null);
+  const [colorKey, setColorKey] = useState<RoutineColorKey | null>(null);
 
   useEffect(() => {
     let cancelled = false;

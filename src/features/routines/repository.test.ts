@@ -653,7 +653,7 @@ describe('routine repository', () => {
 
     it('gives a routine created without a color one the first six routines are not using', async () => {
       const db = await setup();
-      const firstSix = ['pink-1', 'pink-2', 'red-1', 'orange-1', 'orange-2', 'taupe'];
+      const firstSix = ['pink-1', 'pink-2', 'red-1', 'orange-1', 'orange-2', 'taupe'] as const;
       for (const colorKey of firstSix) {
         await createRoutine(db, { title: colorKey, colorKey, steps: [] });
       }

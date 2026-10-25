@@ -77,6 +77,7 @@ import {
   type EditorState,
 } from './routineEditorModel';
 import { countLine } from './timerFormat';
+import type { RoutineColorKey } from './routineColors';
 import type { DeletedRoutine, Routine } from './types';
 import { scrollToKeepAboveKeyboard } from './keepAboveKeyboard';
 import { CHIP_FOLD_MS, STEP_MAKE_ROOM, STEP_OPEN_MS } from './motion';
@@ -87,7 +88,7 @@ const NO_CANDIDATES: number[] = [];
 
 /** A new routine, with the color it starts with, or a saved one to edit. */
 export type EditorMode =
-  | { kind: 'new'; colorKey: string }
+  | { kind: 'new'; colorKey: RoutineColorKey }
   | {
       kind: 'edit';
       routine: Routine;

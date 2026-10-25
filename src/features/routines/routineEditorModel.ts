@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 
 import { moveItem } from './reorder';
+import type { RoutineColorKey } from './routineColors';
 import { chipCandidates, initialStepper, pressStepper, type StepperState } from './timers';
 import type { Routine, RoutineInput } from './types';
 
@@ -26,7 +27,7 @@ export type EditorRow = ({ kind: 'step' } & EditorStep) | DeletedStepRow;
 export type EditorState = {
   isNew: boolean;
   title: string;
-  colorKey: string;
+  colorKey: RoutineColorKey;
   rows: EditorRow[];
   /** The step open for typing, if any. */
   openId: string | null;
@@ -51,14 +52,14 @@ export type TimerPanelSession = {
 };
 
 /** A new routine starts with its color; an existing one with what's saved. */
-export type EditorStart = { kind: 'new'; colorKey: string } | { kind: 'edit'; routine: Routine };
+export type EditorStart = { kind: 'new'; colorKey: RoutineColorKey } | { kind: 'edit'; routine: Routine };
 
 export function createEditorState(start: EditorStart): EditorState {
   const routine = start.kind === 'edit' ? start.routine : null;
   return {
     isNew: !routine,
     title: routine?.title ?? '',
-    colorKey: routine?.colorKey ?? (start.kind === 'new' ? start.colorKey : ''),
+    colorKey: start.kind === 'edit' ? start.routine.colorKey : start.colorKey,
     rows: (routine?.steps ?? []).map((step) => ({
       kind: 'step',
       localId: uuidv4(),
@@ -171,7 +172,7 @@ export function setTitle(state: EditorState, title: string): EditorState {
   return { ...state, title: title.replace(/\s*[\r\n]+\s*/g, ' ') };
 }
 
-export function setColor(state: EditorState, colorKey: string): EditorState {
+export function setColor(state: EditorState, colorKey: RoutineColorKey): EditorState {
   return { ...state, colorKey };
 }
 

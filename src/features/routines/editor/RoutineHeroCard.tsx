@@ -3,7 +3,7 @@ import { Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
 import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
-import { routineColor } from '../routineColors';
+import { routineColor, type RoutineColorKey } from '../routineColors';
 import { ColorDot, ColorGrid } from './ColorGrid';
 import { IconButton } from './controls';
 
@@ -15,13 +15,13 @@ export function RoutineHeroCard(props: {
   colors: EditorColors;
   title: string;
   countLine: string;
-  colorKey: string;
+  colorKey: RoutineColorKey;
   colorsOpen: boolean;
   onChangeTitle: (title: string) => void;
   onTitleFocus: () => void;
   onOpenColors: () => void;
   onCloseColors: () => void;
-  onPickColor: (key: string) => void;
+  onPickColor: (key: RoutineColorKey) => void;
   onTitleRowLayout: (event: LayoutChangeEvent) => void;
 }) {
   const { colors } = props;

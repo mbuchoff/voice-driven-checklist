@@ -1,3 +1,5 @@
+import type { RoutineColorKey } from './routineColors';
+
 export type Step = {
   id: string;
   text: string;
@@ -9,21 +11,21 @@ export type Step = {
 export type Routine = {
   id: string;
   title: string;
-  colorKey: string;
+  colorKey: RoutineColorKey;
   steps: Step[];
 };
 
 export type LibraryRoutine = {
   id: string;
   title: string;
-  colorKey: string;
+  colorKey: RoutineColorKey;
   steps: { text: string }[];
 };
 
 export type RoutineInput = {
   title: string;
   /** Left out, a routine gets a new color (see pickRoutineColorKey). */
-  colorKey?: string;
+  colorKey?: RoutineColorKey;
   steps: StepInput[];
 };
 

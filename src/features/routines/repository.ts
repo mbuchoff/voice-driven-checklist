@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import type { Database, DatabaseQueries } from '@/src/db/database';
 
-import { isRoutineColorKey, pickRoutineColorKey } from './routineColors';
+import { pickRoutineColorKey, storedRoutineColorKey, type RoutineColorKey } from './routineColors';
 import type {
   DeletedRoutine,
   LibraryRoutine,
@@ -59,14 +59,12 @@ async function neighborColors(db: DatabaseQueries): Promise<string[]> {
 }
 
 /** The color a new routine should get when it doesn't bring one. */
-export async function newRoutineColorKey(db: Database): Promise<string> {
+export async function newRoutineColorKey(db: Database): Promise<RoutineColorKey> {
   return pickRoutineColorKey(await neighborColors(db));
 }
 
-async function resolveColorKey(db: DatabaseQueries, colorKey: string | undefined): Promise<string> {
-  return isRoutineColorKey(colorKey)
-    ? colorKey
-    : pickRoutineColorKey(await neighborColors(db));
+async function resolveColorKey(db: DatabaseQueries, colorKey: RoutineColorKey | undefined): Promise<RoutineColorKey> {
+  return colorKey ?? pickRoutineColorKey(await neighborColors(db));
 }
 
 async function writeRoutine(
@@ -167,7 +165,8 @@ export async function updateRoutine(
   const title = trimTitle(input.title);
   const steps = buildSteps(input.steps);
   const now = Date.now();
-  let colorKey = '';
+  // Set in the transaction, which throws if the routine is gone.
+  let colorKey: RoutineColorKey | undefined;
 
   await db.withTransactionAsync(async (transaction) => {
     const current = await transaction.getFirstAsync<{ color: string }>(
@@ -177,7 +176,7 @@ export async function updateRoutine(
     if (!current) {
       throw new Error(`Routine not found: ${id}`);
     }
-    colorKey = isRoutineColorKey(input.colorKey) ? input.colorKey : current.color;
+    colorKey = input.colorKey ?? storedRoutineColorKey(current.color);
     await transaction.runAsync(
       'UPDATE routines SET title = ?, color = ?, updated_at = ? WHERE id = ?',
       title,
@@ -189,7 +188,7 @@ export async function updateRoutine(
     await insertSteps(transaction, id, steps);
   });
 
-  return { id, title, colorKey, steps };
+  return { id, title, colorKey: colorKey!, steps };
 }
 
 /**
@@ -255,7 +254,7 @@ async function readRoutine(db: DatabaseQueries, id: string): Promise<Routine | n
   return {
     id: row.id,
     title: row.title,
-    colorKey: row.color,
+    colorKey: storedRoutineColorKey(row.color),
     steps: stepRows.map((r) => ({
       id: r.id,
       text: r.text,
@@ -269,7 +268,7 @@ export async function getRoutine(db: Database, id: string): Promise<Routine | nu
   return readRoutine(db, id);
 }
 
-type LibraryRow = { id: string; title: string; colorKey: string; steps: StepInput[] };
+type LibraryRow = { id: string; title: string; colorKey: RoutineColorKey; steps: StepInput[] };
 
 /** Every routine in library order, with its steps in order. */
 async function readLibrary(db: Database): Promise<LibraryRow[]> {
@@ -289,7 +288,7 @@ async function readLibrary(db: Database): Promise<LibraryRow[]> {
   const routines: LibraryRow[] = [];
   for (const row of rows) {
     if (routines[routines.length - 1]?.id !== row.id) {
-      routines.push({ id: row.id, title: row.title, colorKey: row.color, steps: [] });
+      routines.push({ id: row.id, title: row.title, colorKey: storedRoutineColorKey(row.color), steps: [] });
     }
     if (row.text != null) {
       routines[routines.length - 1].steps.push({ text: row.text, timerSeconds: row.timer_seconds });

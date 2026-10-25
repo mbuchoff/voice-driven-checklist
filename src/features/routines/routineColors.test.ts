@@ -5,6 +5,7 @@ import {
   isRoutineColorKey,
   pickRoutineColorKey,
   routineColorShades,
+  storedRoutineColorKey,
 } from './routineColors';
 
 function luminance(hex: string) {
@@ -21,6 +22,11 @@ function contrast(a: string, b: string) {
 }
 
 describe('routine colors', () => {
+  it('reads a stored color it doesn’t know (a later version’s) as the column’s default', () => {
+    expect(storedRoutineColorKey('violet-2')).toBe('violet-2');
+    expect(storedRoutineColorKey('ultraviolet-9')).toBe('green-2');
+  });
+
   it('offers thirty distinct colors, each with light and dark shades', () => {
     const keys = ROUTINE_COLORS.map((color) => color.key);
     expect(new Set(keys).size).toBe(30);

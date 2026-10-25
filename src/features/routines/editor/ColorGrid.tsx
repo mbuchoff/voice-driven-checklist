@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
-import { ROUTINE_COLORS, ROUTINE_COLOR_COLUMNS, routineColorShades } from '../routineColors';
+import { ROUTINE_COLORS, ROUTINE_COLOR_COLUMNS, routineColorShades, type RoutineColorKey } from '../routineColors';
 
 /** The grid is at most this many dp per column wide. */
 const COLUMN_SPACE = 54;
@@ -19,7 +19,7 @@ export function ColorGrid({
 }: {
   colors: EditorColors;
   selected: string;
-  onPick: (key: string) => void;
+  onPick: (key: RoutineColorKey) => void;
 }) {
   const rows = [];
   for (let start = 0; start < ROUTINE_COLORS.length; start += ROUTINE_COLOR_COLUMNS) {

@@ -1,6 +1,6 @@
 import type { Palette } from '@/src/theme/palette';
 
-import { routineColorShades } from './routineColors';
+import { routineColorShades, type RoutineColorKey } from './routineColors';
 
 /** CSS `color-mix(in srgb, a weight, b)` for #rrggbb colors. */
 export function mixColors(a: string, b: string, weightOfA: number): string {
@@ -62,7 +62,7 @@ const EDITOR_TOKENS = {
   },
 } as const;
 
-export function editorColors(theme: Palette, colorKey: string): EditorColors {
+export function editorColors(theme: Palette, colorKey: RoutineColorKey): EditorColors {
   const shades = routineColorShades(colorKey, theme.mode);
   const tokens = EDITOR_TOKENS[theme.mode];
   return {

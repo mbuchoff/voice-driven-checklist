@@ -14,10 +14,11 @@ import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 import { RoutineEditor } from './RoutineEditor';
 import { setupEditorDatabase as setupDb, tapToEdit } from './RoutineEditor.testSupport';
 import { createRoutine, getRoutine } from './repository';
+import type { RoutineColorKey } from './routineColors';
 import type { Routine } from './types';
 
 async function renderEditor(
-  { initialRoutine, newColorKey = 'teal-1' }: { initialRoutine?: Routine; newColorKey?: string } = {},
+  { initialRoutine, newColorKey = 'teal-1' }: { initialRoutine?: Routine; newColorKey?: RoutineColorKey } = {},
   options: { database?: Database; preferences?: MemoryDevicePreferenceStore } = {},
 ) {
   const database = options.database ?? (await setupDb());
