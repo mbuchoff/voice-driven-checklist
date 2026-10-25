@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ComponentRef,
@@ -173,6 +174,13 @@ export function useStepReorder({
   scrollRef,
   onDragStart,
 }: StepReorderOptions) {
+  // Every step's latest place, by id, from its row's layout events (a row
+  // sends one only when its frame changes, so this is kept for every step,
+  // whatever its position). The held step's own are skipped while it's held:
+  // it's out of the list then.
+  const layoutsById = useRef<Record<string, StepRowLayout>>({});
+  // The places by position, which drags aim with: the current order's, and
+  // fixed while a drag is under way (see onRowLayout).
   const rowLayouts = useRef<(StepRowLayout | null)[]>([]);
   // Where the steps were when the current drag started.
   const startLayouts = useRef<(StepRowLayout | null)[]>([]);
@@ -202,6 +210,10 @@ export function useStepReorder({
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const [drag, setDrag] = useState<StepDragState | null>(null);
+  // After a cancel, the held step's id while the steps that made room
+  // spring back.
+  const [returning, setReturning] = useState<string | null>(null);
+  const returnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [settlingPreview, setSettlingPreview] =
     useState<StepDragState | null>(null);
   const dragPreview = drag ?? settlingPreview;
@@ -210,22 +222,47 @@ export function useStepReorder({
     transform: [{ translateY: dragOffset.value }],
   }));
 
-  // During a drag, the other steps' places are taken only while the slot is
-  // in the dragged step's own place: then they're where they'd be without
-  // the drag (an open step closing, UNDO rows going), not making room.
-  const onRowLayout = (index: number, event: LayoutChangeEvent) => {
-    const current = dragRef.current;
-    if (current && (index === current.from || current.to !== current.from)) return;
-    const { y, height } = event.nativeEvent.layout;
-    rowLayouts.current[index] = { y, height };
+  // Read by the editor too (keeping the open step above the keyboard).
+  const geometry = useMemo(() => ({
+    /** Where step `localId` is on the steps' card, as last laid out. */
+    layoutOf: (localId: string): StepRowLayout | undefined => layoutsById.current[localId],
+    /** The list's scroll position. */
+    scrollY: () => scrollY.current,
+    /** Where the list's viewport is on screen. */
+    viewport: () => ({ top: viewportTop.current, height: viewportHeight.current }),
+  }), []);
+
+  const syncPositions = () => {
+    rowLayouts.current = itemsRef.current.map((item) => layoutsById.current[item.localId] ?? null);
     rowLayoutsValue.value = [...rowLayouts.current];
   };
 
+  // During a drag, the other steps' places count for aiming only while the
+  // slot is in the held step's own place: then they're where they'd be
+  // without the drag (an open step closing, UNDO rows going), not making room.
+  const onRowLayout = (localId: string, event: LayoutChangeEvent) => {
+    const current = dragRef.current;
+    if (current?.localId === localId) return;
+    const { y, height } = event.nativeEvent.layout;
+    layoutsById.current[localId] = { y, height };
+    if (!current) {
+      syncPositions();
+    } else if (current.to === current.from) {
+      const index = itemsRef.current.findIndex((item) => item.localId === localId);
+      if (index >= 0) {
+        rowLayouts.current[index] = { y, height };
+        rowLayoutsValue.value = [...rowLayouts.current];
+      }
+    }
+  };
+
+  // A drop, or a step added, deleted or put back: positions follow the order.
+  const order = items.map((item) => item.localId).join('|');
   useEffect(() => {
-    if (rowLayouts.current.length <= items.length) return;
-    rowLayouts.current.length = items.length;
-    rowLayoutsValue.value = [...rowLayouts.current];
-  }, [items.length, rowLayoutsValue]);
+    if (!dragRef.current) syncPositions();
+    // syncPositions reads the latest order through itemsRef.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order]);
 
   const autoscrollNearEdge = (pageY: number, elapsedMs: number): boolean => {
     const maxY = Math.max(0, contentHeight.current - viewportHeight.current);
@@ -307,6 +344,8 @@ export function useStepReorder({
 
   const startDrag = (localId: string, pageY: number) => {
     setSettlingPreview(null);
+    if (returnTimer.current) clearTimeout(returnTimer.current);
+    setReturning(null);
     const currentItems = itemsRef.current;
     const index = currentItems.findIndex((item) => item.localId === localId);
     if (index < 0) return;
@@ -418,12 +457,19 @@ export function useStepReorder({
     // commit; the next drag initializes it from zero.
   };
 
+  // The steps that made room spring back with the drag's spring.
   const cancelDrag = (localId: string) => {
     if (dragRef.current?.localId !== localId) return;
     dragRef.current = null;
     cancelEdgeAutoscroll();
     endSettling();
     setDrag(null);
+    setReturning(localId);
+    if (returnTimer.current) clearTimeout(returnTimer.current);
+    returnTimer.current = setTimeout(() => {
+      returnTimer.current = null;
+      setReturning(null);
+    }, STEP_MAKE_ROOM_MS);
   };
 
   const moveItemByAction = (index: number, delta: -1 | 1) => {
@@ -487,9 +533,10 @@ export function useStepReorder({
           scheduleOnRN(updateEdgeDrag, event.absoluteY, nearEdge);
         }
       })
-      .onEnd(() => {
+      .onEnd((_event, success) => {
         'worklet';
-        if (dragFrom.value === stepIndex) {
+        // A cancelled drag ends unsuccessfully, then finalizes as cancelled.
+        if (success && dragFrom.value === stepIndex) {
           scheduleOnRN(finishDrag, item.localId, stepIndex);
         }
       })
@@ -567,6 +614,7 @@ export function useStepReorder({
         cancelAnimationFrame(autoscrollFrame.current);
       }
       if (settleTimer.current) clearTimeout(settleTimer.current);
+      if (returnTimer.current) clearTimeout(returnTimer.current);
     },
     [],
   );
@@ -586,6 +634,10 @@ export function useStepReorder({
 
   return {
     drag,
+    /** Other steps glide to make room: during a drag, and while they return after a cancel. */
+    makingRoom: !!drag || !!returning,
+    /** The held step, which never glides (it would fly to where it lands). */
+    heldId: drag?.localId ?? returning,
     dragPreview,
     dragPreviewStyle,
     gestureFor,
@@ -596,5 +648,6 @@ export function useStepReorder({
     setContentHeight: (height: number) => {
       contentHeight.current = height;
     },
+    geometry,
   };
 }

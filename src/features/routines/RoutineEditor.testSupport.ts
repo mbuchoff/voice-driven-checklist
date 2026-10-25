@@ -71,8 +71,10 @@ export async function finishRowDrag(gesture: GestureType) {
   await releaseRowDrag(gesture);
 }
 
+/** A cancelled drag, in RNGH's order: an unsuccessful end, then finalize. */
 export async function cancelRowDrag(gesture: GestureType) {
   await act(async () => {
+    gesture.handlers.onEnd?.({} as never, false);
     gesture.handlers.onFinalize?.({} as never, false);
     await Promise.resolve();
   });

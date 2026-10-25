@@ -161,17 +161,11 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
 
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const titleRef = useRef<ComponentRef<typeof TextInput>>(null);
-  const viewportTop = useRef(0);
-  const scrollY = useRef(0);
   const keyboardTop = useRef<number | null>(null);
-  const viewportHeight = useRef(0);
   const heroY = useRef(0);
   const titleRow = useRef<{ y: number; height: number } | null>(null);
   const sectionY = useRef(0);
   const groupY = useRef(0);
-  // By step id, to keep the open step above the keyboard; the reorder hook
-  // keeps its own by position, for aiming drags.
-  const rowLayouts = useRef<Record<string, { y: number; height: number }>>({});
   /** Where a point `y` down the steps' card sits in the scrolled content. */
   const contentYOfStepsCard = (y: number) => sectionY.current + groupY.current + y;
   const scrollToId = useRef<string | null>(null);
@@ -231,21 +225,23 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
     };
   }, []);
 
+  // Row places, scroll and viewport come from the reorder hook.
+  const { geometry } = reorder;
   const scrollOpenStepIntoView = useCallback(() => {
     const id = modelRef.current.openId;
-    const row = id ? rowLayouts.current[id] : null;
+    const row = id ? geometry.layoutOf(id) : null;
     if (!row || keyboardTop.current == null) return;
     const top = contentYOfStepsCard(row.y);
     const target = scrollToKeepAboveKeyboard({
       top,
       bottom: top + row.height,
-      scrollY: scrollY.current,
-      viewportTop: viewportTop.current,
+      scrollY: geometry.scrollY(),
+      viewportTop: geometry.viewport().top,
       keyboardTop: keyboardTop.current,
       margin: EDITOR_KEYBOARD_OFFSET,
     });
     if (target != null) scrollRef.current?.scrollTo({ y: target, animated: true });
-  }, []);
+  }, [geometry]);
 
   useEffect(() => {
     if (!model.openId || keyboardClearance <= 0) return;
@@ -395,20 +391,18 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     reorder.onScroll(event);
     const y = event.nativeEvent.contentOffset.y;
-    scrollY.current = y;
     // The bar folds once the name has scrolled up under it.
     const row = titleRow.current;
     setCollapsed(!!row && y > heroY.current + row.y + row.height);
   };
 
-  const onRowLayout = (localId: string, index: number, event: LayoutChangeEvent) => {
-    reorder.onRowLayout(index, event);
+  const onRowLayout = (localId: string, event: LayoutChangeEvent) => {
+    reorder.onRowLayout(localId, event);
     const { y, height, width } = event.nativeEvent.layout;
     if (width > 0 && Math.abs(width - rowWidth) > 0.5) setRowWidth(width);
-    rowLayouts.current[localId] = { y, height };
     if (scrollToId.current === localId) {
       scrollToId.current = null;
-      const target = contentYOfStepsCard(y + height / 2) - viewportHeight.current / 2;
+      const target = contentYOfStepsCard(y + height / 2) - geometry.viewport().height / 2;
       scrollRef.current?.scrollTo({ y: Math.max(0, target), animated: true });
     }
   };
@@ -468,11 +462,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="none"
         scrollEnabled={!drag}
-        onLayout={(event) => {
-          viewportTop.current = event.nativeEvent.layout.y;
-          viewportHeight.current = event.nativeEvent.layout.height;
-          reorder.onViewportLayout(event);
-        }}
+        onLayout={reorder.onViewportLayout}
         onContentSizeChange={(_, height) => {
           reorder.setContentHeight(height);
           if (keyboardClearance > 0) scrollOpenStepIntoView();
@@ -573,10 +563,10 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
                     open={isOpen}
                     first={rowIndex === 0 && !slot}
                     hidden={isActive}
-                    makesRoom={!!drag && !isActive}
+                    makesRoom={reorder.makingRoom && row.localId !== reorder.heldId}
                     holdGesture={reorder.gestureFor({ localId: row.localId, text: row.text }, index)}
                     inputRef={focus.fieldRef(row.localId)}
-                    onLayout={(event) => onRowLayout(row.localId, index, event)}
+                    onLayout={(event) => onRowLayout(row.localId, event)}
                     onOpen={() => open(row.localId)}
                     onChangeText={(text) => update((state) => setStepText(state, row.localId, text))}
                     onEnter={enter}

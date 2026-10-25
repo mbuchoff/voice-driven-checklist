@@ -10,7 +10,7 @@ import * as Reanimated from 'react-native-reanimated';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
 import { RoutineEditor } from './RoutineEditor';
-import { STEP_MAKE_ROOM, STEP_REORDER_SETTLE_MS } from './useStepReorder';
+import { STEP_MAKE_ROOM, STEP_MAKE_ROOM_MS, STEP_REORDER_SETTLE_MS } from './useStepReorder';
 import {
   beginRowDrag,
   cancelRowDrag,
@@ -157,6 +157,23 @@ describe('RoutineEditor', () => {
         // Otherwise it would fly to where it lands.
         expect(glide('step-row-0')).toBeUndefined();
         await cancelRowDrag(gesture);
+      });
+
+      it('spring back to their places when the drag is cancelled, then stop gliding', async () => {
+        await threeSteps();
+        const gesture = await beginRowDrag(0, 25, 125);
+        jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+
+        await cancelRowDrag(gesture);
+
+        expect(['step-label-0', 'step-label-1', 'step-label-2'].map((id) => screen.getByTestId(id).props.children)).toEqual(['a', 'b', 'c']);
+        expect(glide('step-row-1')).toBe(STEP_MAKE_ROOM);
+        expect(glide('step-row-2')).toBe(STEP_MAKE_ROOM);
+        expect(glide('step-row-0')).toBeUndefined();
+        await act(async () => {
+          jest.advanceTimersByTime(STEP_MAKE_ROOM_MS);
+        });
+        expect([0, 1, 2].map((index) => glide(`step-row-${index}`))).toEqual([undefined, undefined, undefined]);
       });
 
       it('move without gliding once the drop has landed', async () => {
@@ -518,6 +535,59 @@ describe('RoutineEditor', () => {
       });
     });
 
+    describe('the next drag after the list has changed', () => {
+      async function editorWith(texts: string[]) {
+        const database = await setupDb();
+        const existing = await createRoutine(database, { title: 'drag again', steps: texts.map((text) => ({ text })) });
+        await renderWithDatabase(
+          <RoutineEditor mode={editing(existing)} onSaved={jest.fn()} onCancel={jest.fn()} />,
+          { database },
+        );
+      }
+      /** Fabric reports a row's place only when its frame changes. */
+      function moved(index: number, y: number, height: number) {
+        fireEvent(screen.getByTestId(`step-row-${index}`), 'layout', { nativeEvent: { layout: { y, height } } });
+      }
+      const preview = () => StyleSheet.flatten(screen.getByTestId('step-drag-preview').props.style);
+
+      it('lifts a step where it is after a drop among steps of different heights', async () => {
+        await editorWith(['a', 'long b', 'c', 'd']);
+        primeRowLayouts([57, 84, 57, 57]);
+
+        // "long b" goes to the end; c and d move up into its place as it's dragged.
+        const gesture = await beginRowDrag(1, 99, 260);
+        moved(2, 57, 57);
+        moved(3, 114, 57);
+        await finishRowDrag(gesture);
+        moved(3, 171, 84);
+        await act(flushGestureCommit);
+
+        // d is now third, at 114 (c and d didn't move again, so they sent nothing).
+        const second = await beginRowDrag(2, 142, 142);
+
+        expect(screen.getByTestId('step-drag-preview-text')).toHaveTextContent('d');
+        expect(preview().top).toBe(114);
+        expect(preview().minHeight).toBe(57);
+        await cancelRowDrag(second);
+      });
+
+      it('lifts the last step after a step is deleted and put back', async () => {
+        await editorWith(['a', 'b', 'c', 'd']);
+        primeRowLayouts([50, 50, 50, 50]);
+        deleteStepByAccessibility(1);
+        await act(flushGestureCommit);
+        // UNDO keeps the step's height, so c and d stay put and send nothing.
+        fireEvent.press(screen.getByRole('button', { name: 'Undo deleting this step' }));
+        moved(1, 50, 50);
+        await act(flushGestureCommit);
+
+        const gesture = await beginRowDrag(3, 175, 175);
+
+        expect(screen.getByTestId('step-drag-preview-text')).toHaveTextContent('d');
+        await cancelRowDrag(gesture);
+      });
+    });
+
     it('forgets deleted row measurements before calculating the bottom slot', async () => {
       const database = await setupDb();
       const existing = await createRoutine(database, {
@@ -571,7 +641,15 @@ describe('RoutineEditor', () => {
       );
 
       primeRowLayouts([50, 50, 50]);
-      await dragRow(2, 125, 20);
+      const layOut = (index: number, y: number) =>
+        fireEvent(screen.getByTestId(`step-row-${index}`), 'layout', { nativeEvent: { layout: { y, height: 50 } } });
+      const first = await beginRowDrag(2, 125, 20);
+      // a and b move down to make room; once dropped, c sits first.
+      layOut(0, 50);
+      layOut(1, 100);
+      await finishRowDrag(first);
+      layOut(0, 0);
+      await act(flushGestureCommit);
 
       expect(screen.getByTestId('step-label-0')).toHaveTextContent('c');
 
