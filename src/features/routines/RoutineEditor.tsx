@@ -49,8 +49,8 @@ import { RoutineHeroCard } from './editor/RoutineHeroCard';
 import { DeletedStepRow, StepRow } from './editor/StepRow';
 import { NumberBadge } from './editor/NumberBadge';
 import { KeyboardHolder, useStepFocus } from './editor/stepFocus';
-import { STEP_WORDS, TEXT_PAD } from './editor/stepRowMetrics';
-import { StepTimerChips } from './editor/TimerChips';
+import { chipStripRoom, STEP_WORDS, TEXT_PAD } from './editor/stepRowMetrics';
+import { StepTimerChips, useChipWidths } from './editor/TimerChips';
 import { TimerPanel } from './editor/TimerPanel';
 import { createRoutine, deleteRoutine, updateRoutine } from './repository';
 import { moveItem } from './reorder';
@@ -86,6 +86,7 @@ import { routineColor } from './routineColors';
 import {
   chipCandidates,
   countLine,
+  TIMER_FILLERS,
   initialStepper,
   pressStepper,
   type StepperState,
@@ -95,6 +96,7 @@ import { scrollToKeepAboveKeyboard } from './keepAboveKeyboard';
 import { STEP_MAKE_ROOM, useStepReorder } from './useStepReorder';
 
 const EDITOR_KEYBOARD_OFFSET = 24;
+const NO_CANDIDATES: number[] = [];
 
 /** A new routine, with the color it starts with, or a saved one to edit. */
 export type EditorMode =
@@ -165,10 +167,21 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const [colorsOpen, setColorsOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [keyboardClearance, setKeyboardClearance] = useState(0);
+  // Every step row is as wide; its chips' room follows from that.
+  const [rowWidth, setRowWidth] = useState(0);
   const [saveBarHeight, setSaveBarHeight] = useState(0);
   const [busy, setBusy] = useState(false);
 
   const steps = realSteps(model);
+  // Every time a chip could show: the fillers, the recent ones, the steps'
+  // own, and the sets on show.
+  const chipWidths = useChipWidths(colors, [
+    ...TIMER_FILLERS,
+    ...recent,
+    ...steps.flatMap((step) => (step.timerSeconds ? [step.timerSeconds] : [])),
+    ...model.openCandidates,
+    ...(panel?.quickPicks ?? []),
+  ]);
   const counted = countedStepCount(model);
   const summary = countLine(counted, timedTotal(model));
   const wantsSave = needsSave(model, baseline);
@@ -372,7 +385,8 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
 
   const onRowLayout = (localId: string, index: number, event: LayoutChangeEvent) => {
     reorder.onRowLayout(index, event);
-    const { y, height } = event.nativeEvent.layout;
+    const { y, height, width } = event.nativeEvent.layout;
+    if (width > 0 && Math.abs(width - rowWidth) > 0.5) setRowWidth(width);
     rowLayouts.current[localId] = { y, height };
     if (scrollToId.current === localId) {
       scrollToId.current = null;
@@ -527,13 +541,9 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
               if (!isActive) dropIndex += 1;
               const isOpen = model.openId === row.localId;
               // The open step's times fold open with it (and away while the
-              // timer panel shows). Every step's chips are measured ahead of
-              // time, so they're ready the moment it opens; the open step's
-              // set then stays fixed.
+              // timer panel shows); every time's chip is measured ahead, so
+              // they're ready the moment it opens.
               const chipsOpen = isOpen && !panel;
-              const candidates = isOpen
-                ? model.openCandidates
-                : chipCandidates(row.timerSeconds, recent);
               return (
                 <Fragment key={row.localId}>
                   {slot}
@@ -563,7 +573,9 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
                         colors={colors}
                         index={index}
                         open={chipsOpen}
-                        candidates={candidates}
+                        candidates={isOpen ? model.openCandidates : NO_CANDIDATES}
+                        widths={chipWidths.widths}
+                        room={chipStripRoom(rowWidth)}
                         selected={row.timerSeconds}
                         stepNumber={numbers[row.localId] ?? index + 1}
                         onPick={(seconds) => pickChip(row.localId, seconds)}
@@ -595,6 +607,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
 
       <AddStepButton colors={colors} visible={fabVisible} bottom={fabBottom} onPress={add} />
       <KeyboardHolder ref={focus.holderRef} />
+      {chipWidths.measurer}
 
       {wantsSave ? (
         <Animated.View
@@ -640,6 +653,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
           value={panelStep.timerSeconds}
           stepper={panel.stepper}
           quickPicks={panel.quickPicks}
+          quickPickWidths={chipWidths.widths.panel}
           onStep={stepPanel}
           onPick={(seconds) => pickPanelTime(seconds)}
           onClear={() => pickPanelTime(null)}

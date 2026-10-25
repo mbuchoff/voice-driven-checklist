@@ -57,14 +57,18 @@ async function existing(database: Database, overrides: Partial<Parameters<typeof
 // The views that measure chips are hidden from accessibility on purpose.
 const HIDDEN = { includeHiddenElements: true };
 
-/** Jest doesn't lay out views; give the chip strip and its chips sizes. */
+/**
+ * Jest doesn't lay out views: give the steps' rows a width (the chips' room
+ * follows from it) and the chips their sizes.
+ */
 function layOutChips(index: number, times: number[], chipWidth = 40, room = 330, noTimerWidth = chipWidth) {
-  fireEvent(screen.getByTestId(`chips-room-${index}`, HIDDEN), 'layout', {
-    nativeEvent: { layout: { x: 0, y: 0, width: room + 10, height: 52 } },
+  // The strip's room is the row's width less 16 of padding and its 10 inset.
+  fireEvent(screen.getByTestId(`step-row-${index}`), 'layout', {
+    nativeEvent: { layout: { x: 0, y: index * 56, width: room + 26, height: 56 } },
   });
   const widths: [string, number][] = [...times.map((time) => [String(time), chipWidth] as [string, number]), ['none', noTimerWidth]];
   for (const [chip, width] of widths) {
-    fireEvent(screen.getByTestId(`chip-measure-${index}-${chip}`, HIDDEN), 'layout', {
+    fireEvent(screen.getByTestId(`chip-measure-${chip}`, HIDDEN), 'layout', {
       nativeEvent: { layout: { x: 0, y: 0, width, height: 36 } },
     });
   }

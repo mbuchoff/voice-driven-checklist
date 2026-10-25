@@ -38,3 +38,11 @@ export const OPEN_BADGE_MARGIN = EDIT_INSET - TEXT_PAD.x - ROW_GAP - CONTENT_LEF
 export const OPEN_BOX_SHIFT = OPEN_BADGE_MARGIN - BADGE_SIZE;
 /** The open step's chips start where its words' text box does. */
 export const CHIP_STRIP_INSET = EDIT_INSET - CONTENT_LEFT;
+
+/**
+ * The room for an open step's chips in a row `rowWidth` wide: the front's
+ * width inside its padding, less the strip's inset.
+ */
+export function chipStripRoom(rowWidth: number): number {
+  return rowWidth + 2 * ROW_BLEED - 2 * ROW_PAD_X - CHIP_STRIP_INSET;
+}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -78,69 +78,75 @@ function Chip({
   );
 }
 
+/** How wide each time's chip is in the step strip and in the timer panel. */
+export type ChipWidths = {
+  strip: Record<number, number>;
+  /** The strip's "No timer". */
+  noTimer: number;
+  panel: Record<number, number>;
+};
+
 /**
- * Lays out candidate chips on one line: measures each chip and the room,
- * then keeps as many as fit (see fitChips). `candidates` should stay the
- * same array while the chips are showing, so the set doesn't change under
- * the finger. With `noTimer`, a "No timer" chip shares the line.
+ * Measures, once for the whole editor, each of `times`' chips in both looks
+ * and "No timer": a time's chip is as wide whichever step or set it's in.
+ * Render `measurer` once, anywhere.
  */
-function useFittedChips(
-  candidates: number[],
-  look: ChipLook,
-  moreWidth: number,
-  measureId: string,
-  noTimer = false,
-) {
-  // Widths are kept by time: a time's chip is as wide whichever set it's in,
-  // and a chip that stays on screen isn't laid out (or measured) again.
-  const [widths, setWidths] = useState<Record<number, number>>({});
-  const [noTimerWidth, setNoTimerWidth] = useState(0);
-  const [room, setRoom] = useState(0);
-  const measured = candidates.every((time) => widths[time] != null) && room > 0
-    && (!noTimer || noTimerWidth > 0);
-  const times = useMemo(
-    () =>
-      measured
-        ? fitChips(
-          candidates,
-          (time) => widths[time],
-          noTimer ? room - noTimerWidth - look.gap : room,
-          look.gap,
-          moreWidth,
-        )
-        : null,
-    [candidates, look.gap, measured, moreWidth, noTimer, noTimerWidth, room, widths],
-  );
-  const measurer = (colors: EditorColors) => (
+export function useChipWidths(colors: EditorColors, times: readonly number[]) {
+  const [widths, setWidths] = useState<ChipWidths>({ strip: {}, noTimer: 0, panel: {} });
+  const distinct = [...new Set(times)].sort((a, b) => a - b);
+  const measure = (look: 'strip' | 'panel', time: number) => (event: LayoutChangeEvent) => {
+    const width = event.nativeEvent.layout.width;
+    setWidths((current) =>
+      current[look][time] === width ? current : { ...current, [look]: { ...current[look], [time]: width } });
+  };
+  const measurer = (
     <View
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={{ position: 'absolute', opacity: 0, flexDirection: 'row', top: 0, left: 0 }}
+      style={{ position: 'absolute', opacity: 0, top: 0, left: 0 }}
     >
-      {candidates.map((time) => (
+      <View style={{ flexDirection: 'row' }}>
+        {distinct.map((time) => (
+          <View key={time} testID={`chip-measure-${time}`} onLayout={measure('strip', time)}>
+            <Chip colors={colors} look={STRIP_LOOK} seconds={time} checked={false} />
+          </View>
+        ))}
         <View
-          key={time}
-          testID={`${measureId}-${time}`}
+          testID="chip-measure-none"
           onLayout={(event) => {
             const width = event.nativeEvent.layout.width;
-            setWidths((current) => (current[time] === width ? current : { ...current, [time]: width }));
+            setWidths((current) => (current.noTimer === width ? current : { ...current, noTimer: width }));
           }}
         >
-          <Chip colors={colors} look={look} seconds={time} checked={false} />
+          <Chip colors={colors} look={STRIP_LOOK} seconds={null} checked={false} />
         </View>
-      ))}
-      {noTimer ? (
-        <View
-          testID={`${measureId}-none`}
-          onLayout={(event) => setNoTimerWidth(event.nativeEvent.layout.width)}
-        >
-          <Chip colors={colors} look={look} seconds={null} checked={false} />
-        </View>
-      ) : null}
+      </View>
+      <View style={{ flexDirection: 'row' }}>
+        {distinct.map((time) => (
+          <View key={time} testID={`panel-chip-measure-${time}`} onLayout={measure('panel', time)}>
+            <Chip colors={colors} look={PANEL_LOOK} seconds={time} checked={false} />
+          </View>
+        ))}
+      </View>
     </View>
   );
-  return { times, measurer, setRoom };
+  return { widths, measurer };
+}
+
+/**
+ * The candidates whose chips fit on one line in `room` (see fitChips), or
+ * null until every one has been measured.
+ */
+function fittedChips(
+  candidates: readonly number[],
+  widths: Record<number, number>,
+  room: number,
+  look: ChipLook,
+  moreWidth: number,
+): number[] | null {
+  if (room <= 0 || candidates.some((time) => widths[time] == null)) return null;
+  return fitChips(candidates, (time) => widths[time], room, look.gap, moreWidth);
 }
 
 /** An open step's timer chips, folded open under its words. */
@@ -148,6 +154,8 @@ export function StepTimerChips({
   colors,
   open,
   candidates,
+  widths,
+  room,
   selected,
   stepNumber,
   onPick,
@@ -156,15 +164,22 @@ export function StepTimerChips({
 }: {
   colors: EditorColors;
   open: boolean;
-  candidates: number[];
+  /** The open step's times (fixed while it's open). */
+  candidates: readonly number[];
+  widths: ChipWidths;
+  /** The strip's room for "No timer", the times and ⋯. */
+  room: number;
   selected: number | null;
   stepNumber: number;
   onPick: (seconds: number | null) => void;
   onMore: () => void;
   index: number;
 }) {
-  const { times, measurer, setRoom } = useFittedChips(
-    candidates, STRIP_LOOK, MORE_WIDTH, `chip-measure-${index}`, true,
+  const times = useMemo(
+    () => (widths.noTimer > 0
+      ? fittedChips(candidates, widths.strip, room - widths.noTimer - STRIP_LOOK.gap, STRIP_LOOK, MORE_WIDTH)
+      : null),
+    [candidates, room, widths],
   );
   const [contentHeight, setContentHeight] = useState(0);
   const height = useSharedValue(0);
@@ -187,11 +202,7 @@ export function StepTimerChips({
       accessibilityElementsHidden={!shown}
       importantForAccessibility={shown ? 'auto' : 'no-hide-descendants'}
     >
-      <View
-        testID={`chips-room-${index}`}
-        onLayout={(event) => setRoom(event.nativeEvent.layout.width - CHIP_STRIP_INSET)}
-        style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
-      >
+      <View style={{ position: 'absolute', left: 0, right: 0, top: 0 }}>
         <View
           testID={shown ? `step-chips-${index}` : undefined}
           accessibilityRole="radiogroup"
@@ -247,7 +258,6 @@ export function StepTimerChips({
           </Pressable>
         </View>
       </View>
-      {measurer(colors)}
     </Animated.View>
   );
 }
@@ -256,17 +266,19 @@ export function StepTimerChips({
 export function PanelQuickPicks({
   colors,
   candidates,
+  widths,
   selected,
   onPick,
 }: {
   colors: EditorColors;
-  candidates: number[];
+  candidates: readonly number[];
+  /** The panel look's widths (ChipWidths.panel). */
+  widths: Record<number, number>;
   selected: number | null;
   onPick: (seconds: number) => void;
 }) {
-  const { times, measurer, setRoom } = useFittedChips(
-    candidates, PANEL_LOOK, 0, 'panel-chip-measure',
-  );
+  const [room, setRoom] = useState(0);
+  const times = useMemo(() => fittedChips(candidates, widths, room, PANEL_LOOK, 0), [candidates, room, widths]);
   return (
     <View testID="panel-chips-room" onLayout={(event) => setRoom(event.nativeEvent.layout.width)}>
       <View
@@ -294,7 +306,6 @@ export function PanelQuickPicks({
           />
         ))}
       </View>
-      {measurer(colors)}
     </View>
   );
 }
