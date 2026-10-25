@@ -11,7 +11,7 @@ import { Icon } from '@/src/components/Icon';
 import type { EditorColors } from '../editorColors';
 import { formatTimerLong, formatTimerWords } from '../timerFormat';
 import { fitChips } from '../timers';
-import { CSS_EASE } from './motion';
+import { CHIP_FOLD_MS, CSS_EASE } from './motion';
 import { CHIP_STRIP_INSET } from './stepRowMetrics';
 
 type ChipLook = {
@@ -29,7 +29,6 @@ const STRIP_LOOK: ChipLook = { minHeight: 44, paddingHorizontal: 6, fontSize: 16
 /** The timer panel's quick picks: centered, no ⋯. */
 const PANEL_LOOK: ChipLook = { minHeight: 44, paddingHorizontal: 10, fontSize: 17, gap: 6 };
 const MORE_WIDTH = 44;
-const FOLD_MS = 220;
 
 function Chip({
   colors,
@@ -193,7 +192,7 @@ export function StepTimerChips({
   }, [shown, times]);
   const visibleTimes = shown ? times : foldingTimes;
   useEffect(() => {
-    height.value = withTiming(shown ? contentHeight : 0, { duration: FOLD_MS, easing: CSS_EASE });
+    height.value = withTiming(shown ? contentHeight : 0, { duration: CHIP_FOLD_MS, easing: CSS_EASE });
   }, [contentHeight, height, shown]);
   const foldStyle = useAnimatedStyle(() => ({ height: height.value }));
 

@@ -10,7 +10,7 @@ import * as Reanimated from 'react-native-reanimated';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
 import { RoutineEditor } from './RoutineEditor';
-import { STEP_MAKE_ROOM, STEP_MAKE_ROOM_MS, STEP_REORDER_SETTLE_MS } from './useStepReorder';
+import { STEP_MAKE_ROOM, STEP_MAKE_ROOM_MS } from './useStepReorder';
 import {
   beginRowDrag,
   cancelRowDrag,
@@ -462,11 +462,11 @@ describe('RoutineEditor', () => {
     });
 
     describe('a drag that closes the open step or clears UNDO rows as it starts', () => {
-      async function fourSteps() {
+      async function fourSteps(first = 'a') {
         const database = await setupDb();
         const existing = await createRoutine(database, {
           title: 'reshape then drag',
-          steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }, { text: 'd' }],
+          steps: [{ text: first }, { text: 'b' }, { text: 'c' }, { text: 'd' }],
         });
         await renderWithDatabase(
           <RoutineEditor mode={editing(existing)} onSaved={jest.fn()} onCancel={jest.fn()} />,
@@ -482,6 +482,15 @@ describe('RoutineEditor', () => {
         }
       }
       const labels = () => [0, 1, 2, 3].map((index) => screen.getByTestId(`step-label-${index}`).props.children);
+      const wait = (ms: number) => act(async () => {
+        jest.advanceTimersByTime(ms);
+      });
+      /** Longer than any lift's reshaping takes. */
+      const untilSettled = () => wait(1000);
+      const fingerAt = (gesture: Awaited<ReturnType<typeof beginRowDrag>>, absoluteY: number) => act(async () => {
+        gesture.handlers.onUpdate?.({ absoluteY } as never);
+        await flushGestureCommit();
+      });
 
       it('aims at where the steps are once the open step has closed', async () => {
         await fourSteps();
@@ -494,14 +503,9 @@ describe('RoutineEditor', () => {
         // Step 4 lifts; step 1 closes and the steps below it move up 60.
         const gesture = await beginRowDrag(3, 235, 235);
         layOut([[0, 0], [1, 50], [2, 100]]);
-        await act(async () => {
-          jest.advanceTimersByTime(STEP_REORDER_SETTLE_MS);
-        });
+        await untilSettled();
         // The finger rises 150, to the upper half of step 3 as it is now.
-        await act(async () => {
-          gesture.handlers.onUpdate?.({ absoluteY: 85 } as never);
-          await flushGestureCommit();
-        });
+        await fingerAt(gesture, 85);
         await finishRowDrag(gesture);
 
         expect(labels()).toEqual(['a', 'b', 'd', 'c']);
@@ -521,17 +525,50 @@ describe('RoutineEditor', () => {
         // Step "d" lifts; the UNDO row goes and the steps move up 50.
         const gesture = await beginRowDrag(2, 175, 175);
         layOut([[0, 0], [1, 50]]);
-        await act(async () => {
-          jest.advanceTimersByTime(STEP_REORDER_SETTLE_MS);
-        });
+        await untilSettled();
         // The finger rises 110, to the upper half of "b" as it is now.
-        await act(async () => {
-          gesture.handlers.onUpdate?.({ absoluteY: 65 } as never);
-          await flushGestureCommit();
-        });
+        await fingerAt(gesture, 65);
         await finishRowDrag(gesture);
 
         expect([0, 1, 2].map((index) => screen.getByTestId(`step-label-${index}`).props.children)).toEqual(['b', 'd', 'c']);
+      });
+
+      it('aims where the finger is once the list has settled, counting a move made meanwhile', async () => {
+        await fourSteps();
+        tapToEdit(0);
+        primeRowLayouts([110, 50, 50, 50]);
+        jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+
+        const gesture = await beginRowDrag(3, 235, 235);
+        layOut([[0, 0], [1, 50], [2, 100]]);
+        // Moved while the list settles, then held still and let go.
+        await fingerAt(gesture, 85);
+        await untilSettled();
+        await finishRowDrag(gesture);
+
+        expect(labels()).toEqual(['a', 'b', 'd', 'c']);
+      });
+
+      it('waits out a long open step’s word glide before aiming', async () => {
+        const long = Array.from({ length: 30 }, (_, i) => `word${i + 1}`).join(' ');
+        await fourSteps(long);
+        tapToEdit(0);
+        primeRowLayouts([160, 50, 50, 50]);
+        jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+
+        const gesture = await beginRowDrag(3, 285, 285);
+        // Past the fold, the words are still gliding to their closed lines.
+        await wait(400);
+        await fingerAt(gesture, 135);
+        // The glide ends (160 ms + 12 ms for each word after the first) and
+        // the long step settles at 80, moving the others up.
+        await wait(120);
+        layOut([[1, 80], [2, 130]]);
+        fireEvent(screen.getByTestId('step-row-0'), 'layout', { nativeEvent: { layout: { y: 0, height: 80 } } });
+        await untilSettled();
+        await finishRowDrag(gesture);
+
+        expect(labels().slice(1)).toEqual(['b', 'd', 'c']);
       });
     });
 
@@ -614,7 +651,7 @@ describe('RoutineEditor', () => {
       // Lifting clears the UNDO row; the drop aims once the list has settled.
       const gesture = await beginRowDrag(0, 25, 25);
       await act(async () => {
-        jest.advanceTimersByTime(STEP_REORDER_SETTLE_MS);
+        jest.advanceTimersByTime(1000);
       });
       await act(async () => {
         gesture.handlers.onUpdate?.({ absoluteY: 180 } as never);

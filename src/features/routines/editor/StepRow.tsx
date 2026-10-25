@@ -26,7 +26,7 @@ import type { EditorColors } from '../editorColors';
 import { useUndoTimeout } from '../useUndoTimeout';
 import { STEP_MAKE_ROOM, STEP_REORDER_HOLD_MS } from '../useStepReorder';
 import { formatTimerLong, formatTimerWords } from '../timerFormat';
-import { CSS_EASE } from './motion';
+import { CSS_EASE, STEP_OPEN_MS } from './motion';
 import { NumberBadge } from './NumberBadge';
 import {
   BADGE_SIZE,
@@ -49,8 +49,6 @@ export const SWIPE_DELETE_SHARE = 0.4;
 const SWIPE_MS = 200;
 /** The row is removed once it has flown off. */
 const FLING_MS = 220;
-/** How fast the number and time move when a step opens or closes. */
-const OPEN_MS = 220;
 /** The time badge's look, shared with the hidden copy that measures it. */
 const TIME_BADGE = {
   height: TIME_BADGE_HEIGHT,
@@ -162,7 +160,7 @@ export function StepRow(props: StepRowProps) {
   };
 
   useEffect(() => {
-    openProgress.value = withTiming(open ? 1 : 0, { duration: OPEN_MS, easing: CSS_EASE });
+    openProgress.value = withTiming(open ? 1 : 0, { duration: STEP_OPEN_MS, easing: CSS_EASE });
   }, [open, openProgress]);
 
   const deleteRow = () => props.onDelete(rowHeight.current);

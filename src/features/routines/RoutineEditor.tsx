@@ -39,9 +39,11 @@ import { SaveBar } from './editor/SaveBar';
 import { RoutineHeroCard } from './editor/RoutineHeroCard';
 import { DeletedStepRow, StepRow } from './editor/StepRow';
 import { KeyboardHolder, useStepFocus } from './editor/stepFocus';
+import { CHIP_FOLD_MS, STEP_OPEN_MS } from './editor/motion';
 import { chipStripRoom } from './editor/stepRowMetrics';
 import { StepTimerChips, useChipWidths } from './editor/TimerChips';
 import { TimerPanel } from './editor/TimerPanel';
+import { glideLength } from './editor/wordGlidePlan';
 import { createRoutine, deleteRoutine, updateRoutine } from './repository';
 import { moveItem } from './reorder';
 import {
@@ -120,6 +122,23 @@ type Sheet = 'leave' | 'delete' | null;
  * and its place among the steps that aren't being dragged (`dropIndex`,
  * where the drag's slot can go; null for the dragged step).
  */
+/** A few frames for the rows' last places to arrive after a change. */
+const LAST_LAYOUTS_MS = 50;
+
+/**
+ * How long lifting a step takes to change where the other steps are: the
+ * open step closes (its number, time and chips come back while its words
+ * glide to their closed lines) and UNDO rows go.
+ */
+function liftSettleMs(state: EditorState): number {
+  const open = state.openId ? realSteps(state).find((step) => step.localId === state.openId) : undefined;
+  const clearsUndoRows = state.rows.some((row) => row.kind === 'deleted');
+  if (!open && !clearsUndoRows) return 0;
+  const words = open?.text.trim() ? open.text.trim().split(/\s+/).length : 0;
+  const closing = open ? Math.max(STEP_OPEN_MS, CHIP_FOLD_MS, words ? glideLength(words) : 0) : 0;
+  return closing + LAST_LAYOUTS_MS;
+}
+
 type ShownRow =
   | { kind: 'deleted'; row: Extract<EditorRow, { kind: 'deleted' }>; rowIndex: number }
   | { kind: 'step'; row: Extract<EditorRow, { kind: 'step' }>; rowIndex: number; index: number; dropIndex: number | null };
@@ -203,9 +222,9 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
     scrollRef,
     onDragStart: () => {
       // The keyboard has already been let go of.
-      const reshapes = !!modelRef.current.openId || modelRef.current.rows.some((row) => row.kind === 'deleted');
+      const settleMs = liftSettleMs(modelRef.current);
       update((state) => leaveOpenStep(expireDeletedSteps(state)));
-      return reshapes;
+      return settleMs;
     },
   });
 
