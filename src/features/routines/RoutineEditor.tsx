@@ -39,8 +39,7 @@ import { RoutineHeroCard } from './editor/RoutineHeroCard';
 import { DeletedStepRow } from './editor/DeletedStepRow';
 import { StepRow } from './editor/StepRow';
 import { KeyboardHolder, useStepFocus } from './editor/stepFocus';
-import { chipStripRoom } from './editor/stepRowMetrics';
-import { StepTimerChips, useChipWidths } from './editor/TimerChips';
+import { ChipSizesProvider, StepTimerChips } from './editor/TimerChips';
 import { TimerPanel } from './editor/TimerPanel';
 import { glideLength } from './editor/wordGlidePlan';
 import { createRoutine, deleteRoutine, updateRoutine } from './repository';
@@ -80,7 +79,6 @@ import {
   chipCandidates,
   initialStepper,
   pressStepper,
-  TIMER_FILLERS,
   type StepperState,
 } from './timers';
 import type { DeletedRoutine, Routine } from './types';
@@ -200,15 +198,6 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const [busy, setBusy] = useState(false);
 
   const steps = realSteps(model);
-  // Every time a chip could show: the fillers, the recent ones, the steps'
-  // own, and the sets on show.
-  const chipWidths = useChipWidths(colors, [
-    ...TIMER_FILLERS,
-    ...recent,
-    ...steps.flatMap((step) => (step.timerSeconds ? [step.timerSeconds] : [])),
-    ...model.openCandidates,
-    ...(panel?.quickPicks ?? []),
-  ]);
   const counted = countedStepCount(model);
   const summary = countLine(counted, timedTotal(model));
   const wantsSave = needsSave(model, baseline);
@@ -454,239 +443,243 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
       testID="editor-safe-area"
       style={{ flex: 1, backgroundColor: colors.tint }}
     >
-      <EditorTopBar
+      <ChipSizesProvider
         colors={colors}
-        collapsed={collapsed}
-        isNew={model.isNew}
-        title={displayTitle(model)}
-        countLine={summary}
-        canRun={runnable}
-        onBack={back}
-        onDelete={() => {
-          settle();
-          setSheet('delete');
-        }}
-        onPlay={play}
-      />
-      <ScrollView
-        ref={scrollRef}
-        testID="routine-editor-scroll"
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingTop: 4,
-          paddingHorizontal: 16,
-          paddingBottom: 96 + keyboardClearance,
-          gap: 22,
-        }}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="none"
-        scrollEnabled={!drag}
-        onLayout={reorder.onViewportLayout}
-        onContentSizeChange={(_, height) => {
-          reorder.setContentHeight(height);
-          if (keyboardClearance > 0) scrollOpenStepIntoView();
-        }}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
+        rowWidth={rowWidth}
+        recent={recent}
+        stepTimers={steps.map((step) => step.timerSeconds)}
+        shownSets={[model.openCandidates, panel?.quickPicks ?? []]}
       >
-        <View onLayout={(event) => { heroY.current = event.nativeEvent.layout.y; }}>
-          <RoutineHeroCard
-            ref={titleRef}
-            colors={colors}
-            title={model.title}
-            countLine={summary}
-            colorKey={model.colorKey}
-            colorLabel={colorLabel}
-            colorsOpen={colorsOpen}
-            onChangeTitle={(title) => update((state) => setTitle(state, title))}
-            onTitleFocus={() => update(leaveOpenStep)}
-            onOpenColors={() => {
-              settle();
-              setColorsOpen(true);
-            }}
-            onCloseColors={() => setColorsOpen(false)}
-            onPickColor={(key) => {
-              update((state) => setColor(state, key));
-              setColorsOpen(false);
-            }}
-            onTitleRowLayout={(event) => {
-              const { y, height } = event.nativeEvent.layout;
-              titleRow.current = { y, height };
-            }}
-          />
-        </View>
-
-        <View
-          style={{ gap: 10 }}
-          onLayout={(event) => { sectionY.current = event.nativeEvent.layout.y; }}
+        <EditorTopBar
+          colors={colors}
+          collapsed={collapsed}
+          isNew={model.isNew}
+          title={displayTitle(model)}
+          countLine={summary}
+          canRun={runnable}
+          onBack={back}
+          onDelete={() => {
+            settle();
+            setSheet('delete');
+          }}
+          onPlay={play}
+        />
+        <ScrollView
+          ref={scrollRef}
+          testID="routine-editor-scroll"
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingTop: 4,
+            paddingHorizontal: 16,
+            paddingBottom: 96 + keyboardClearance,
+            gap: 22,
+          }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
+          scrollEnabled={!drag}
+          onLayout={reorder.onViewportLayout}
+          onContentSizeChange={(_, height) => {
+            reorder.setContentHeight(height);
+            if (keyboardClearance > 0) scrollOpenStepIntoView();
+          }}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12, paddingHorizontal: 2 }}>
-            <Text accessibilityRole="header" style={{ flex: 1, color: colors.text, fontSize: 16, lineHeight: 19, fontWeight: '700' }}>
-              Steps
-            </Text>
-            <Text style={{ flexShrink: 1, color: colors.muted2, fontSize: 15, lineHeight: 18, textAlign: 'right' }}>
-              Tap to edit · hold to move · swipe to delete
-            </Text>
+          <View onLayout={(event) => { heroY.current = event.nativeEvent.layout.y; }}>
+            <RoutineHeroCard
+              ref={titleRef}
+              colors={colors}
+              title={model.title}
+              countLine={summary}
+              colorKey={model.colorKey}
+              colorLabel={colorLabel}
+              colorsOpen={colorsOpen}
+              onChangeTitle={(title) => update((state) => setTitle(state, title))}
+              onTitleFocus={() => update(leaveOpenStep)}
+              onOpenColors={() => {
+                settle();
+                setColorsOpen(true);
+              }}
+              onCloseColors={() => setColorsOpen(false)}
+              onPickColor={(key) => {
+                update((state) => setColor(state, key));
+                setColorsOpen(false);
+              }}
+              onTitleRowLayout={(event) => {
+                const { y, height } = event.nativeEvent.layout;
+                titleRow.current = { y, height };
+              }}
+            />
           </View>
 
           <View
-            onLayout={(event) => { groupY.current = event.nativeEvent.layout.y; }}
-            style={{
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 20,
-              backgroundColor: colors.surface,
-              boxShadow: `0 2px 6px ${colors.shadow}`,
-              overflow: 'hidden',
-            }}
+            style={{ gap: 10 }}
+            onLayout={(event) => { sectionY.current = event.nativeEvent.layout.y; }}
           >
-            {model.rows.length === 0 ? (
-              <View style={{ minHeight: 56, paddingHorizontal: 16, justifyContent: 'center' }}>
-                <Text style={{ color: colors.muted, fontSize: 15 }}>Tap + to add your first step</Text>
-              </View>
-            ) : null}
-            {/* One flat list of keyed siblings, so the slot stays one view as it moves. */}
-            {[...editorRows(model.rows, drag?.localId).flatMap((item) => {
-              if (item.kind === 'deleted') {
-                const { row, rowIndex } = item;
-                return (
-                  <DeletedStepRow
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 12, paddingHorizontal: 2 }}>
+              <Text accessibilityRole="header" style={{ flex: 1, color: colors.text, fontSize: 16, lineHeight: 19, fontWeight: '700' }}>
+                Steps
+              </Text>
+              <Text style={{ flexShrink: 1, color: colors.muted2, fontSize: 15, lineHeight: 18, textAlign: 'right' }}>
+                Tap to edit · hold to move · swipe to delete
+              </Text>
+            </View>
+
+            <View
+              onLayout={(event) => { groupY.current = event.nativeEvent.layout.y; }}
+              style={{
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 20,
+                backgroundColor: colors.surface,
+                boxShadow: `0 2px 6px ${colors.shadow}`,
+                overflow: 'hidden',
+              }}
+            >
+              {model.rows.length === 0 ? (
+                <View style={{ minHeight: 56, paddingHorizontal: 16, justifyContent: 'center' }}>
+                  <Text style={{ color: colors.muted, fontSize: 15 }}>Tap + to add your first step</Text>
+                </View>
+              ) : null}
+              {/* One flat list of keyed siblings, so the slot stays one view as it moves. */}
+              {[...editorRows(model.rows, drag?.localId).flatMap((item) => {
+                if (item.kind === 'deleted') {
+                  const { row, rowIndex } = item;
+                  return (
+                    <DeletedStepRow
+                      key={row.localId}
+                      // Counts rows, deleted ones too (step test IDs count steps).
+                      index={rowIndex}
+                      colors={colors}
+                      height={row.height}
+                      first={rowIndex === 0}
+                      onUndo={() => update((state) => undoDeleteStep(state, row.localId))}
+                      onExpired={() => update((state) => expireDeletedStep(state, row.localId))}
+                    />
+                  );
+                }
+                const { row, rowIndex, index, dropIndex } = item;
+                const isActive = dropIndex === null;
+                const slot = isActive ? null : renderDropSlot(dropIndex);
+                const isOpen = model.openId === row.localId;
+                // The open step's times fold open with it (and away while the
+                // timer panel shows); every time's chip is measured ahead, so
+                // they're ready the moment it opens.
+                const chipsOpen = isOpen && !panel;
+                const stepRow = (
+                  <StepRow
                     key={row.localId}
-                    // Counts rows, deleted ones too (step test IDs count steps).
-                    index={rowIndex}
                     colors={colors}
-                    height={row.height}
-                    first={rowIndex === 0}
-                    onUndo={() => update((state) => undoDeleteStep(state, row.localId))}
-                    onExpired={() => update((state) => expireDeletedStep(state, row.localId))}
+                    index={index}
+                    number={numbers[row.localId] ?? index + 1}
+                    localId={row.localId}
+                    text={row.text}
+                    timerSeconds={row.timerSeconds}
+                    open={isOpen}
+                    first={rowIndex === 0 && !slot}
+                    hidden={isActive}
+                    makesRoom={reorder.makingRoom && row.localId !== reorder.heldId}
+                    holdGesture={reorder.gestureFor({ localId: row.localId, text: row.text }, index)}
+                    inputRef={focus.fieldRef(row.localId)}
+                    onLayout={(event) => onRowLayout(row.localId, event)}
+                    onOpen={() => open(row.localId)}
+                    onChangeText={(text) => update((state) => setStepText(state, row.localId, text))}
+                    onEnter={enter}
+                    onBlur={() => onStepBlur(row.localId)}
+                    onDelete={(height) => removeStep(row.localId, height)}
+                    onMoveEarlier={() => reorder.moveItemByAction(index, -1)}
+                    onMoveLater={() => reorder.moveItemByAction(index, 1)}
+                    chips={
+                      <StepTimerChips
+                        colors={colors}
+                        index={index}
+                        open={chipsOpen}
+                        candidates={isOpen ? model.openCandidates : NO_CANDIDATES}
+                        selected={row.timerSeconds}
+                        stepNumber={numbers[row.localId] ?? index + 1}
+                        onPick={(seconds) => pickChip(row.localId, seconds)}
+                        onMore={() => openPanel(row.localId)}
+                      />
+                    }
                   />
                 );
-              }
-              const { row, rowIndex, index, dropIndex } = item;
-              const isActive = dropIndex === null;
-              const slot = isActive ? null : renderDropSlot(dropIndex);
-              const isOpen = model.openId === row.localId;
-              // The open step's times fold open with it (and away while the
-              // timer panel shows); every time's chip is measured ahead, so
-              // they're ready the moment it opens.
-              const chipsOpen = isOpen && !panel;
-              const stepRow = (
-                <StepRow
-                  key={row.localId}
-                  colors={colors}
-                  index={index}
-                  number={numbers[row.localId] ?? index + 1}
-                  localId={row.localId}
-                  text={row.text}
-                  timerSeconds={row.timerSeconds}
-                  open={isOpen}
-                  first={rowIndex === 0 && !slot}
-                  hidden={isActive}
-                  makesRoom={reorder.makingRoom && row.localId !== reorder.heldId}
-                  holdGesture={reorder.gestureFor({ localId: row.localId, text: row.text }, index)}
-                  inputRef={focus.fieldRef(row.localId)}
-                  onLayout={(event) => onRowLayout(row.localId, event)}
-                  onOpen={() => open(row.localId)}
-                  onChangeText={(text) => update((state) => setStepText(state, row.localId, text))}
-                  onEnter={enter}
-                  onBlur={() => onStepBlur(row.localId)}
-                  onDelete={(height) => removeStep(row.localId, height)}
-                  onMoveEarlier={() => reorder.moveItemByAction(index, -1)}
-                  onMoveLater={() => reorder.moveItemByAction(index, 1)}
-                  chips={
-                    <StepTimerChips
-                      colors={colors}
-                      index={index}
-                      open={chipsOpen}
-                      candidates={isOpen ? model.openCandidates : NO_CANDIDATES}
-                      widths={chipWidths.widths}
-                      room={chipStripRoom(rowWidth)}
-                      selected={row.timerSeconds}
-                      stepNumber={numbers[row.localId] ?? index + 1}
-                      onPick={(seconds) => pickChip(row.localId, seconds)}
-                      onMore={() => openPanel(row.localId)}
-                    />
-                  }
-                />
-              );
-              return slot ? [slot, stepRow] : [stepRow];
-            }), renderDropSlot(steps.length - 1)]}
-          </View>
+                return slot ? [slot, stepRow] : [stepRow];
+              }), renderDropSlot(steps.length - 1)]}
+            </View>
 
-          <Text style={{ color: colors.muted2, fontSize: 15, lineHeight: 20, paddingHorizontal: 4 }}>
-            Press ✓ on the keyboard when you’re done with a step; your typing is kept either way.
-          </Text>
-        </View>
-        {reorder.dragPreview ? (
-          <DragPreview
+            <Text style={{ color: colors.muted2, fontSize: 15, lineHeight: 20, paddingHorizontal: 4 }}>
+              Press ✓ on the keyboard when you’re done with a step; your typing is kept either way.
+            </Text>
+          </View>
+          {reorder.dragPreview ? (
+            <DragPreview
+              colors={colors}
+              top={contentYOfStepsCard(reorder.dragPreview.top)}
+              height={reorder.dragPreview.height}
+              number={reorder.dragPreview.to + 1}
+              text={reorder.dragPreview.text}
+              style={reorder.dragPreviewStyle}
+            />
+          ) : null}
+        </ScrollView>
+
+        <AddStepButton colors={colors} visible={fabVisible} bottom={fabBottom} onPress={add} />
+        <KeyboardHolder ref={focus.holderRef} />
+
+        {wantsSave ? (
+          <SaveBar
             colors={colors}
-            top={contentYOfStepsCard(reorder.dragPreview.top)}
-            height={reorder.dragPreview.height}
-            number={reorder.dragPreview.to + 1}
-            text={reorder.dragPreview.text}
-            style={reorder.dragPreviewStyle}
+            isNew={model.isNew}
+            enabled={saveAllowed}
+            bottomInset={insets.bottom}
+            onHeight={setSaveBarHeight}
+            onSave={() => void save()}
           />
         ) : null}
-      </ScrollView>
 
-      <AddStepButton colors={colors} visible={fabVisible} bottom={fabBottom} onPress={add} />
-      <KeyboardHolder ref={focus.holderRef} />
-      {chipWidths.measurer}
+        {panel && panelStep ? (
+          <TimerPanel
+            colors={colors}
+            stepNumber={numbers[panel.stepId] ?? 1}
+            stepText={panelStep.text}
+            value={panelStep.timerSeconds}
+            stepper={panel.stepper}
+            quickPicks={panel.quickPicks}
+            onStep={stepPanel}
+            onPick={(seconds) => pickPanelTime(seconds)}
+            onClear={() => pickPanelTime(null)}
+            onDone={closePanel}
+          />
+        ) : null}
 
-      {wantsSave ? (
-        <SaveBar
-          colors={colors}
-          isNew={model.isNew}
-          enabled={saveAllowed}
-          bottomInset={insets.bottom}
-          onHeight={setSaveBarHeight}
-          onSave={() => void save()}
-        />
-      ) : null}
+        {sheet === 'leave' ? (
+          <LeaveSheet
+            colors={colors}
+            isNew={model.isNew}
+            saveAllowed={saveAllowed}
+            onKeepEditing={() => setSheet(null)}
+            onDiscard={() => {
+              setSheet(null);
+              onCancel();
+            }}
+            onSave={() => {
+              setSheet(null);
+              void save();
+            }}
+          />
+        ) : null}
 
-      {panel && panelStep ? (
-        <TimerPanel
-          colors={colors}
-          stepNumber={numbers[panel.stepId] ?? 1}
-          stepText={panelStep.text}
-          value={panelStep.timerSeconds}
-          stepper={panel.stepper}
-          quickPicks={panel.quickPicks}
-          quickPickWidths={chipWidths.widths.panel}
-          onStep={stepPanel}
-          onPick={(seconds) => pickPanelTime(seconds)}
-          onClear={() => pickPanelTime(null)}
-          onDone={closePanel}
-        />
-      ) : null}
-
-      {sheet === 'leave' ? (
-        <LeaveSheet
-          colors={colors}
-          isNew={model.isNew}
-          saveAllowed={saveAllowed}
-          onKeepEditing={() => setSheet(null)}
-          onDiscard={() => {
-            setSheet(null);
-            onCancel();
-          }}
-          onSave={() => {
-            setSheet(null);
-            void save();
-          }}
-        />
-      ) : null}
-
-      {sheet === 'delete' ? (
-        <DeleteRoutineSheet
-          colors={colors}
-          // Named as typed, like the prototype; the routines screen's UNDO
-          // names the saved routine it deleted.
-          title={displayTitle(model, mode.kind === 'edit' ? mode.routine.title : undefined)}
-          onCancel={() => setSheet(null)}
-          onDelete={() => void confirmDelete()}
-        />
-      ) : null}
+        {sheet === 'delete' ? (
+          <DeleteRoutineSheet
+            colors={colors}
+            // Named as typed, like the prototype; the routines screen's UNDO
+            // names the saved routine it deleted.
+            title={displayTitle(model, mode.kind === 'edit' ? mode.routine.title : undefined)}
+            onCancel={() => setSheet(null)}
+            onDelete={() => void confirmDelete()}
+          />
+        ) : null}
+      </ChipSizesProvider>
     </SafeAreaView>
   );
 }

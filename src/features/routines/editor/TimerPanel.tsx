@@ -90,7 +90,6 @@ export function TimerPanel({
   value,
   stepper,
   quickPicks,
-  quickPickWidths,
   onStep,
   onPick,
   onClear,
@@ -102,8 +101,6 @@ export function TimerPanel({
   value: number | null;
   stepper: StepperState;
   quickPicks: number[];
-  /** How wide each quick pick is (ChipWidths.panel). */
-  quickPickWidths: Record<number, number>;
   onStep: (dir: -1 | 1) => void;
   onPick: (seconds: number) => void;
   onClear: () => void;
@@ -143,7 +140,7 @@ export function TimerPanel({
         </View>
         <StepperButton colors={colors} dir={1} stepper={stepper} disabled={false} onPress={() => onStep(1)} />
       </View>
-      <PanelQuickPicks colors={colors} candidates={quickPicks} widths={quickPickWidths} selected={value} onPick={onPick} />
+      <PanelQuickPicks colors={colors} candidates={quickPicks} selected={value} onPick={onPick} />
       <SheetActions>
         <SheetButton
           colors={colors}

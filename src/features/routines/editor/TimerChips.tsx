@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Pressable, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -10,9 +10,9 @@ import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
 import { formatTimerLong, formatTimerWords } from '../timerFormat';
-import { fitChips } from '../timers';
+import { fitChips, TIMER_FILLERS } from '../timers';
 import { CHIP_FOLD_MS, CSS_EASE } from '../motion';
-import { CHIP_STRIP_INSET } from './stepRowMetrics';
+import { CHIP_STRIP_INSET, chipStripRoom } from './stepRowMetrics';
 
 type ChipLook = {
   minHeight: number;
@@ -79,20 +79,42 @@ function Chip({
 }
 
 /** How wide each time's chip is in the step strip and in the timer panel. */
-export type ChipWidths = {
+type ChipWidths = {
   strip: Record<number, number>;
   /** The strip's "No timer". */
   noTimer: number;
   panel: Record<number, number>;
 };
 
+type ChipSizes = { widths: ChipWidths; stripRoom: number };
+
+const ChipSizesContext = createContext<ChipSizes>({ widths: { strip: {}, noTimer: 0, panel: {} }, stripRoom: 0 });
+
 /**
- * Measures, once for the whole editor, each of `times`' chips in both looks
- * and "No timer": a time's chip is as wide whichever step or set it's in.
- * Render `measurer` once, anywhere.
+ * Measures chips once for the whole editor: every time a chip could show
+ * (the fillers, the times used most recently, the steps' own, and the sets
+ * on show), in the strip's look and the panel's, and "No timer". A time's
+ * chip is as wide whichever step or set it's in. The strips and quick picks
+ * inside read the widths, and the strip's room in a row `rowWidth` wide.
  */
-export function useChipWidths(colors: EditorColors, times: readonly number[]) {
+export function ChipSizesProvider({
+  colors,
+  rowWidth,
+  recent,
+  stepTimers,
+  shownSets,
+  children,
+}: {
+  colors: EditorColors;
+  rowWidth: number;
+  recent: readonly number[];
+  stepTimers: readonly (number | null)[];
+  /** The open step's times and the timer panel's quick picks. */
+  shownSets: readonly (readonly number[])[];
+  children: ReactNode;
+}) {
   const [widths, setWidths] = useState<ChipWidths>({ strip: {}, noTimer: 0, panel: {} });
+  const times = [...TIMER_FILLERS, ...recent, ...stepTimers.flatMap((time) => (time ? [time] : [])), ...shownSets.flat()];
   const distinct = [...new Set(times)].sort((a, b) => a - b);
   const measure = (look: 'strip' | 'panel', time: number) => (event: LayoutChangeEvent) => {
     const width = event.nativeEvent.layout.width;
@@ -131,7 +153,14 @@ export function useChipWidths(colors: EditorColors, times: readonly number[]) {
       </View>
     </View>
   );
-  return { widths, measurer };
+  const stripRoom = chipStripRoom(rowWidth);
+  const sizes = useMemo(() => ({ widths, stripRoom }), [widths, stripRoom]);
+  return (
+    <ChipSizesContext.Provider value={sizes}>
+      {children}
+      {measurer}
+    </ChipSizesContext.Provider>
+  );
 }
 
 /**
@@ -154,8 +183,6 @@ export function StepTimerChips({
   colors,
   open,
   candidates,
-  widths,
-  room,
   selected,
   stepNumber,
   onPick,
@@ -166,15 +193,13 @@ export function StepTimerChips({
   open: boolean;
   /** The open step's times (fixed while it's open). */
   candidates: readonly number[];
-  widths: ChipWidths;
-  /** The strip's room for "No timer", the times and ⋯. */
-  room: number;
   selected: number | null;
   stepNumber: number;
   onPick: (seconds: number | null) => void;
   onMore: () => void;
   index: number;
 }) {
+  const { widths, stripRoom: room } = useContext(ChipSizesContext);
   const times = useMemo(
     () => (widths.noTimer > 0
       ? fittedChips(candidates, widths.strip, room - widths.noTimer - STRIP_LOOK.gap, STRIP_LOOK, MORE_WIDTH)
@@ -266,17 +291,15 @@ export function StepTimerChips({
 export function PanelQuickPicks({
   colors,
   candidates,
-  widths,
   selected,
   onPick,
 }: {
   colors: EditorColors;
   candidates: readonly number[];
-  /** The panel look's widths (ChipWidths.panel). */
-  widths: Record<number, number>;
   selected: number | null;
   onPick: (seconds: number) => void;
 }) {
+  const widths = useContext(ChipSizesContext).widths.panel;
   const [room, setRoom] = useState(0);
   const times = useMemo(() => fittedChips(candidates, widths, room, PANEL_LOOK, 0), [candidates, room, widths]);
   return (
