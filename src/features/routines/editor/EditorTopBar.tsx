@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -12,46 +12,9 @@ import Animated, {
 import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
+import { IconButton } from './controls';
 
 const FOLD_MS = 180;
-
-export function IconButton({
-  label,
-  onPress,
-  children,
-  testID,
-  disabled,
-  style,
-}: {
-  label: string;
-  onPress: () => void;
-  children: React.ReactNode;
-  testID?: string;
-  disabled?: boolean;
-  style?: object;
-}) {
-  return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !!disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={{
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: disabled ? 0.4 : 1,
-        ...style,
-      }}
-    >
-      {children}
-    </Pressable>
-  );
-}
 
 /**
  * Back, the title, ▶ when the routine can run, and (for an existing routine)

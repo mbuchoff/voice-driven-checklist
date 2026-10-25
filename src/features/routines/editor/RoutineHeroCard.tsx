@@ -5,7 +5,7 @@ import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
 import { ColorDot, ColorGrid } from './ColorGrid';
-import { IconButton } from './EditorTopBar';
+import { IconButton } from './controls';
 
 /**
  * The routine's card, live: its color, name and count. The dot swaps the

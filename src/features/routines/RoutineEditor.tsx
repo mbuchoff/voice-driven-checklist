@@ -13,43 +13,33 @@ import {
   Dimensions,
   Keyboard,
   Platform,
-  Pressable,
   Text,
   TextInput,
   View,
   type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
 
-import { Icon } from '@/src/components/Icon';
 import { notify } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
 import { useDevicePreferences } from '@/src/features/settings/DevicePreferencesProvider';
 import { useTheme } from '@/src/theme/useTheme';
 
 import { editorColors } from './editorColors';
+import { AddStepButton } from './editor/AddStepButton';
+import { DragPreview } from './editor/DragPreview';
 import { EditorTopBar } from './editor/EditorTopBar';
-import {
-  EditorSheet,
-  SheetActions,
-  SheetBody,
-  SheetButton,
-  SheetTitle,
-} from './editor/EditorSheet';
+import { DeleteRoutineSheet, LeaveSheet } from './editor/LeaveSheets';
+import { SaveBar } from './editor/SaveBar';
 import { RoutineHeroCard } from './editor/RoutineHeroCard';
 import { DeletedStepRow, StepRow } from './editor/StepRow';
-import { NumberBadge } from './editor/NumberBadge';
 import { KeyboardHolder, useStepFocus } from './editor/stepFocus';
-import { chipStripRoom, STEP_WORDS, TEXT_PAD } from './editor/stepRowMetrics';
+import { chipStripRoom } from './editor/stepRowMetrics';
 import { StepTimerChips, useChipWidths } from './editor/TimerChips';
 import { TimerPanel } from './editor/TimerPanel';
 import { createRoutine, deleteRoutine, updateRoutine } from './repository';
@@ -80,6 +70,7 @@ import {
   setTitle,
   timedTotal,
   undoDeleteStep,
+  type EditorRow,
   type EditorState,
 } from './routineEditorModel';
 import { routineColor } from './routineColors';
@@ -124,6 +115,25 @@ type PanelState = {
 };
 type Sheet = 'leave' | 'delete' | null;
 
+/**
+ * The rows as shown: each step with its number among the steps (`index`)
+ * and its place among the steps that aren't being dragged (`dropIndex`,
+ * where the drag's slot can go; null for the dragged step).
+ */
+type ShownRow =
+  | { kind: 'deleted'; row: Extract<EditorRow, { kind: 'deleted' }>; rowIndex: number }
+  | { kind: 'step'; row: Extract<EditorRow, { kind: 'step' }>; rowIndex: number; index: number; dropIndex: number | null };
+
+function editorRows(rows: EditorRow[], draggedId: string | undefined): ShownRow[] {
+  let index = 0;
+  let dropIndex = 0;
+  return rows.map((row, rowIndex) => {
+    if (row.kind === 'deleted') return { kind: 'deleted', row, rowIndex };
+    const dragged = row.localId === draggedId;
+    return { kind: 'step', row, rowIndex, index: index++, dropIndex: dragged ? null : dropIndex++ };
+  });
+}
+
 export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const database = useDatabase();
   const theme = useTheme();
@@ -160,6 +170,8 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const sectionY = useRef(0);
   const groupY = useRef(0);
   const rowLayouts = useRef<Record<string, { y: number; height: number }>>({});
+  /** Where a point `y` down the steps' card sits in the scrolled content. */
+  const contentYOfStepsCard = (y: number) => sectionY.current + groupY.current + y;
   const scrollToId = useRef<string | null>(null);
 
   const [panel, setPanel] = useState<PanelState | null>(null);
@@ -221,7 +233,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
     const id = modelRef.current.openId;
     const row = id ? rowLayouts.current[id] : null;
     if (!row || keyboardTop.current == null) return;
-    const top = sectionY.current + groupY.current + row.y;
+    const top = contentYOfStepsCard(row.y);
     const target = scrollToKeepAboveKeyboard({
       top,
       bottom: top + row.height,
@@ -362,20 +374,24 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
 
   // Android Back: the keyboard closes first (by the system), then an open
   // panel, sheet or color grid, then it works like the back arrow.
+  const onBack = useRef(() => {});
+  onBack.current = () => {
+    if (panel) closePanel();
+    else if (sheet) setSheet(null);
+    else if (colorsOpen) setColorsOpen(false);
+    else back();
+  };
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (panel) closePanel();
-      else if (sheet) setSheet(null);
-      else if (colorsOpen) setColorsOpen(false);
-      else back();
+      onBack.current();
       return true;
     });
     return () => subscription.remove();
-  });
+  }, []);
 
-  const onScroll = (event: { nativeEvent: { contentOffset: { y: number } } }) => {
-    reorder.onScroll(event as never);
+  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    reorder.onScroll(event);
     const y = event.nativeEvent.contentOffset.y;
     scrollY.current = y;
     // The bar folds once the name has scrolled up under it.
@@ -390,23 +406,21 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
     rowLayouts.current[localId] = { y, height };
     if (scrollToId.current === localId) {
       scrollToId.current = null;
-      const target = sectionY.current + groupY.current + y + height / 2 - viewportHeight.current / 2;
+      const target = contentYOfStepsCard(y + height / 2) - viewportHeight.current / 2;
       scrollRef.current?.scrollTo({ y: Math.max(0, target), animated: true });
     }
   };
 
   // While a step is dragged, the numbers follow it.
   const drag = reorder.drag;
-  const numbers = useMemo(() => {
-    const order = drag ? moveItem(steps.map((step) => step.localId), drag.from, drag.to) : steps.map((step) => step.localId);
-    return Object.fromEntries(order.map((id, index) => [id, index + 1]));
-  }, [drag, steps]);
+  const ids = steps.map((step) => step.localId);
+  const numbers = Object.fromEntries(
+    (drag ? moveItem(ids, drag.from, drag.to) : ids).map((id, index) => [id, index + 1]),
+  );
 
   const fabVisible = !model.openId;
   const fabBottom = (wantsSave ? saveBarHeight : insets.bottom) + 16;
 
-  let stepIndex = 0;
-  let dropIndex = 0;
   // One slot that moves along (and glides, like the steps) as the dragged
   // step passes others.
   const renderDropSlot = (index: number) =>
@@ -520,11 +534,13 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
                 <Text style={{ color: colors.muted, fontSize: 15 }}>Tap + to add your first step</Text>
               </View>
             ) : null}
-            {model.rows.map((row, rowIndex) => {
-              if (row.kind === 'deleted') {
+            {editorRows(model.rows, drag?.localId).map((item) => {
+              if (item.kind === 'deleted') {
+                const { row, rowIndex } = item;
                 return (
                   <DeletedStepRow
                     key={row.localId}
+                    // Counts rows, deleted ones too (step test IDs count steps).
                     index={rowIndex}
                     colors={colors}
                     height={row.height}
@@ -534,11 +550,9 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
                   />
                 );
               }
-              const index = stepIndex;
-              stepIndex += 1;
-              const isActive = drag?.localId === row.localId;
+              const { row, rowIndex, index, dropIndex } = item;
+              const isActive = dropIndex === null;
               const slot = isActive ? null : renderDropSlot(dropIndex);
-              if (!isActive) dropIndex += 1;
               const isOpen = model.openId === row.localId;
               // The open step's times fold open with it (and away while the
               // timer panel shows); every time's chip is measured ahead, so
@@ -596,7 +610,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
         {reorder.dragPreview ? (
           <DragPreview
             colors={colors}
-            top={sectionY.current + groupY.current + reorder.dragPreview.top}
+            top={contentYOfStepsCard(reorder.dragPreview.top)}
             height={reorder.dragPreview.height}
             number={reorder.dragPreview.to + 1}
             text={reorder.dragPreview.text}
@@ -610,39 +624,14 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
       {chipWidths.measurer}
 
       {wantsSave ? (
-        <Animated.View
-          entering={FadeIn.duration(150)}
-          exiting={FadeOut.duration(75)}
-          onLayout={(event) => setSaveBarHeight(event.nativeEvent.layout.height)}
-          style={{
-            paddingTop: 12,
-            paddingHorizontal: 16,
-            paddingBottom: 16 + insets.bottom,
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
-            backgroundColor: colors.tint,
-          }}
-        >
-          <Pressable
-            testID="save"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !saveAllowed }}
-            disabled={!saveAllowed}
-            onPress={() => void save()}
-            style={{
-              height: 54,
-              borderRadius: 17,
-              backgroundColor: colors.ink,
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: saveAllowed ? 1 : 0.4,
-            }}
-          >
-            <Text style={{ color: colors.onInk, fontSize: 16, fontWeight: '700' }}>
-              {model.isNew ? 'Create routine' : 'Save changes'}
-            </Text>
-          </Pressable>
-        </Animated.View>
+        <SaveBar
+          colors={colors}
+          isNew={model.isNew}
+          enabled={saveAllowed}
+          bottomInset={insets.bottom}
+          onHeight={setSaveBarHeight}
+          onSave={() => void save()}
+        />
       ) : null}
 
       {panel && panelStep ? (
@@ -662,173 +651,30 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
       ) : null}
 
       {sheet === 'leave' ? (
-        <EditorSheet colors={colors} onDismiss={() => setSheet(null)} testID="leave-sheet">
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <SheetTitle colors={colors}>
-                {model.isNew ? 'Create this routine?' : 'Save your changes?'}
-              </SheetTitle>
-            </View>
-            <Pressable
-              testID="leave-keep-editing"
-              accessibilityRole="button"
-              accessibilityLabel="Keep editing"
-              onPress={() => setSheet(null)}
-              style={{ width: 44, height: 44, marginRight: -10, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Icon name="close" color={colors.muted} size={18} />
-            </Pressable>
-          </View>
-          <SheetBody colors={colors}>
-            {!model.isNew
-              ? 'You changed this routine. If you leave without saving, those changes are lost.'
-              : saveAllowed
-                ? 'It hasn’t been created yet.'
-                : 'It needs a name and at least one step before it can be created.'}
-          </SheetBody>
-          <SheetActions>
-            <SheetButton
-              colors={colors}
-              variant="discardSoft"
-              label="Discard"
-              testID="leave-discard"
-              onPress={() => {
-                setSheet(null);
-                onCancel();
-              }}
-            />
-            <SheetButton
-              colors={colors}
-              variant="strong"
-              label={model.isNew ? 'Create' : 'Save'}
-              testID="leave-save"
-              disabled={!saveAllowed}
-              onPress={() => {
-                setSheet(null);
-                void save();
-              }}
-            />
-          </SheetActions>
-        </EditorSheet>
+        <LeaveSheet
+          colors={colors}
+          isNew={model.isNew}
+          saveAllowed={saveAllowed}
+          onKeepEditing={() => setSheet(null)}
+          onDiscard={() => {
+            setSheet(null);
+            onCancel();
+          }}
+          onSave={() => {
+            setSheet(null);
+            void save();
+          }}
+        />
       ) : null}
 
       {sheet === 'delete' ? (
-        <EditorSheet colors={colors} onDismiss={() => setSheet(null)} testID="delete-sheet">
-          <SheetTitle colors={colors}>Delete this routine?</SheetTitle>
-          <SheetBody colors={colors}>
-            {`“${displayTitle(model, mode.kind === 'edit' ? mode.routine.title : undefined)}” and its steps will be gone.`}
-          </SheetBody>
-          <SheetActions>
-            <SheetButton colors={colors} variant="keep" label="Cancel" testID="delete-cancel" onPress={() => setSheet(null)} />
-            <SheetButton
-              colors={colors}
-              variant="discard"
-              label="Delete"
-              testID="delete-confirm"
-              onPress={() => void confirmDelete()}
-            />
-          </SheetActions>
-        </EditorSheet>
+        <DeleteRoutineSheet
+          colors={colors}
+          title={displayTitle(model, mode.kind === 'edit' ? mode.routine.title : undefined)}
+          onCancel={() => setSheet(null)}
+          onDelete={() => void confirmDelete()}
+        />
       ) : null}
     </SafeAreaView>
-  );
-}
-
-function DragPreview({
-  colors,
-  top,
-  height,
-  number,
-  text,
-  style,
-}: {
-  colors: ReturnType<typeof editorColors>;
-  top: number;
-  height: number;
-  number: number;
-  text: string;
-  style: object;
-}) {
-  return (
-    <Animated.View
-      testID="step-drag-preview"
-      pointerEvents="none"
-      style={[
-        {
-          position: 'absolute',
-          top,
-          left: 16,
-          right: 16,
-          minHeight: height,
-          paddingVertical: 6,
-          paddingHorizontal: 8,
-          borderRadius: 16,
-          backgroundColor: colors.fill,
-          boxShadow: '0 16px 34px rgba(28, 48, 41, 0.3)',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-          zIndex: 30,
-          transform: [{ scale: 1.04 }],
-        },
-        style,
-      ]}
-    >
-      <NumberBadge number={number} color={colors.ink} background={colors.surface} />
-      <Text
-        testID="step-drag-preview-text"
-        style={{ flex: 1, color: colors.text, ...STEP_WORDS, paddingHorizontal: TEXT_PAD.x }}
-      >
-        {text}
-      </Text>
-    </Animated.View>
-  );
-}
-
-function AddStepButton({
-  colors,
-  visible,
-  bottom,
-  onPress,
-}: {
-  colors: ReturnType<typeof editorColors>;
-  visible: boolean;
-  bottom: number;
-  onPress: () => void;
-}) {
-  const shown = useSharedValue(visible ? 1 : 0);
-  useEffect(() => {
-    // It hides at once and comes back with a 200 ms grow.
-    shown.value = visible ? withTiming(1, { duration: 200 }) : 0;
-  }, [shown, visible]);
-  const style = useAnimatedStyle(() => ({
-    opacity: Math.min(1, shown.value * 1.25),
-    transform: [{ scale: 0.6 + 0.4 * shown.value }],
-  }));
-  return (
-    <Animated.View
-      pointerEvents={visible ? 'auto' : 'none'}
-      style={[{ position: 'absolute', right: 16, bottom, zIndex: 6 }, style]}
-    >
-      <Pressable
-        testID="add-step"
-        accessibilityRole="button"
-        accessibilityLabel="Add a step"
-        accessibilityElementsHidden={!visible}
-        importantForAccessibility={visible ? 'yes' : 'no-hide-descendants'}
-        onPress={onPress}
-        style={{
-          width: 56,
-          height: 56,
-          borderRadius: 28,
-          backgroundColor: colors.ink,
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 6px 16px rgba(28, 48, 41, 0.3), 0 2px 4px rgba(28, 48, 41, 0.2)',
-        }}
-      >
-        <Icon name="plus" color={colors.onInk} size={24} strokeWidth={2.4} />
-      </Pressable>
-    </Animated.View>
   );
 }
