@@ -32,7 +32,8 @@ import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 import type { Palette } from '@/src/theme/palette';
 
 import { moveItem } from './reorder';
-import { getRoutineCardColors, RoutineCard } from './RoutineCard';
+import { RoutineCard } from './RoutineCard';
+import { routineColorShades } from './routineColors';
 import { RoutineHoldOutline } from './RoutineHoldOutline';
 import {
   getRoutinePosition,
@@ -232,7 +233,7 @@ function RoutinePosition({
       <RoutineHoldFeedback
         itemId={item.id}
         layout={layout}
-        color={getRoutineCardColors(item.colorKey, theme.mode).ink}
+        color={routineColorShades(item.colorKey, theme.mode).ink}
         holdOwner={motion.holdOwner}
         progress={motion.holdProgress}
       />

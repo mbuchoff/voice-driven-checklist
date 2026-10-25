@@ -9,7 +9,8 @@ import Animated, {
 import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
-import { fitChips, formatTimerLong, formatTimerWords } from '../timers';
+import { formatTimerLong, formatTimerWords } from '../timerFormat';
+import { fitChips } from '../timers';
 import { CSS_EASE } from './motion';
 import { CHIP_STRIP_INSET } from './stepRowMetrics';
 

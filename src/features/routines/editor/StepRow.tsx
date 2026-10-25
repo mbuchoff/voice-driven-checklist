@@ -25,7 +25,7 @@ import { Icon } from '@/src/components/Icon';
 import type { EditorColors } from '../editorColors';
 import { useUndoTimeout } from '../useUndoTimeout';
 import { STEP_MAKE_ROOM, STEP_REORDER_HOLD_MS } from '../useStepReorder';
-import { formatTimerLong, formatTimerWords } from '../timers';
+import { formatTimerLong, formatTimerWords } from '../timerFormat';
 import { CSS_EASE } from './motion';
 import { NumberBadge } from './NumberBadge';
 import {

@@ -74,12 +74,12 @@ import {
   type EditorState,
 } from './routineEditorModel';
 import { routineColor } from './routineColors';
+import { countLine } from './timerFormat';
 import {
   chipCandidates,
-  countLine,
-  TIMER_FILLERS,
   initialStepper,
   pressStepper,
+  TIMER_FILLERS,
   type StepperState,
 } from './timers';
 import type { DeletedRoutine, Routine } from './types';

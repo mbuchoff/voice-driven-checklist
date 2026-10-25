@@ -43,7 +43,7 @@ export default function RunRoute() {
   const stopConfirmationPendingRef = useRef(false);
 
   useEffect(() => {
-    cueSound.prepare(preferences.sound);
+    cueSound.setFamily(preferences.sound);
   }, [cueSound, preferences.sound]);
 
   useEffect(() => () => cueSound.release(), [cueSound]);

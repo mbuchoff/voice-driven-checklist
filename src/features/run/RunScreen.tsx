@@ -19,7 +19,7 @@ import type {
 } from '@/src/services/speech/adapters';
 import { useTheme } from '@/src/theme/useTheme';
 
-import { formatTimerWords } from '@/src/features/routines/timers';
+import { formatTimerWords } from '@/src/features/routines/timerFormat';
 
 import { parseCommand, parseInterimCommand } from './commandParser';
 import { initialRunState, isRunActive, runReducer } from './runReducer';

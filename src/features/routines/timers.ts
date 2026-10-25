@@ -1,3 +1,4 @@
+import { formatTimerLong, formatTimerWords } from './timerFormat';
 import { STEP_TIMER_MAX_SECONDS } from './validation';
 
 /** How many time chips a step offers before ⋯. */
@@ -6,36 +7,6 @@ export const TIMER_CHIP_COUNT = 4;
 export const TIMER_FILLERS = [30, 60, 120, 300];
 /** The panel's step sizes, coarsest first. */
 export const STEPPER_LEVELS = [60, 15, 5, 1];
-
-/** Chips, step clocks, the timer panel's readout and the routine total: 1 min 30s. */
-export function formatTimerLong(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  const rest = seconds % 60;
-  return `${Math.floor(seconds / 60)} min${rest ? ` ${rest}s` : ''}`;
-}
-
-/** Spoken by TalkBack: 1 minute 30 seconds. */
-export function formatTimerWords(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
-  const parts: string[] = [];
-  if (minutes) parts.push(minutes === 1 ? '1 minute' : `${minutes} minutes`);
-  if (rest || !minutes) parts.push(rest === 1 ? '1 second' : `${rest} seconds`);
-  return parts.join(' ');
-}
-
-/** A running countdown: 1:45. */
-export function formatCountdownClock(seconds: number): string {
-  const whole = Math.max(0, Math.ceil(seconds));
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
-}
-
-/** "14 steps · 10 min timed", "1 step", "No steps yet". */
-export function countLine(stepCount: number, timedSeconds: number): string {
-  if (stepCount === 0) return 'No steps yet';
-  const steps = stepCount === 1 ? '1 step' : `${stepCount} steps`;
-  return timedSeconds > 0 ? `${steps} · ${formatTimerLong(timedSeconds)} timed` : steps;
-}
 
 /**
  * A step's chip times, in priority order: its own time, the times used most
@@ -94,9 +65,12 @@ export function initialStepper(): StepperState {
   return { level: 0, dir: 0, run: 0 };
 }
 
+function isReversing(state: StepperState, dir: -1 | 1): boolean {
+  return state.dir !== 0 && dir !== state.dir;
+}
+
 function nextLevel(state: StepperState, dir: -1 | 1): number {
-  const reversing = state.dir !== 0 && dir !== state.dir;
-  return reversing ? Math.min(state.level + 1, STEPPER_LEVELS.length - 1) : state.level;
+  return isReversing(state, dir) ? Math.min(state.level + 1, STEPPER_LEVELS.length - 1) : state.level;
 }
 
 /**
@@ -109,7 +83,7 @@ export function pressStepper(
   value: number | null,
   dir: -1 | 1,
 ): { state: StepperState; value: number | null } {
-  const reversing = state.dir !== 0 && dir !== state.dir;
+  const reversing = isReversing(state, dir);
   const level = nextLevel(state, dir);
   const size = STEPPER_LEVELS[level];
   const before = value ?? 0;

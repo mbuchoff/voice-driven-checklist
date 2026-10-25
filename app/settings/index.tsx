@@ -11,7 +11,7 @@ export default function SettingsRoute() {
   const cues = useMemo(() => new CueSoundPlayer(), []);
 
   useEffect(() => {
-    cues.prepare(preferences.sound);
+    cues.setFamily(preferences.sound);
   }, [cues, preferences.sound]);
 
   useEffect(() => () => cues.release(), [cues]);
@@ -21,7 +21,7 @@ export default function SettingsRoute() {
       onBack={() => router.back()}
       onManageAccounts={() => router.push('/settings/account')}
       previewSound={(sound, action) => {
-        cues.prepare(sound);
+        cues.setFamily(sound);
         void cues.play(action);
       }}
     />

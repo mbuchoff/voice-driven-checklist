@@ -4,12 +4,8 @@ import { Pressable, Text, View } from 'react-native';
 import { Icon } from '@/src/components/Icon';
 
 import type { EditorColors } from '../editorColors';
-import {
-  formatTimerLong,
-  stepCaption,
-  stepWords,
-  type StepperState,
-} from '../timers';
+import { formatTimerLong } from '../timerFormat';
+import { stepCaption, stepWords, type StepperState } from '../timers';
 import { EditorSheet, SheetActions, SheetButton, SheetTitle } from './EditorSheet';
 import { PanelQuickPicks } from './TimerChips';
 

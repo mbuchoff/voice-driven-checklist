@@ -33,7 +33,8 @@ export class CueSoundPlayer {
   private family: SoundPreference | null = null;
   private sounding = new Set<AudioPlayer>();
 
-  prepare(family: SoundPreference): void {
+  /** The sound family cues play from (Quiet plays none). */
+  setFamily(family: SoundPreference): void {
     if (this.family === family) return;
     this.stopSounding();
     this.family = family;

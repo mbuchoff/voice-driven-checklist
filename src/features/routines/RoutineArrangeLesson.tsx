@@ -4,7 +4,8 @@ import Animated, { cancelAnimation, Easing, interpolate, useDerivedValue, useAni
 
 import type { Palette } from '@/src/theme/palette';
 
-import { getRoutineCardColors, RoutineCard } from './RoutineCard';
+import { RoutineCard } from './RoutineCard';
+import { routineColorShades } from './routineColors';
 import { RoutineHoldOutline } from './RoutineHoldOutline';
 import { getRoutinePosition, type RoutineGridMetrics } from './routineGrid';
 import type { LibraryRoutine } from './types';
@@ -31,7 +32,7 @@ export function RoutineArrangeLesson({
     x: destination.x - source.x,
     y: destination.y - source.y,
   };
-  const { ink } = getRoutineCardColors(item.colorKey, theme.mode);
+  const { ink } = routineColorShades(item.colorKey, theme.mode);
 
   useEffect(() => {
     progress.value = 0;

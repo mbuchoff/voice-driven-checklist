@@ -19,14 +19,6 @@ import type { LibraryRoutine } from './types';
 import { useRoutineSelectionFeedback } from './useRoutineSelectionFeedback';
 import type { RoutinePressGuard } from './useRoutinePressGuard';
 
-export function getRoutineCardColors(
-  colorKey: string,
-  mode: Palette['mode'],
-) {
-  const { fill, ink } = routineColorShades(colorKey, mode);
-  return { fill, ink };
-}
-
 function stepCountLabel(count: number) {
   return count === 1 ? '1 step' : `${count} steps`;
 }
@@ -54,7 +46,7 @@ export function RoutineCard({
   accessibilityActions?: ComponentProps<typeof Pressable>['accessibilityActions'];
   onAccessibilityAction?: ComponentProps<typeof Pressable>['onAccessibilityAction'];
 }) {
-  const { ink, fill } = getRoutineCardColors(item.colorKey, theme.mode);
+  const { ink, fill } = routineColorShades(item.colorKey, theme.mode);
   const empty = item.steps.length === 0;
   const cardSelection = useRoutineSelectionFeedback('card', onEdit);
   const playSelection = useRoutineSelectionFeedback('control', onStart);

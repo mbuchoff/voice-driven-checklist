@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
 import { Icon, type IconName } from '@/src/components/Icon';
-import { formatCountdownClock, formatTimerWords } from '@/src/features/routines/timers';
+import { formatCountdownClock, formatTimerWords } from '@/src/features/routines/timerFormat';
 import { ScreenBackground } from '@/src/components/ScreenBackground';
 import type { Palette } from '@/src/theme/palette';
 
