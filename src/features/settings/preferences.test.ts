@@ -1,7 +1,7 @@
 import { runMigrations } from '@/src/db/migrations';
 import { createTestDatabase } from '@/src/test/createTestDatabase';
 
-import { SqliteDevicePreferenceStore } from './preferences';
+import { rememberTime, SqliteDevicePreferenceStore } from './preferences';
 
 describe('device preferences', () => {
   it('loads the System theme and Soft Chime defaults', async () => {
@@ -87,5 +87,13 @@ describe('device preferences', () => {
     await expect(new SqliteDevicePreferenceStore(database).load()).resolves.toMatchObject({
       recentTimerSeconds: [],
     });
+  });
+});
+
+describe('remembered timer lengths', () => {
+  it('remembers a used time first, without duplicates, keeping four', () => {
+    expect(rememberTime([], 90)).toEqual([90]);
+    expect(rememberTime([30, 60, 90, 120], 90)).toEqual([90, 30, 60, 120]);
+    expect(rememberTime([30, 60, 90, 120], 45)).toEqual([45, 30, 60, 90]);
   });
 });

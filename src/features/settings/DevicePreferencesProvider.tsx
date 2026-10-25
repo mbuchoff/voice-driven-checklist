@@ -9,10 +9,10 @@ import {
 } from 'react';
 
 import { useDatabase } from '@/src/db/DatabaseProvider';
-import { rememberTime } from '@/src/features/routines/timers';
 
 import {
   DEFAULT_DEVICE_PREFERENCES,
+  rememberTime,
   SqliteDevicePreferenceStore,
   type DevicePreferences,
   type DevicePreferenceStore,

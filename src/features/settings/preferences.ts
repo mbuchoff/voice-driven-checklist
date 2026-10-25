@@ -14,6 +14,14 @@ export type DevicePreferences = {
   recentTimerSeconds: number[];
 };
 
+/** How many timer lengths are remembered as used most recently. */
+export const RECENT_TIMER_LIMIT = 4;
+
+/** Using a timer length moves it to the front of the remembered ones. */
+export function rememberTime(recent: readonly number[], seconds: number): number[] {
+  return [seconds, ...recent.filter((time) => time !== seconds)].slice(0, RECENT_TIMER_LIMIT);
+}
+
 export const DEFAULT_DEVICE_PREFERENCES: DevicePreferences = {
   theme: 'system',
   sound: 'chime',

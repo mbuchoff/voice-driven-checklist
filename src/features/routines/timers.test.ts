@@ -3,7 +3,6 @@ import {
   fitChips,
   initialStepper,
   pressStepper,
-  rememberTime,
   stepCaption,
   stepWords,
   type StepperState,
@@ -25,12 +24,6 @@ describe('timer chips', () => {
     expect(fitChips([1545, 1455, 1335, 1215], width, 299, 4, 36)).toEqual([1335, 1455, 1545]);
     // The step's own time, first, always stays.
     expect(fitChips([1545, 30], width, 10, 4, 36)).toEqual([1545]);
-  });
-
-  it('remembers a used time first, without duplicates, keeping four', () => {
-    expect(rememberTime([], 90)).toEqual([90]);
-    expect(rememberTime([30, 60, 90, 120], 90)).toEqual([90, 30, 60, 120]);
-    expect(rememberTime([30, 60, 90, 120], 45)).toEqual([45, 30, 60, 90]);
   });
 });
 

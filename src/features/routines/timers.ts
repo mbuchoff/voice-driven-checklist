@@ -47,11 +47,6 @@ export function fitChips(
   return kept.sort((a, b) => a - b);
 }
 
-/** Using a time moves it to the front of the remembered ones, four at most. */
-export function rememberTime(recent: readonly number[], seconds: number): number[] {
-  return [seconds, ...recent.filter((time) => time !== seconds)].slice(0, TIMER_CHIP_COUNT);
-}
-
 export type StepperState = {
   /** Index into STEPPER_LEVELS. */
   level: number;
@@ -69,8 +64,9 @@ function isReversing(state: StepperState, dir: -1 | 1): boolean {
   return state.dir !== 0 && dir !== state.dir;
 }
 
-function nextLevel(state: StepperState, dir: -1 | 1): number {
-  return isReversing(state, dir) ? Math.min(state.level + 1, STEPPER_LEVELS.length - 1) : state.level;
+/** The step size a press goes to: the next finer one on a change of direction. */
+function levelAfter(state: StepperState, reversing: boolean): number {
+  return reversing ? Math.min(state.level + 1, STEPPER_LEVELS.length - 1) : state.level;
 }
 
 /**
@@ -84,7 +80,7 @@ export function pressStepper(
   dir: -1 | 1,
 ): { state: StepperState; value: number | null } {
   const reversing = isReversing(state, dir);
-  const level = nextLevel(state, dir);
+  const level = levelAfter(state, reversing);
   const size = STEPPER_LEVELS[level];
   const before = value ?? 0;
   const next = Math.max(0, Math.min(STEP_TIMER_MAX_SECONDS, before + dir * size));
@@ -102,10 +98,10 @@ export function pressStepper(
 
 /** "−1 min", "+15s": what a press in `dir` would do next. */
 export function stepCaption(state: StepperState, dir: -1 | 1): string {
-  return `${dir < 0 ? '−' : '+'}${formatTimerLong(STEPPER_LEVELS[nextLevel(state, dir)])}`;
+  return `${dir < 0 ? '−' : '+'}${formatTimerLong(STEPPER_LEVELS[levelAfter(state, isReversing(state, dir))])}`;
 }
 
 /** "1 minute", "15 seconds", for the button's accessibility label. */
 export function stepWords(state: StepperState, dir: -1 | 1): string {
-  return formatTimerWords(STEPPER_LEVELS[nextLevel(state, dir)]);
+  return formatTimerWords(STEPPER_LEVELS[levelAfter(state, isReversing(state, dir))]);
 }
