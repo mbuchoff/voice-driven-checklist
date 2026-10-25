@@ -28,6 +28,12 @@ import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 import { getEdgeAutoscrollDelta as calculateEdgeAutoscrollDelta } from './edgeAutoscroll';
 
 export const STEP_REORDER_HOLD_MS = 350;
+/**
+ * When lifting a step closes the open step or clears UNDO rows, its slot
+ * holds still this long while the other steps move up, and the drop then
+ * aims at where they are (the open step's times fold away in 220 ms).
+ */
+export const STEP_REORDER_SETTLE_MS = 300;
 /** How far a finger may drift (on either axis) while holding a step. */
 export const STEP_REORDER_HOLD_DRIFT = 12;
 export const STEP_REORDER_RELEASE_MS = 120;
@@ -73,6 +79,8 @@ type DragContext = {
   startCenterY: number;
   startPageY: number;
   startScrollY: number;
+  /** The list is settling after the drag reshaped it: the slot holds still. */
+  settling: boolean;
 };
 
 type StepReorderOptions = {
@@ -80,8 +88,11 @@ type StepReorderOptions = {
   /** Commits a finished drag. */
   onMove: (from: number, to: number) => void;
   scrollRef: RefObject<ComponentRef<typeof ScrollView> | null>;
-  /** Called when a held step lifts (e.g. to close an open step). */
-  onDragStart?: () => void;
+  /**
+   * Called when a held step lifts (e.g. to close an open step); true when
+   * that changes where the other steps are.
+   */
+  onDragStart?: () => boolean;
 };
 
 export function getDropTargetOffset(
@@ -96,6 +107,22 @@ export function getDropTargetOffset(
     ? toLayout.y + toLayout.height - fromLayout.height
     : toLayout.y;
   return targetTop - fromLayout.y;
+}
+
+/**
+ * How far a held step's own place moved while it was held (steps above it
+ * closing up): as far as the edge of the step next to it did.
+ */
+export function getOwnPlaceShift(
+  before: (StepRowLayout | null)[],
+  after: (StepRowLayout | null)[],
+  index: number,
+): number {
+  const [wasAbove, isAbove] = [before[index - 1], after[index - 1]];
+  if (wasAbove && isAbove) return isAbove.y + isAbove.height - (wasAbove.y + wasAbove.height);
+  const [wasBelow, isBelow] = [before[index + 1], after[index + 1]];
+  if (wasBelow && isBelow) return isBelow.y - wasBelow.y;
+  return 0;
 }
 
 function getDropIndex(
@@ -147,6 +174,8 @@ export function useStepReorder({
   onDragStart,
 }: StepReorderOptions) {
   const rowLayouts = useRef<(StepRowLayout | null)[]>([]);
+  // Where the steps were when the current drag started.
+  const startLayouts = useRef<(StepRowLayout | null)[]>([]);
   const dragRef = useRef<DragContext | null>(null);
   const scrollY = useRef(0);
   const viewportTop = useRef(0);
@@ -166,6 +195,9 @@ export function useStepReorder({
   const dragStartScrollY = useSharedValue(0);
   const dragNearEdge = useSharedValue(0);
   const dragOffset = useSharedValue(0);
+  // 0 while a lift's reshaping settles; the slot then holds still.
+  const dragSettled = useSharedValue(1);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragPreviewOpacity = useSharedValue(1);
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -178,8 +210,12 @@ export function useStepReorder({
     transform: [{ translateY: dragOffset.value }],
   }));
 
+  // During a drag, the other steps' places are taken only while the slot is
+  // in the dragged step's own place: then they're where they'd be without
+  // the drag (an open step closing, UNDO rows going), not making room.
   const onRowLayout = (index: number, event: LayoutChangeEvent) => {
-    if (dragRef.current) return;
+    const current = dragRef.current;
+    if (current && (index === current.from || current.to !== current.from)) return;
     const { y, height } = event.nativeEvent.layout;
     rowLayouts.current[index] = { y, height };
     rowLayoutsValue.value = [...rowLayouts.current];
@@ -226,7 +262,7 @@ export function useStepReorder({
 
   const commitDropTarget = (to: number) => {
     const current = dragRef.current;
-    if (!current) return;
+    if (!current || current.settling) return;
     if (current.to === to) return;
     current.to = to;
     dragTarget.value = to;
@@ -280,7 +316,8 @@ export function useStepReorder({
 
     Keyboard.dismiss();
     Vibration.vibrate(STEP_PICKUP_VIBRATION_MS);
-    onDragStart?.();
+    startLayouts.current = [...rowLayouts.current];
+    const reshapes = onDragStart?.() ?? false;
     const current: DragContext = {
       localId: item.localId,
       text: item.text,
@@ -291,9 +328,25 @@ export function useStepReorder({
       startCenterY: layout.y + layout.height / 2,
       startPageY: pageY,
       startScrollY: scrollY.current,
+      settling: reshapes,
     };
     dragRef.current = current;
     setDrag(dragStateFrom(current));
+    const settle = () => {
+      settleTimer.current = null;
+      current.settling = false;
+      // The next move aims afresh.
+      dragTarget.value = -1;
+      dragSettled.value = 1;
+    };
+    if (reshapes) settleTimer.current = setTimeout(settle, STEP_REORDER_SETTLE_MS);
+    else settle();
+  };
+
+  const endSettling = () => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = null;
+    dragSettled.value = 1;
   };
 
   const updateEdgeDrag = (pageY: number, nearEdge: boolean) => {
@@ -333,11 +386,10 @@ export function useStepReorder({
     }
     dragRef.current = null;
     cancelEdgeAutoscroll();
-    const targetOffset = getDropTargetOffset(
-      rowLayouts.current,
-      current.from,
-      current.to,
-    );
+    endSettling();
+    const targetOffset = current.from === current.to
+      ? getOwnPlaceShift(startLayouts.current, rowLayouts.current, current.from)
+      : getDropTargetOffset(rowLayouts.current, current.from, current.to);
     setDrag(null);
     setSettlingPreview(dragStateFrom(current));
     if (current.from !== current.to) onMove(current.from, current.to);
@@ -370,6 +422,7 @@ export function useStepReorder({
     if (dragRef.current?.localId !== localId) return;
     dragRef.current = null;
     cancelEdgeAutoscroll();
+    endSettling();
     setDrag(null);
   };
 
@@ -402,6 +455,8 @@ export function useStepReorder({
         dragStartPageY.value = event.absoluteY;
         dragStartScrollY.value = scrollYValue.value;
         dragNearEdge.value = 0;
+        // Settled once JS knows whether lifting reshapes the list.
+        dragSettled.value = 0;
         dragPreviewOpacity.value = 1;
         dragOffset.value = 0;
         scheduleOnRN(startDrag, item.localId, event.absoluteY);
@@ -416,9 +471,9 @@ export function useStepReorder({
           layout.y + layout.height / 2 +
           (event.absoluteY - dragStartPageY.value) +
           (scrollYValue.value - dragStartScrollY.value);
-        const to = getDropIndex(rowLayoutsValue.value, stepIndex, contentY);
         dragOffset.value = contentY - layout.height / 2 - layout.y;
-        if (to !== dragTarget.value) {
+        const to = getDropIndex(rowLayoutsValue.value, stepIndex, contentY);
+        if (dragSettled.value && to !== dragTarget.value) {
           dragTarget.value = to;
           scheduleOnRN(commitDropTarget, to);
         }
@@ -511,6 +566,7 @@ export function useStepReorder({
       if (autoscrollFrame.current != null) {
         cancelAnimationFrame(autoscrollFrame.current);
       }
+      if (settleTimer.current) clearTimeout(settleTimer.current);
     },
     [],
   );

@@ -10,7 +10,7 @@ import * as Reanimated from 'react-native-reanimated';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
 import { RoutineEditor } from './RoutineEditor';
-import { STEP_MAKE_ROOM } from './useStepReorder';
+import { STEP_MAKE_ROOM, STEP_REORDER_SETTLE_MS } from './useStepReorder';
 import {
   beginRowDrag,
   cancelRowDrag,
@@ -443,6 +443,80 @@ describe('RoutineEditor', () => {
       expect(vibrate.mock.calls.filter(([ms]) => ms === 12)).toHaveLength(1);
     });
 
+    describe('a drag that closes the open step or clears UNDO rows as it starts', () => {
+      async function fourSteps() {
+        const database = await setupDb();
+        const existing = await createRoutine(database, {
+          title: 'reshape then drag',
+          steps: [{ text: 'a' }, { text: 'b' }, { text: 'c' }, { text: 'd' }],
+        });
+        await renderWithDatabase(
+          <RoutineEditor initialRoutine={existing} onSaved={jest.fn()} onCancel={jest.fn()} />,
+          { database },
+        );
+      }
+      /** The rows' places once the list has closed up. */
+      function layOut(rows: [index: number, y: number][]) {
+        for (const [index, y] of rows) {
+          fireEvent(screen.getByTestId(`step-row-${index}`), 'layout', {
+            nativeEvent: { layout: { y, height: 50 } },
+          });
+        }
+      }
+      const labels = () => [0, 1, 2, 3].map((index) => screen.getByTestId(`step-label-${index}`).props.children);
+
+      it('aims at where the steps are once the open step has closed', async () => {
+        await fourSteps();
+        tapToEdit(0);
+        // Step 1 is open, with its times under its words.
+        primeRowLayouts([110, 50, 50, 50]);
+        // Gesture work reaches JS in microtasks; only the clock is faked.
+        jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+
+        // Step 4 lifts; step 1 closes and the steps below it move up 60.
+        const gesture = await beginRowDrag(3, 235, 235);
+        layOut([[0, 0], [1, 50], [2, 100]]);
+        await act(async () => {
+          jest.advanceTimersByTime(STEP_REORDER_SETTLE_MS);
+        });
+        // The finger rises 150, to the upper half of step 3 as it is now.
+        await act(async () => {
+          gesture.handlers.onUpdate?.({ absoluteY: 85 } as never);
+          await flushGestureCommit();
+        });
+        await finishRowDrag(gesture);
+
+        expect(labels()).toEqual(['a', 'b', 'd', 'c']);
+      });
+
+      it('aims at where the steps are once the UNDO rows have gone', async () => {
+        await fourSteps();
+        primeRowLayouts([50, 50, 50, 50]);
+        deleteStepByAccessibility(0);
+        // The renumbered steps' gestures register in a microtask.
+        await act(flushGestureCommit);
+        // "Step deleted · UNDO" holds step 1's place above the others.
+        layOut([[0, 50], [1, 100], [2, 150]]);
+        // Gesture work reaches JS in microtasks; only the clock is faked.
+        jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+
+        // Step "d" lifts; the UNDO row goes and the steps move up 50.
+        const gesture = await beginRowDrag(2, 175, 175);
+        layOut([[0, 0], [1, 50]]);
+        await act(async () => {
+          jest.advanceTimersByTime(STEP_REORDER_SETTLE_MS);
+        });
+        // The finger rises 110, to the upper half of "b" as it is now.
+        await act(async () => {
+          gesture.handlers.onUpdate?.({ absoluteY: 65 } as never);
+          await flushGestureCommit();
+        });
+        await finishRowDrag(gesture);
+
+        expect([0, 1, 2].map((index) => screen.getByTestId(`step-label-${index}`).props.children)).toEqual(['b', 'd', 'c']);
+      });
+    });
+
     it('forgets deleted row measurements before calculating the bottom slot', async () => {
       const database = await setupDb();
       const existing = await createRoutine(database, {
@@ -464,8 +538,17 @@ describe('RoutineEditor', () => {
       );
       primeRowLayouts([50, 50, 50, 50]);
       deleteStepByAccessibility(3);
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
 
-      const gesture = await beginRowDrag(0, 25, 180);
+      // Lifting clears the UNDO row; the drop aims once the list has settled.
+      const gesture = await beginRowDrag(0, 25, 25);
+      await act(async () => {
+        jest.advanceTimersByTime(STEP_REORDER_SETTLE_MS);
+      });
+      await act(async () => {
+        gesture.handlers.onUpdate?.({ absoluteY: 180 } as never);
+        await flushGestureCommit();
+      });
 
       expect(screen.getByTestId('step-drop-target-2')).toBeOnTheScreen();
       await cancelRowDrag(gesture);

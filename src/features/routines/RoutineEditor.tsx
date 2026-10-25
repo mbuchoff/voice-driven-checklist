@@ -199,9 +199,11 @@ export function RoutineEditor({
     onMove: (from, to) => setModel((state) => moveStep(state, from, to)),
     scrollRef,
     onDragStart: () => {
+      const reshapes = !!modelRef.current.openId || modelRef.current.rows.some((row) => row.kind === 'deleted');
       releaseOpenStep();
       expireAllUndoRows();
       setModel((state) => leaveOpenStep(state));
+      return reshapes;
     },
   });
 
