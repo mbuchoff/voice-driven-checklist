@@ -5,7 +5,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 
 import type { Database } from '@/src/db/database';
 import { runMigrations } from '@/src/db/migrations';
@@ -43,6 +43,36 @@ describe('LibraryScreen', () => {
     expect((await listRoutines(database)).map((routine) => routine.title)).toEqual(['First', 'Doomed', 'Last']);
     expect(screen.queryByText('“Doomed” deleted')).toBeNull();
     expect(last.id).toBeTruthy();
+  });
+
+  it('keeps the undo offer and reports a failed restore so UNDO can be tried again', async () => {
+    const alert = jest.spyOn(Alert, 'alert');
+    const database = await setupDb();
+    const doomed = await createRoutine(database, { title: 'Doomed', steps: [{ text: 'b' }] });
+    offerRoutineUndo((await deleteRoutine(database, doomed.id))!);
+    await database.execAsync(`
+      CREATE TRIGGER reject_restore BEFORE INSERT ON routines
+      BEGIN SELECT RAISE(ABORT, 'simulated restore failure'); END;
+    `);
+    await renderWithDatabase(
+      <LibraryScreen onCreate={jest.fn()} onEdit={jest.fn()} onStart={jest.fn()} />,
+      { database },
+    );
+    expect(await screen.findByText('“Doomed” deleted')).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole('button', { name: /undo/i }));
+
+    await waitFor(() => {
+      expect(alert).toHaveBeenCalledWith(expect.stringMatching(/restore/i), expect.any(String));
+    });
+    expect(screen.getByText('“Doomed” deleted')).toBeOnTheScreen();
+    expect(await listRoutines(database)).toEqual([]);
+
+    await database.execAsync('DROP TRIGGER reject_restore');
+    fireEvent.press(screen.getByRole('button', { name: /undo/i }));
+
+    expect(await screen.findByTestId(`routine-card-${doomed.id}`)).toBeOnTheScreen();
+    expect((await listRoutines(database)).map((routine) => routine.title)).toEqual(['Doomed']);
   });
 
   it('ends the undo offer when the routines screen is left', async () => {

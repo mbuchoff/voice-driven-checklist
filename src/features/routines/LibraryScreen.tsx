@@ -168,9 +168,21 @@ export function LibraryScreen({
     const offered = takeRoutineUndo();
     if (offered) setUndoOffer(offered);
   }, [active, refreshKey]);
+  // The offer stays up until the routine is back, so a failed restore can
+  // be tried again; taps during a restore are ignored.
+  const restoring = useRef(false);
   const undoDelete = useCallback(async (deleted: DeletedRoutine) => {
+    if (restoring.current) return;
+    restoring.current = true;
+    try {
+      await restoreRoutine(db, deleted);
+    } catch {
+      await notify('Couldn’t restore routine', `“${deleted.routine.title}” is still deleted.`);
+      return;
+    } finally {
+      restoring.current = false;
+    }
     setUndoOffer(null);
-    await restoreRoutine(db, deleted);
     refresh();
   }, [db, refresh]);
 
