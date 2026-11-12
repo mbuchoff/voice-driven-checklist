@@ -92,9 +92,9 @@ export function pressStepper(
   const before = value ?? 0;
   const next = Math.max(0, Math.min(STEP_TIMER_MAX_SECONDS, before + dir * STEPPER_LEVELS[pressed]));
   if (next === before) return { state, value };
-  // Reaching Off counts as landing on a multiple too, so the + after it
-  // moves by the step the − just took rather than a finer one (15s − 15s =
-  // Off, then +15s).
+  // Reaching Off counts as landing on a multiple too, so the + after it moves
+  // one size finer than the size climbed to: the step the − just took
+  // (15s − 15s = Off, then +15s), except after a 1-minute −, then +15s.
   const climbs = !reversing && pressed > 0 && next % STEPPER_LEVELS[pressed - 1] === 0;
   return { state: { level: climbs ? pressed - 1 : pressed, dir }, value: next || null };
 }

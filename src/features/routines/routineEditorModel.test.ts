@@ -28,10 +28,10 @@ import {
   undoDeleteStep,
   type EditorState,
 } from './routineEditorModel';
-import type { Routine } from './types';
 import { stepCaption } from './timers';
+import type { Routine } from './types';
 
-/** The timer lengths used most recently. */
+/** Recent times, most recent first. */
 const RECENT = [90, 30];
 
 const saved: Routine = {

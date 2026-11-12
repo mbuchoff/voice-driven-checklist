@@ -295,13 +295,9 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const closePanel = () => {
     const stepId = modelRef.current.panel?.stepId;
     if (!stepId) return;
-    let used: number | null = null;
-    update((state) => {
-      const closed = closeTimerPanel(state, recent);
-      used = closed.used;
-      return closed.state;
-    });
-    if (used) remember(used);
+    const closed = closeTimerPanel(modelRef.current, recent);
+    update(() => closed.state);
+    if (closed.used) remember(closed.used);
     focus.resumeTyping(stepId);
   };
 

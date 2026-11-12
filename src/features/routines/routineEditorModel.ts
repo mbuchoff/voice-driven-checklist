@@ -127,7 +127,7 @@ export function leaveOpenStep(state: EditorState): EditorState {
     : removeRow(closed, id);
 }
 
-/** Opens a step for typing, with its times from `recent` (the lengths used most recently). */
+/** Opens a step for typing, with its times from `recent` (the recent times, see recentTimes.tsx). */
 export function openStep(state: EditorState, id: string, recent: readonly number[]): EditorState {
   if (state.openId === id) return state;
   const left = leaveOpenStep(state);

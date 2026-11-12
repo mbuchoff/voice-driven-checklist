@@ -29,9 +29,7 @@ export function useRecentTimes(): RecentTimes {
 
 /**
  * Recent times live only in memory, so they start empty each time the app
- * starts, and are forgotten whenever the account changes. (The account is
- * null only at startup, before the editor can be reached, so settling from
- * null forgets nothing.)
+ * starts, and are forgotten whenever the account changes.
  */
 export function RecentTimesProvider({
   account,

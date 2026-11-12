@@ -92,7 +92,7 @@ const ChipSizesContext = createContext<ChipSizes>({ widths: { strip: {}, noTimer
 
 /**
  * Measures chips once for the whole editor: every time a chip could show
- * (the fillers, the times used most recently, the steps' own, and the sets
+ * (the fillers, the recent times, the steps' own, and the sets
  * on show), in the strip's look and the panel's, and "No timer". A time's
  * chip is as wide whichever step or set it's in. The strips and quick picks
  * inside read the widths, and the strip's room in a row `rowWidth` wide.
