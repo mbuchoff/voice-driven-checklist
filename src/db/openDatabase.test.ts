@@ -32,7 +32,7 @@ it('shares an in-flight open and retains the successfully initialized connection
     expect(await open()).toBe(opened);
     expect(open()).toBe(first);
     expect(mockOpen).toHaveBeenCalledTimes(1);
-    await expect(database.getFirstAsync('PRAGMA user_version')).resolves.toEqual({ user_version: 3 });
+    await expect(database.getFirstAsync('PRAGMA user_version')).resolves.toEqual({ user_version: 4 });
   } finally {
     await database.closeAsync();
   }
@@ -76,10 +76,10 @@ it('closes a failed migration connection and safely retries the same persisted l
 
     const database = await open();
     expect(mockOpen).toHaveBeenCalledTimes(2);
-    await expect(database.getFirstAsync('PRAGMA user_version')).resolves.toEqual({ user_version: 3 });
-    await expect(database.getAllAsync('SELECT id,title,library_position FROM checklists'))
+    await expect(database.getFirstAsync('PRAGMA user_version')).resolves.toEqual({ user_version: 4 });
+    await expect(database.getAllAsync('SELECT id,title,library_position FROM routines'))
       .resolves.toEqual([{ id: 'kept', title: 'Kept routine', library_position: 0 }]);
-    await expect(database.getAllAsync('SELECT text FROM checklist_items')).resolves.toEqual([{ text: 'Kept step' }]);
+    await expect(database.getAllAsync('SELECT text FROM steps')).resolves.toEqual([{ text: 'Kept step' }]);
     await expect(database.getFirstAsync('SELECT theme,sound FROM device_preferences'))
       .resolves.toEqual({ theme: 'dark', sound: 'wood' });
     await expect(database.getFirstAsync('SELECT mode FROM account_preferences')).resolves.toEqual({ mode: 'local' });

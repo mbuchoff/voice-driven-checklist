@@ -6,9 +6,9 @@ import {
   DevicePreferencesProvider,
   useDevicePreferences,
 } from './DevicePreferencesProvider';
-import type {
-  DevicePreferences,
-  DevicePreferenceStore,
+import {
+  type DevicePreferences,
+  type DevicePreferenceStore,
 } from './preferences';
 
 function preferenceStore(

@@ -9,7 +9,7 @@ import type { SpeechPlaybackAdapter } from './adapters';
 //    forever instead of falling back to the playback-unavailable banner.
 //  - A cold engine (just after boot/idle) can take several seconds to enumerate
 //    voices; too short a cap falsely reports playback unavailable on the first
-//    checklist (it then works on retry once the engine is warm).
+//    routine (it then works on retry once the engine is warm).
 // 10s comfortably outlasts a cold start while still bounding the disabled case.
 export const AVAILABILITY_TIMEOUT_MS = 10_000;
 

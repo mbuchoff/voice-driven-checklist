@@ -11,148 +11,198 @@ const mockedCreateAudioPlayer = createAudioPlayer as jest.MockedFunction<
   typeof createAudioPlayer
 >;
 
+type Status = { playing: boolean; didJustFinish: boolean };
+type StatusListener = (status: Status) => void;
+
 function audioPlayer() {
+  const listeners: StatusListener[] = [];
+  const report = (status: Status) => listeners.forEach((listener) => listener(status));
   return {
     play: jest.fn(),
-    seekTo: jest.fn(async () => undefined),
     release: jest.fn(),
+    addListener: jest.fn((_event: string, listener: StatusListener) => {
+      listeners.push(listener);
+      return { remove: jest.fn() };
+    }),
+    start: () => report({ playing: true, didJustFinish: false }),
+    finish: () => report({ playing: false, didJustFinish: true }),
   };
 }
 
+function createdPlayers() {
+  return mockedCreateAudioPlayer.mock.results.map(
+    (result) => result.value as ReturnType<typeof audioPlayer>,
+  );
+}
+
+// Every player a test makes is released after it, with its cues' watchdogs.
+const made: CueSoundPlayer[] = [];
+function newCues() {
+  const cues = new CueSoundPlayer();
+  made.push(cues);
+  return cues;
+}
+afterEach(() => {
+  made.splice(0).forEach((cues) => cues.release());
+});
+
 describe('CueSoundPlayer', () => {
-  beforeEach(() => mockedCreateAudioPlayer.mockReset());
-  afterEach(() => jest.useRealTimers());
-
-  it('prepares one distinct player for every action in an audible family', () => {
+  beforeEach(() => {
+    mockedCreateAudioPlayer.mockReset();
     mockedCreateAudioPlayer.mockImplementation(() => audioPlayer() as never);
-    const cues = new CueSoundPlayer();
-
-    cues.prepare('chime');
-
-    expect(mockedCreateAudioPlayer).toHaveBeenCalledTimes(4);
   });
 
-  it('plays the requested action from the prepared family', async () => {
-    const players = [audioPlayer(), audioPlayer(), audioPlayer(), audioPlayer()];
-    mockedCreateAudioPlayer.mockImplementation(() => players.shift() as never);
-    const cues = new CueSoundPlayer();
-    cues.prepare('wood');
-    const prepared = mockedCreateAudioPlayer.mock.results.map((result) => result.value);
+  it('plays the requested cue from the chosen family', async () => {
+    const cues = newCues();
+    cues.setFamily('wood');
 
     await expect(cues.play('previous')).resolves.toBe(true);
 
-    expect(prepared[1].seekTo).toHaveBeenCalledWith(0);
-    expect(prepared[1].play).toHaveBeenCalledTimes(1);
-    expect(prepared[0].play).not.toHaveBeenCalled();
-    expect(prepared[2].play).not.toHaveBeenCalled();
-    expect(prepared[3].play).not.toHaveBeenCalled();
+    expect(mockedCreateAudioPlayer).toHaveBeenCalledWith(
+      require('../../../assets/audio/cues/wood-previous.wav'),
+    );
+    expect(createdPlayers()[0].play).toHaveBeenCalledTimes(1);
   });
 
-  it('releases the current players before preparing a different family', () => {
-    const players = Array.from({ length: 8 }, audioPlayer);
-    mockedCreateAudioPlayer.mockImplementation(() => players.shift() as never);
-    const cues = new CueSoundPlayer();
-    cues.prepare('chime');
-    const firstFamily = mockedCreateAudioPlayer.mock.results.map((result) => result.value);
+  it('plays every cue on a new player, so none is left over from before the phone locked', async () => {
+    const cues = newCues();
+    cues.setFamily('chime');
 
-    cues.prepare('ping');
+    await cues.play('next');
+    await cues.play('next');
 
-    expect(firstFamily).toHaveLength(4);
-    expect(firstFamily.every((player) => player.release.mock.calls.length === 1)).toBe(true);
-    expect(mockedCreateAudioPlayer).toHaveBeenCalledTimes(8);
+    const [first, second] = createdPlayers();
+    expect(createdPlayers()).toHaveLength(2);
+    expect(second).not.toBe(first);
+    expect(second.play).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps Quiet silent and releases any prepared audible family', async () => {
-    mockedCreateAudioPlayer.mockImplementation(() => audioPlayer() as never);
-    const cues = new CueSoundPlayer();
-    cues.prepare('ping');
-    const prepared = mockedCreateAudioPlayer.mock.results.map((result) => result.value);
+  it('lets go of a cue’s watchdog once it has finished', async () => {
+    jest.useFakeTimers();
+    try {
+      const cues = newCues();
+      cues.setFamily('ping');
+      await cues.play('repeat');
 
-    cues.prepare('quiet');
+      createdPlayers()[0].finish();
+
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('frees a cue’s player once it has finished', async () => {
+    const cues = newCues();
+    cues.setFamily('ping');
+
+    await cues.play('repeat');
+    const [player] = createdPlayers();
+    expect(player.release).not.toHaveBeenCalled();
+    player.finish();
+
+    expect(player.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('cuts off a cue that is still sounding when the next one starts', async () => {
+    const cues = newCues();
+    cues.setFamily('ping');
+
+    await cues.play('next');
+    await cues.play('previous');
+
+    const [first, second] = createdPlayers();
+    expect(first.release).toHaveBeenCalledTimes(1);
+    expect(second.release).not.toHaveBeenCalled();
+  });
+
+  it('keeps Quiet silent and stops a cue that is sounding', async () => {
+    const cues = newCues();
+    cues.setFamily('ping');
+    await cues.play('next');
+
+    cues.setFamily('quiet');
     await expect(cues.play('complete')).resolves.toBe(false);
 
-    expect(prepared.every((player) => player.release.mock.calls.length === 1)).toBe(true);
-    expect(prepared.every((player) => player.play.mock.calls.length === 0)).toBe(true);
-    expect(mockedCreateAudioPlayer).toHaveBeenCalledTimes(4);
+    expect(createdPlayers()).toHaveLength(1);
+    expect(createdPlayers()[0].release).toHaveBeenCalledTimes(1);
   });
 
-  it('swallows setup and playback failures so run controls remain usable', async () => {
+  it('plays nothing once released', async () => {
+    const cues = newCues();
+    cues.setFamily('chime');
+    await cues.play('next');
+
+    cues.release();
+
+    await expect(cues.play('next')).resolves.toBe(false);
+    expect(createdPlayers()[0].release).toHaveBeenCalledTimes(1);
+  });
+
+  describe('logs', () => {
+    let info: jest.SpyInstance;
+    let warn: jest.SpyInstance;
+    const logged = () => [...info.mock.calls, ...warn.mock.calls].map(([line]) => line);
+    beforeEach(() => {
+      info = jest.spyOn(console, 'info').mockImplementation(() => {});
+      warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+      jest.restoreAllMocks();
+    });
+
+    it('each cue as the player reports it: playing, then finished', async () => {
+      const cues = newCues();
+      cues.setFamily('chime');
+      await cues.play('next');
+      const [player] = createdPlayers();
+
+      player.start();
+      player.start();
+      player.finish();
+
+      expect(logged()).toEqual(['[cue] next requested', '[cue] next playing', '[cue] next finished']);
+    });
+
+    it('a cue that never reports its end as timed out', async () => {
+      jest.useFakeTimers();
+      const cues = newCues();
+      cues.setFamily('wood');
+      await cues.play('repeat');
+
+      jest.advanceTimersByTime(3000);
+
+      expect(logged()).toEqual(['[cue] repeat requested', '[cue] repeat timed out']);
+    });
+
+    it('a cue that fails to play as failed', async () => {
+      const cues = newCues();
+      cues.setFamily('chime');
+      mockedCreateAudioPlayer.mockImplementationOnce(() => {
+        throw new Error('audio unavailable');
+      });
+
+      await cues.play('previous');
+
+      expect(logged()).toEqual(['[cue] previous failed']);
+    });
+  });
+
+  it('swallows audio failures so run controls remain usable', async () => {
+    const cues = newCues();
+    cues.setFamily('chime');
     mockedCreateAudioPlayer.mockImplementationOnce(() => {
       throw new Error('audio unavailable');
     });
-    const cues = new CueSoundPlayer();
-
-    expect(() => cues.prepare('chime')).not.toThrow();
     await expect(cues.play('next')).resolves.toBe(false);
-  });
 
-  it('retries the same family after an interrupted setup', async () => {
-    const partialPlayer = audioPlayer();
-    mockedCreateAudioPlayer
-      .mockReturnValueOnce(partialPlayer as never)
-      .mockImplementationOnce(() => {
-        throw new Error('audio unavailable');
-      });
-    const cues = new CueSoundPlayer();
-
-    cues.prepare('chime');
-    const retryPlayers = Array.from({ length: 4 }, audioPlayer);
-    mockedCreateAudioPlayer.mockImplementation(() => retryPlayers.shift() as never);
-    cues.prepare('chime');
-    const prepared = mockedCreateAudioPlayer.mock.results
-      .slice(2)
-      .map((result) => result.value);
-
-    await cues.play('next');
-
-    expect(partialPlayer.release).toHaveBeenCalledTimes(1);
-    expect(prepared).toHaveLength(4);
-    expect(prepared[0].play).toHaveBeenCalledTimes(1);
-  });
-
-  it('abandons a cue that cannot start so it cannot block speech indefinitely', async () => {
-    jest.useFakeTimers();
-    const stalledPlayer = audioPlayer();
-    stalledPlayer.seekTo.mockImplementation(() => new Promise(() => undefined));
-    const players = [stalledPlayer, audioPlayer(), audioPlayer(), audioPlayer()];
-    mockedCreateAudioPlayer.mockImplementation(() => players.shift() as never);
-    const cues = new CueSoundPlayer();
-    cues.prepare('chime');
-
-    const started = cues.play('next');
-    await jest.advanceTimersByTimeAsync(1000);
-
-    await expect(started).resolves.toBe(false);
-    expect(stalledPlayer.play).not.toHaveBeenCalled();
-  });
-
-  it('does not start a stale cue after its player family is released', async () => {
-    let finishSeek: () => void = () => undefined;
-    const stalePlayer = audioPlayer();
-    stalePlayer.seekTo.mockImplementation(
-      () => new Promise<undefined>((resolve) => {
-        finishSeek = () => resolve(undefined);
-      }),
-    );
-    const players = [
-      stalePlayer,
-      audioPlayer(),
-      audioPlayer(),
-      audioPlayer(),
-      audioPlayer(),
-      audioPlayer(),
-      audioPlayer(),
-      audioPlayer(),
-    ];
-    mockedCreateAudioPlayer.mockImplementation(() => players.shift() as never);
-    const cues = new CueSoundPlayer();
-    cues.prepare('chime');
-
-    const started = cues.play('next');
-    cues.prepare('ping');
-    finishSeek();
-
-    await expect(started).resolves.toBe(false);
-    expect(stalePlayer.play).not.toHaveBeenCalled();
+    const failing = audioPlayer();
+    failing.play.mockImplementation(() => {
+      throw new Error('playback failed');
+    });
+    mockedCreateAudioPlayer.mockImplementationOnce(() => failing as never);
+    await expect(cues.play('next')).resolves.toBe(false);
+    expect(failing.release).toHaveBeenCalledTimes(1);
   });
 });

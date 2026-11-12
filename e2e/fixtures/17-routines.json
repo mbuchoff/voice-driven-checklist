@@ -5,6 +5,7 @@
   "checklists": [
     {
       "title": "01 Morning Routine",
+      "color": "teal-1",
       "items": [
         { "text": "Open blinds" },
         { "text": "Drink a full glass of water before making breakfast" },
@@ -21,6 +22,7 @@
     },
     {
       "title": "02 Before Leaving the House",
+      "color": "orange-1",
       "items": [
         { "text": "Find keys, wallet, and phone" },
         { "text": "Lock windows" },
@@ -32,6 +34,7 @@
     },
     {
       "title": "03 Evening Reset",
+      "color": "violet-2",
       "items": [
         { "text": "Clear sink" },
         { "text": "Load dishwasher" },
@@ -43,6 +46,7 @@
     },
     {
       "title": "04 Weekly Groceries",
+      "color": "lime-1",
       "items": [
         { "text": "Check fridge" },
         { "text": "Check pantry" },
@@ -53,6 +57,7 @@
     },
     {
       "title": "05 Pack for a Trip",
+      "color": "cyan-2",
       "items": [
         { "text": "Passport and tickets" },
         { "text": "Identification and wallet" },
@@ -63,6 +68,7 @@
     },
     {
       "title": "06 Gym Bag",
+      "color": "pink-1",
       "items": [
         { "text": "Shoes" },
         { "text": "Workout clothes" },
@@ -74,6 +80,7 @@
     },
     {
       "title": "07 Workshop Opening",
+      "color": "amber-2",
       "items": [
         { "text": "Unlock entrance" },
         { "text": "Turn on lights" },
@@ -83,6 +90,7 @@
     },
     {
       "title": "08 Pet Care",
+      "color": "green-1",
       "items": [
         { "text": "Refresh water" },
         { "text": "Prepare food" },
@@ -93,6 +101,7 @@
     },
     {
       "title": "09 Close the Office",
+      "color": "blue-2",
       "items": [
         { "text": "Save open work" },
         { "text": "Clear shared table" },
@@ -103,6 +112,7 @@
     },
     {
       "title": "10 Medication Check",
+      "color": "red-1",
       "items": [
         { "text": "Confirm the label and prescribed dose" },
         { "text": "Take with water" },
@@ -111,6 +121,7 @@
     },
     {
       "title": "11 Laundry Day",
+      "color": "mint-1",
       "items": [
         { "text": "Sort colors" },
         { "text": "Check pockets" },
@@ -121,6 +132,7 @@
     },
     {
       "title": "12 Car Departure",
+      "color": "purple-1",
       "items": [
         { "text": "Walk around the car" },
         { "text": "Check mirrors" },
@@ -130,6 +142,7 @@
     },
     {
       "title": "13 Garden Watering",
+      "color": "yellow-1",
       "items": [
         { "text": "Check soil moisture" },
         { "text": "Water seedlings gently" },
@@ -139,6 +152,7 @@
     },
     {
       "title": "14 Guest Room",
+      "color": "slate",
       "items": [
         { "text": "Fresh sheets" },
         { "text": "Clean towels" },
@@ -148,6 +162,7 @@
     },
     {
       "title": "15 Weekly Review",
+      "color": "indigo-1",
       "items": [
         { "text": "Review calendar" },
         { "text": "Review open tasks" },
@@ -157,6 +172,7 @@
     },
     {
       "title": "16 Emergency Kit",
+      "color": "orange-2",
       "items": [
         { "text": "Check flashlight batteries" },
         { "text": "Replace expired food" },
@@ -166,6 +182,7 @@
     },
     {
       "title": "17 End of Day Lockup for the Entire Building",
+      "color": "magenta-1",
       "items": [
         { "text": "Walk every room" },
         { "text": "Close and lock every window" },

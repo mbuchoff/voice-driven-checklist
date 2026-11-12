@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 
 import { AccountGate } from '@/src/features/account/AccountGate';
-import { LibraryScreen } from '@/src/features/checklists/LibraryScreen';
+import { LibraryScreen } from '@/src/features/routines/LibraryScreen';
 
 export default function LibraryRoute() {
   const router = useRouter();
@@ -23,10 +23,10 @@ export default function LibraryRoute() {
         <LibraryScreen
           active={active}
           refreshKey={refreshKey}
-          onCreate={() => router.push('/checklists/new')}
+          onCreate={() => router.push('/routines/new')}
           onSettings={() => router.push('/settings')}
           onEdit={(id) =>
-            router.push({ pathname: '/checklists/[id]/edit', params: { id } })
+            router.push({ pathname: '/routines/[id]/edit', params: { id } })
           }
           onStart={(id) =>
             router.push({ pathname: '/run/[id]', params: { id } })

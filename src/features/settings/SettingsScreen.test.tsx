@@ -4,12 +4,12 @@ import { Alert } from 'react-native';
 import { runMigrations } from '@/src/db/migrations';
 import type { AccountContextValue } from '@/src/features/account/AccountProvider';
 import type { AccountState } from '@/src/features/account/types';
-import { serializeBackup } from '@/src/features/checklists/backup';
+import { serializeBackup } from '@/src/features/routines/backup';
 import {
   exportBackupFile,
   pickBackupFile,
-} from '@/src/features/checklists/backupIO';
-import { createChecklist, listChecklists } from '@/src/features/checklists/repository';
+} from '@/src/features/routines/backupIO';
+import { createRoutine, listRoutines } from '@/src/features/routines/repository';
 import { createTestDatabase } from '@/src/test/createTestDatabase';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
@@ -18,7 +18,7 @@ import { MemoryDevicePreferenceStore } from './preferences';
 import { SettingsContent } from './SettingsScreen';
 
 jest.mock(
-  '@/src/features/checklists/backupIO',
+  '@/src/features/routines/backupIO',
   () => ({
     exportBackupFile: jest.fn(),
     pickBackupFile: jest.fn(),
@@ -106,7 +106,7 @@ describe('SettingsContent', () => {
     const onBack = jest.fn();
     await renderSettings({ onBack });
 
-    fireEvent.press(screen.getByRole('button', { name: /back to my checklists/i }));
+    fireEvent.press(screen.getByRole('button', { name: /back to my routines/i }));
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('settings-safe-area')).toBeOnTheScreen();
     expect(screen.getByTestId('theme-system-icon')).toBeOnTheScreen();
@@ -153,11 +153,11 @@ describe('SettingsContent', () => {
     await expect(store.load()).resolves.toMatchObject({ sound: 'quiet' });
   });
 
-  it('exports checklist data without adding device preferences', async () => {
+  it('exports routine data without adding device preferences', async () => {
     const { database } = await renderSettings();
-    await createChecklist(database, {
+    await createRoutine(database, {
       title: 'Morning routine',
-      items: [{ text: 'Wake up' }],
+      steps: [{ text: 'Wake up' }],
     });
 
     fireEvent.press(screen.getByRole('button', { name: /export backup/i }));
@@ -175,7 +175,7 @@ describe('SettingsContent', () => {
     expect(JSON.parse(jsonText)).not.toHaveProperty('account');
   });
 
-  it('imports a selected checklist backup and leaves preferences untouched', async () => {
+  it('imports a selected routine backup and leaves preferences untouched', async () => {
     const store = new MemoryDevicePreferenceStore({
       theme: 'dark',
       sound: 'ping',
@@ -183,7 +183,7 @@ describe('SettingsContent', () => {
     });
     pickBackupFileMock.mockResolvedValue(
       serializeBackup([
-        { title: 'Imported checklist', items: [{ text: 'Review' }] },
+        { title: 'Imported checklist', steps: [{ text: 'Review' }] },
       ]),
     );
     const { database } = await renderSettings({ store });
@@ -191,7 +191,7 @@ describe('SettingsContent', () => {
     fireEvent.press(screen.getByRole('button', { name: /import backup/i }));
 
     await waitFor(async () => {
-      expect((await listChecklists(database)).map((item) => item.title)).toContain(
+      expect((await listRoutines(database)).map((item) => item.title)).toContain(
         'Imported checklist',
       );
     });
@@ -211,20 +211,20 @@ describe('SettingsContent', () => {
     await waitFor(() =>
       expect(alertSpy).toHaveBeenCalledWith(
         'Nothing to export',
-        'Create a checklist first.',
+        'Create a routine first.',
       ),
     );
     expect(exportBackupFileMock).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
 
-  it('reports backup export failures without changing checklist data', async () => {
+  it('reports backup export failures without changing routine data', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert');
     exportBackupFileMock.mockRejectedValue(new Error('Could not write file.'));
     const { database } = await renderSettings();
-    await createChecklist(database, {
+    await createRoutine(database, {
       title: 'Morning routine',
-      items: [{ text: 'Wake up' }],
+      steps: [{ text: 'Wake up' }],
     });
 
     fireEvent.press(screen.getByRole('button', { name: /export backup/i }));
@@ -232,7 +232,7 @@ describe('SettingsContent', () => {
     await waitFor(() =>
       expect(alertSpy).toHaveBeenCalledWith('Export failed', 'Could not write file.'),
     );
-    await expect(listChecklists(database)).resolves.toHaveLength(1);
+    await expect(listRoutines(database)).resolves.toHaveLength(1);
     alertSpy.mockRestore();
   });
 
@@ -243,7 +243,7 @@ describe('SettingsContent', () => {
     fireEvent.press(screen.getByRole('button', { name: /import backup/i }));
 
     await waitFor(() => expect(pickBackupFileMock).toHaveBeenCalledTimes(1));
-    await expect(listChecklists(database)).resolves.toEqual([]);
+    await expect(listRoutines(database)).resolves.toEqual([]);
     expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
@@ -284,7 +284,7 @@ describe('SettingsContent', () => {
         'Could not read backup file: not valid JSON.',
       ),
     );
-    await expect(listChecklists(database)).resolves.toEqual([]);
+    await expect(listRoutines(database)).resolves.toEqual([]);
     alertSpy.mockRestore();
   });
 

@@ -1,7 +1,7 @@
 import {
-  createChecklist,
-  getChecklist,
-} from '@/src/features/checklists/repository';
+  createRoutine,
+  getRoutine,
+} from '@/src/features/routines/repository';
 import { runMigrations } from '@/src/db/migrations';
 import { createTestDatabase } from '@/src/test/createTestDatabase';
 
@@ -556,12 +556,12 @@ describe('AccountManager', () => {
     await expect(refreshTokens.get(GRACE.sub)).resolves.toBeNull();
   });
 
-  it('switches to local mode, clears credentials, and preserves checklists when revocation is offline', async () => {
+  it('switches to local mode, clears credentials, and preserves routines when revocation is offline', async () => {
     const database = createTestDatabase();
     await runMigrations(database);
-    const checklist = await createChecklist(database, {
+    const routine = await createRoutine(database, {
       title: 'Keep me',
-      items: [{ text: 'Still here' }],
+      steps: [{ text: 'Still here' }],
     });
     const preferences = new SqliteAccountPreferenceStore(database);
     await preferences.save({ mode: 'google', identity: ADA });
@@ -577,9 +577,9 @@ describe('AccountManager', () => {
     await expect(refreshTokens.get(ADA.sub)).resolves.toBeNull();
     await expect(preferences.load()).resolves.toEqual({ mode: 'local' });
     expect(client.revokeCalls).toEqual(['rotated-refresh']);
-    await expect(getChecklist(database, checklist.id)).resolves.toMatchObject({
+    await expect(getRoutine(database, routine.id)).resolves.toMatchObject({
       title: 'Keep me',
-      items: [{ text: 'Still here' }],
+      steps: [{ text: 'Still here' }],
     });
   });
 
@@ -701,12 +701,12 @@ describe('AccountManager', () => {
     });
   });
 
-  it('deletes the Cognito user before entering local mode without touching checklists', async () => {
+  it('deletes the Cognito user before entering local mode without touching routines', async () => {
     const database = createTestDatabase();
     await runMigrations(database);
-    const checklist = await createChecklist(database, {
+    const routine = await createRoutine(database, {
       title: 'Local data',
-      items: [{ text: 'Preserved' }],
+      steps: [{ text: 'Preserved' }],
     });
     const preferences = new SqliteAccountPreferenceStore(database);
     await preferences.save({ mode: 'google', identity: ADA });
@@ -721,9 +721,9 @@ describe('AccountManager', () => {
     expect(manager.state).toEqual({ status: 'local' });
     await expect(refreshTokens.get(ADA.sub)).resolves.toBeNull();
     await expect(preferences.load()).resolves.toEqual({ mode: 'local' });
-    await expect(getChecklist(database, checklist.id)).resolves.toMatchObject({
+    await expect(getRoutine(database, routine.id)).resolves.toMatchObject({
       title: 'Local data',
-      items: [{ text: 'Preserved' }],
+      steps: [{ text: 'Preserved' }],
     });
   });
 });

@@ -3,6 +3,7 @@ import { BackHandler, Platform, StyleSheet } from 'react-native';
 
 import {
   flushRunEffects as flush,
+  runSnapshot,
   setupRunScreen as setup,
 } from './RunScreen.testSupport';
 const defaultPlatformOS = Platform.OS;
@@ -33,6 +34,16 @@ describe('RunScreen', () => {
       configurable: true,
       get: () => defaultPlatformVersion,
     });
+  });
+
+  it('counts a timed step down on Android, with its power module', async () => {
+    useAndroidHardwareBack();
+    setup({
+      snapshot: { ...runSnapshot, steps: runSnapshot.steps.map((step) => ({ ...step, timerSeconds: 30 })) },
+    });
+    await flush();
+
+    expect(screen.getByTestId('run-countdown')).toHaveTextContent('0:30');
   });
 
   describe('initial render', () => {
@@ -86,7 +97,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item two')).toBeOnTheScreen();
-      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 2 of 3/i)).toBeOnTheScreen();
       expect(playback.spoken).toEqual(['Item one', 'Item two']);
     });
 
@@ -100,7 +111,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item two')).toBeOnTheScreen();
-      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 2 of 3/i)).toBeOnTheScreen();
       expect(playback.spoken).toEqual(['Item one', 'Item two']);
     });
 
@@ -136,7 +147,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item two')).toBeOnTheScreen();
-      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 2 of 3/i)).toBeOnTheScreen();
       expect(screen.queryByText('Item three')).toBeNull();
     });
 
@@ -153,7 +164,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item two')).toBeOnTheScreen();
-      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 2 of 3/i)).toBeOnTheScreen();
       expect(screen.queryByText('Item three')).toBeNull();
     });
 
@@ -202,7 +213,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item one')).toBeOnTheScreen();
-      expect(screen.getByText(/item 1 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 1 of 3/i)).toBeOnTheScreen();
       expect(playback.spoken).toEqual(['Item one', 'Item one']);
     });
 
@@ -283,7 +294,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item two')).toBeOnTheScreen();
-      expect(screen.getByText(/item 2 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 2 of 3/i)).toBeOnTheScreen();
       expect(playback.spoken).toEqual(['Item one', 'Item two']);
     });
 
@@ -458,7 +469,7 @@ describe('RunScreen', () => {
       fireEvent.press(screen.getByTestId('manual-next'));
       await flush();
 
-      expect(screen.getByText(/checklist complete/i)).toBeOnTheScreen();
+      expect(screen.getByText(/routine complete/i)).toBeOnTheScreen();
       expect(screen.getByTestId('completion-restart')).toBeOnTheScreen();
       expect(screen.getByTestId('completion-return')).toBeOnTheScreen();
       expect(recognition.isListening()).toBe(false);
@@ -688,7 +699,7 @@ describe('RunScreen', () => {
       await flush();
 
       expect(screen.getByText('Item one')).toBeOnTheScreen();
-      expect(screen.getByText(/item 1 of 3/i)).toBeOnTheScreen();
+      expect(screen.getByText(/step 1 of 3/i)).toBeOnTheScreen();
       expect(playback.spoken[playback.spoken.length - 1]).toBe('Item one');
     });
 
@@ -722,7 +733,7 @@ describe('RunScreen', () => {
       act(() => recognition.emitResult({ transcript: 'next', isFinal: true }));
       await flush();
       expect(playback.spoken.length).toBe(before);
-      expect(screen.getByText(/checklist complete/i)).toBeOnTheScreen();
+      expect(screen.getByText(/routine complete/i)).toBeOnTheScreen();
     });
   });
 

@@ -224,7 +224,7 @@ The initialization flow below is used only when a checklist run is first launche
 ### Lifecycle Teardown
 - Register a route-leave hook on the run screen so router navigation away from the screen dispatches `DISCARD_RUN`.
 - Register a hardware-back handler on Android that dispatches `DISCARD_RUN` before allowing navigation.
-- Register an app lifecycle listener so moving to the background dispatches `DISCARD_RUN`.
+- ~~Register an app lifecycle listener so moving to the background dispatches `DISCARD_RUN`.~~ Superseded by #39: a run keeps going in the background (timed steps move on with the phone locked during voice runs); only killing the app ends it.
 - On web, register `pagehide` and `beforeunload` teardown handlers that dispatch `DISCARD_RUN`.
 - On run-screen unmount, dispose of speech playback, recognition resources, and the in-memory run snapshot even if no explicit Stop action was used.
 

@@ -19,12 +19,15 @@ import type {
 } from '@/src/services/speech/adapters';
 import { useTheme } from '@/src/theme/useTheme';
 
+import { formatTimerWords } from '@/src/features/routines/timerFormat';
+
 import { parseCommand, parseInterimCommand } from './commandParser';
-import { initialRunState, runReducer } from './runReducer';
+import { initialRunState, isRunActive, runReducer } from './runReducer';
 import { CompletionView } from './CompletionView';
 import { ActiveRunView } from './RunScreenView';
 import { RUN_TRANSITION_CONFIG } from './runPresentation';
-import type { ChecklistRunSnapshot } from './types';
+import type { RoutineRunSnapshot } from './types';
+import { useStepCountdown } from './useStepCountdown';
 
 const LOCALE = 'en-US';
 
@@ -46,7 +49,7 @@ const CUE_TO_SPEECH_DELAY_MS = 175;
 const STOP_HOLD_DURATION_MS = 1200;
 
 export type RunScreenProps = {
-  snapshot: ChecklistRunSnapshot;
+  snapshot: RoutineRunSnapshot;
   playback: SpeechPlaybackAdapter;
   recognition: SpeechRecognitionAdapter;
   initialAvailability: { spokenPlaybackAvailable: boolean; voiceControlAvailable: boolean };
@@ -143,28 +146,46 @@ export function RunScreen({
 
   useEffect(() => {
     animatedCurrentIndex.value = withTiming(
-      state.currentItemIndex,
+      state.currentStepIndex,
       RUN_TRANSITION_CONFIG,
     );
-  }, [animatedCurrentIndex, state.currentItemIndex]);
+  }, [animatedCurrentIndex, state.currentStepIndex]);
+
+  // Suppress onVoiceRunStop in this cleanup on the completed transition. The
+  // completion effect stops the service after the chime has been started.
+  const statusRef = useRef(state.status);
+  statusRef.current = state.status;
+  // Each arrival is left once: "next" heard as its countdown runs out (or
+  // two taps) moves on, and cues, a single time. A move names the arrival
+  // it leaves (by default the current one); one for an arrival that isn't
+  // current, or was already left, does nothing.
+  const arrivalRef = useRef(state.arrival);
+  arrivalRef.current = state.arrival;
+  const leftArrivalRef = useRef<number | null>(null);
 
   const runAction = useCallback(
-    (action: 'next' | 'previous' | 'repeat') => {
+    (action: 'next' | 'previous' | 'repeat', arrival: number = arrivalRef.current) => {
+      if (action !== 'repeat') {
+        if (!isRunActive(statusRef.current) || arrival !== arrivalRef.current || leftArrivalRef.current === arrival) return;
+        leftArrivalRef.current = arrival;
+      }
       const completes =
         action === 'next' &&
         state.snapshot != null &&
-        state.currentItemIndex === state.snapshot.items.length - 1;
+        state.currentStepIndex === state.snapshot.steps.length - 1;
+      // The cue starts here, with the command, so the reading that follows
+      // can wait for it (completing plays the completion chime instead).
       cueStartedRef.current = onCue && !completes
         ? Promise.resolve(onCue(action)).then(
             (audible) => audible !== false,
             () => false,
           )
         : null;
-      if (action === 'next') dispatch({ type: 'NEXT' });
-      else if (action === 'previous') dispatch({ type: 'PREVIOUS' });
+      if (action === 'next') dispatch({ type: 'NEXT', arrival });
+      else if (action === 'previous') dispatch({ type: 'PREVIOUS', arrival });
       else dispatch({ type: 'REPEAT' });
     },
-    [onCue, state.currentItemIndex, state.snapshot],
+    [onCue, state.currentStepIndex, state.snapshot],
   );
 
   const completeStopHold = useCallback((generation: number) => {
@@ -219,18 +240,18 @@ export function RunScreen({
   const spokenPlaybackReady = !state.voiceControlAvailable || voiceServiceReady;
 
   // Drive spoken playback whenever the run is in the `speaking` state. Bumps
-  // to `playbackTick` (e.g. REPEAT) cause the same item to be re-spoken.
+  // to `playbackTick` (e.g. REPEAT) cause the same step to be re-spoken.
   // When voice control is available, wait for voice-run startup so Android
   // applies the audio route before TTS; without voice control, routed playback
   // self-arms that route before speaking.
   useEffect(() => {
     if (state.status !== 'speaking' || !state.snapshot || !spokenPlaybackReady) return;
-    const item = state.snapshot.items[state.currentItemIndex];
+    const step = state.snapshot.steps[state.currentStepIndex];
     let cancelled = false;
     let speechTimer: ReturnType<typeof setTimeout> | null = null;
     const speak = () => {
       playback
-        .speak(item.text, { locale: LOCALE })
+        .speak(step.text, { locale: LOCALE })
         .then(() => {
           if (!cancelled) dispatch({ type: 'PLAYBACK_FINISHED' });
         })
@@ -260,7 +281,7 @@ export function RunScreen({
   }, [
     state.status,
     state.snapshot,
-    state.currentItemIndex,
+    state.currentStepIndex,
     state.playbackTick,
     spokenPlaybackReady,
     playback,
@@ -343,10 +364,26 @@ export function RunScreen({
     state.voiceControlAvailable &&
     (state.status === 'speaking' || state.status === 'listening');
 
-  // Suppress onVoiceRunStop in this cleanup on the completed transition. The
-  // completion effect stops the service after the chime has been started.
-  const statusRef = useRef(state.status);
-  statusRef.current = state.status;
+  // A timed step counts down from the moment the run reaches it; at zero the
+  // reading is cut off and the run moves on as if you'd said "next".
+  const currentStep = state.snapshot?.steps[state.currentStepIndex];
+  const runActionRef = useRef(runAction);
+  runActionRef.current = runAction;
+  const countdown = useStepCountdown({
+    timerSeconds: currentStep?.timerSeconds ?? null,
+    arrival: state.arrival,
+    active: isRunActive(state.status),
+    keepsRunningInBackground: voiceRunActive,
+    onExpire: (arrival) => runActionRef.current('next', arrival),
+  });
+
+  useEffect(() => {
+    const seconds = currentStep?.timerSeconds;
+    if (!seconds || !talkBackEnabled) return;
+    AccessibilityInfo.announceForAccessibility(`Timed step, ${formatTimerWords(seconds)}`);
+    // Announced once per arrival at a timed step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.arrival]);
 
   useEffect(() => {
     setVoiceServiceReady(!onVoiceRunStart);
@@ -431,14 +468,14 @@ export function RunScreen({
     return () => sub.remove();
   }, [state.status, onExit, onRequestStop]);
 
-  const totalItems = state.snapshot?.items.length ?? 0;
+  const totalSteps = state.snapshot?.steps.length ?? 0;
   const androidApi = Platform.OS === 'android' ? Number(Platform.Version) : 0;
 
   if (state.status === 'completed') {
     return (
       <CompletionView
-        totalItems={totalItems}
-        checklistTitle={state.snapshot?.checklistTitle}
+        totalSteps={totalSteps}
+        routineTitle={state.snapshot?.routineTitle}
         onRestart={() => {
           cueStartedRef.current = null;
           dispatch({ type: 'RESTART' });
@@ -461,6 +498,7 @@ export function RunScreen({
       onReleaseStopHold={releaseStopHold}
       onRequestStop={onRequestStop}
       onAction={runAction}
+      countdown={countdown}
     />
   );
 }

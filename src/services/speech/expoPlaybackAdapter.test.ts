@@ -54,7 +54,7 @@ describe('ExpoPlaybackAdapter.isAvailable', () => {
 
   // A cold TTS engine (just after boot/idle) can take several seconds to
   // enumerate voices — longer than a 3s cap, which would falsely report it
-  // unavailable on the first checklist. The timeout must outlast a cold start.
+  // unavailable on the first routine. The timeout must outlast a cold start.
   it('returns true when a cold engine resolves voices after ~5s', async () => {
     jest.useFakeTimers();
     try {

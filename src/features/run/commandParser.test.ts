@@ -46,6 +46,7 @@ describe('parseInterimCommand', () => {
     ['next', 'next'],
     ['NEXT', 'next'],
     ['next item', 'next'],
+    ['next step', 'next'],
     ['next one', 'next'],
     ['next please', 'next'],
     ['repeat', 'repeat'],
@@ -53,6 +54,7 @@ describe('parseInterimCommand', () => {
     ['repeat please', 'repeat'],
     ['previous', 'previous'],
     ['previous item', 'previous'],
+    ['previous step', 'previous'],
     ['previous one', 'previous'],
     ['previous please', 'previous'],
   ])('parses strict interim phrase %j as %j', (input, expected) => {

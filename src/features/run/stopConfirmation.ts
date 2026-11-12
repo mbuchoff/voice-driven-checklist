@@ -2,7 +2,7 @@ import type { ConfirmOptions } from '@/src/components/confirm';
 
 export const RUN_STOP_CONFIRMATION: ConfirmOptions = {
   title: 'Stop run?',
-  message: 'This will end the current checklist run and return to your checklists.',
+  message: 'This will end the current run and return to your routines.',
   confirmLabel: 'Stop',
   destructive: true,
   dismissible: true,

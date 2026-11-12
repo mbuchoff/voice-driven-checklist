@@ -59,7 +59,8 @@ export function DevicePreferencesProvider({
     setInitializationError(null);
     void store.load().then(
       (loaded) => {
-        if (!cancelled) setPreferences(loaded);
+        if (cancelled) return;
+        setPreferences(loaded);
       },
       (reason) => {
         if (!cancelled) {

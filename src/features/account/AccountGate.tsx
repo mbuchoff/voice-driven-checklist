@@ -47,7 +47,7 @@ export function AccountGateContent({
   const warning =
     account.state.status === 'google'
       ? account.state.sessionStatus === 'temporarily-unavailable'
-        ? 'Google is temporarily unavailable. Your on-device checklists are still available.'
+        ? 'Google is temporarily unavailable. Your on-device routines are still available.'
         : account.state.sessionStatus === 'reauth-required'
           ? 'Sign in again from Account settings to restore the Google session.'
           : null

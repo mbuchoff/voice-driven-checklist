@@ -120,7 +120,7 @@ export function FirstRunScreen({
               Your routines,{`\n`}one step at a time.
             </Text>
             <Text style={{ color: theme.textMuted, fontSize: 16, lineHeight: 25 }}>
-              Pick how you want to begin. Your checklist library stays on this
+              Pick how you want to begin. Your routine library stays on this
               device either way.
             </Text>
           </View>
@@ -149,7 +149,7 @@ export function FirstRunScreen({
             </Text>
             <Text style={{ color: theme.textMuted, fontSize: 13, lineHeight: 20 }}>
               Use the app without an account, or let Google identify you for account
-              management. Every checklist remains on this device and is never uploaded.
+              management. Every routine remains on this device and is never uploaded.
             </Text>
 
             {error ? (

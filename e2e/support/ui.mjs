@@ -27,6 +27,20 @@ export async function waitForDisplayed(element, timeout = 15_000) {
   return element;
 }
 
+// Waits until an element stops moving, e.g. while the list scrolls a step
+// into view; a press on a moving view is cancelled.
+export async function waitForSettled(driver, element, timeout = 3_000) {
+  const deadline = Date.now() + timeout;
+  let last = await elementRect(driver, element);
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const rect = await elementRect(driver, element);
+    if (rect.x === last.x && rect.y === last.y) return element;
+    last = rect;
+  }
+  throw new Error('element kept moving');
+}
+
 export async function elementRect(driver, element) {
   const resolvedElement = await element;
   return driver.getElementRect(resolvedElement.elementId);
@@ -42,6 +56,18 @@ export async function tapText(driver, text) {
   const element = byText(driver, text);
   await waitForDisplayed(element);
   await element.click();
+}
+
+/** Taps OK until the dialog titled `title` closes; a tap can land while it is still opening. */
+export async function tapOkUntilClosed(driver, title, attempts = 3) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await tapText(driver, 'OK');
+    const closed = await byText(driver, title)
+      .waitForDisplayed({ reverse: true, timeout: 1_500 })
+      .catch(() => false);
+    if (closed) return;
+  }
+  throw new Error(`the "${title}" dialog stayed open`);
 }
 
 export async function tapElementAt(driver, element, { xRatio = 0.5, yRatio = 0.5 } = {}) {
@@ -265,3 +291,44 @@ export async function collectRoutineTitles(driver) {
 
   return [...seen];
 }
+
+/** A one-finger swipe across `element` from one horizontal share to another. */
+export async function swipeAcross(driver, element, { fromX = 0.85, toX = 0.1, durationMs = 220 } = {}) {
+  const rect = await elementRect(driver, element);
+  const y = Math.round(rect.y + rect.height / 2);
+  await driver.performActions([
+    {
+      type: 'pointer',
+      id: 'step-swipe',
+      parameters: { pointerType: 'touch' },
+      actions: [
+        { type: 'pointerMove', duration: 0, x: Math.round(rect.x + rect.width * fromX), y },
+        { type: 'pointerDown', button: 0 },
+        { type: 'pointerMove', duration: durationMs, x: Math.round(rect.x + rect.width * toX), y },
+        { type: 'pointerUp', button: 0 },
+      ],
+    },
+  ]);
+  await driver.releaseActions();
+}
+
+/** Holds at `from` until the step lifts, then drags it to `to`. */
+export async function holdAndDragFromTo(driver, from, to, { holdMs = 600, durationMs = 420 } = {}) {
+  await driver.performActions([
+    {
+      type: 'pointer',
+      id: 'step-hold-drag',
+      parameters: { pointerType: 'touch' },
+      actions: [
+        { type: 'pointerMove', duration: 0, ...from },
+        { type: 'pointerDown', button: 0 },
+        { type: 'pause', duration: holdMs },
+        { type: 'pointerMove', duration: durationMs, ...to },
+        { type: 'pause', duration: 120 },
+        { type: 'pointerUp', button: 0 },
+      ],
+    },
+  ]);
+  await driver.releaseActions();
+}
+
