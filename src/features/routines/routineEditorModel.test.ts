@@ -109,13 +109,13 @@ describe('routine editor model', () => {
     it('closes back to typing with the step’s times again, remembering a changed time but not Off', () => {
       const { state, neck } = panelOnNeckRolls();
       const changed = closeTimerPanel(pickPanelTime(state, 120), RECENT);
-      expect(changed.remember).toBe(120);
+      expect(changed.used).toBe(120);
       expect(changed.state.panel).toBeNull();
       expect(changed.state.openId).toBe(neck);
       expect(changed.state.openCandidates[0]).toBe(120);
 
-      expect(closeTimerPanel(state, RECENT).remember).toBeNull();
-      expect(closeTimerPanel(pickPanelTime(state, null), RECENT).remember).toBeNull();
+      expect(closeTimerPanel(state, RECENT).used).toBeNull();
+      expect(closeTimerPanel(pickPanelTime(state, null), RECENT).used).toBeNull();
     });
   });
 

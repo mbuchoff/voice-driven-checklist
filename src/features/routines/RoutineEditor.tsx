@@ -298,7 +298,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
     let used: number | null = null;
     update((state) => {
       const closed = closeTimerPanel(state, recent);
-      used = closed.remember;
+      used = closed.used;
       return closed.state;
     });
     if (used) remember(used);

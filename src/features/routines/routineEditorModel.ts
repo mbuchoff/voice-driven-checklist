@@ -332,17 +332,17 @@ export function pickPanelTime(state: EditorState, seconds: number | null): Edito
 
 /**
  * Done: back to typing in the step, with its times again (its new one
- * among them), and the time to remember as used, if it changed and isn't Off.
+ * among them), and the time it used, if it changed and isn't Off.
  */
 export function closeTimerPanel(
   state: EditorState,
   recent: readonly number[],
-): { state: EditorState; remember: number | null } {
+): { state: EditorState; used: number | null } {
   const panel = state.panel;
-  if (!panel) return { state, remember: null };
+  if (!panel) return { state, used: null };
   const value = findStep(state, panel.stepId)?.timerSeconds ?? null;
   return {
     state: refreshOpenCandidates({ ...state, panel: null }, recent),
-    remember: value && value !== panel.openedValue ? value : null,
+    used: value && value !== panel.openedValue ? value : null,
   };
 }

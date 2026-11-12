@@ -29,9 +29,9 @@ export function useRecentTimes(): RecentTimes {
 
 /**
  * Recent times live only in memory, so they start empty each time the app
- * starts. They are also forgotten when the account becomes a different one.
- * The account first settles from null (loading, not yet chosen); that isn't
- * a change.
+ * starts, and are forgotten whenever the account changes. (The account is
+ * null only at startup, before the editor can be reached, so settling from
+ * null forgets nothing.)
  */
 export function RecentTimesProvider({
   account,
@@ -48,9 +48,9 @@ export function RecentTimesProvider({
   const [held, setHeld] = useState<{ owner: string | null; times: readonly number[] }>(
     { owner: account, times: initialTimes },
   );
-  if (account !== null && account !== held.owner) {
+  if (account !== held.owner) {
     // Adjusting state while rendering, so a different account never sees the old times.
-    setHeld({ owner: account, times: held.owner === null ? held.times : [] });
+    setHeld({ owner: account, times: [] });
   }
 
   const recent = held.times;
