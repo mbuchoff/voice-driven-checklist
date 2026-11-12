@@ -25,7 +25,6 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { notify } from '@/src/components/confirm';
 import { useDatabase } from '@/src/db/DatabaseProvider';
-import { useDevicePreferences } from '@/src/features/settings/DevicePreferencesProvider';
 import { useTheme } from '@/src/theme/useTheme';
 
 import { editorColors } from './editorColors';
@@ -42,6 +41,7 @@ import { KeyboardHolder, useStepFocus } from './editor/stepFocus';
 import { LIST_PAD_X } from './editor/stepRowMetrics';
 import { ChipSizesProvider, StepTimerChips } from './editor/TimerChips';
 import { TimerPanel } from './editor/TimerPanel';
+import { useRecentTimes } from './recentTimes';
 import { createRoutine, deleteRoutine, updateRoutine } from './repository';
 import { moveItem } from './reorder';
 import {
@@ -150,7 +150,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const database = useDatabase();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { preferences, rememberTimerSeconds } = useDevicePreferences();
+  const { recent, remember: rememberTimerSeconds } = useRecentTimes();
   const [model, setModel] = useState<EditorState>(() => createEditorState(mode));
   const [baseline] = useState(() => editorSnapshot(model));
   // Every change goes through `update`, so this is always the latest model,
@@ -168,7 +168,6 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
     const from = modelRef.current.openId;
     focus.handOff(from, update(change).openId);
   };
-  const recent = preferences.recentTimerSeconds;
   const colors = useMemo(() => editorColors(theme, model.colorKey), [theme, model.colorKey]);
 
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);

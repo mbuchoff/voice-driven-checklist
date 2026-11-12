@@ -10,6 +10,7 @@ import { DevicePreferencesProvider } from '@/src/features/settings/DevicePrefere
 import { MemoryDevicePreferenceStore } from '@/src/features/settings/preferences';
 import { createTestDatabase } from '@/src/test/createTestDatabase';
 
+import { RecentTimesProvider } from './recentTimes';
 import { createRoutine, getRoutine } from './repository';
 import { createRoutineUndoStore, RoutineUndoProvider } from './routineUndo';
 
@@ -34,9 +35,11 @@ it.each([false, true])('returns to a single library after deletion (direct entry
         >
           <DatabaseProvider database={database}>
             <DevicePreferencesProvider store={new MemoryDevicePreferenceStore()}>
-              <RoutineUndoProvider store={routineUndo}>
-                <Stack screenOptions={{ animation: 'none' }} />
-              </RoutineUndoProvider>
+              <RecentTimesProvider account="local">
+                <RoutineUndoProvider store={routineUndo}>
+                  <Stack screenOptions={{ animation: 'none' }} />
+                </RoutineUndoProvider>
+              </RecentTimesProvider>
             </DevicePreferencesProvider>
           </DatabaseProvider>
         </SafeAreaProvider>

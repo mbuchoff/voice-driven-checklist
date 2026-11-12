@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { Database } from '@/src/db/database';
 import { DatabaseProvider } from '@/src/db/DatabaseProvider';
 import { runMigrations } from '@/src/db/migrations';
+import { RecentTimesProvider } from '@/src/features/routines/recentTimes';
 import { RoutineUndoProvider, type RoutineUndoStore } from '@/src/features/routines/routineUndo';
 import { DevicePreferencesProvider } from '@/src/features/settings/DevicePreferencesProvider';
 import { MemoryDevicePreferenceStore } from '@/src/features/settings/preferences';
@@ -28,6 +29,8 @@ export async function renderWithDatabase(
     preferences?: MemoryDevicePreferenceStore;
     /** What the routines screen is handed to offer UNDO for. */
     routineUndo?: RoutineUndoStore;
+    /** Timer lengths already used since the app started, most recent first. */
+    recentTimes?: number[];
   } & Omit<RenderOptions, 'wrapper'> = {},
 ): Promise<RenderWithDatabaseResult> {
   const database = options.database ?? createTestDatabase();
@@ -42,7 +45,9 @@ export async function renderWithDatabase(
       <SafeAreaProvider initialMetrics={TEST_WINDOW_METRICS}>
         <DatabaseProvider database={database}>
           <DevicePreferencesProvider store={preferences}>
-            <RoutineUndoProvider store={options.routineUndo}>{children}</RoutineUndoProvider>
+            <RecentTimesProvider account="local" initialTimes={options.recentTimes}>
+              <RoutineUndoProvider store={options.routineUndo}>{children}</RoutineUndoProvider>
+            </RecentTimesProvider>
           </DevicePreferencesProvider>
         </DatabaseProvider>
       </SafeAreaProvider>

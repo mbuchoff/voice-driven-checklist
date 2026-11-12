@@ -52,12 +52,15 @@ export type StepperState = {
   level: number;
   /** Direction of the last press: -1, 0 (none yet) or 1. */
   dir: -1 | 0 | 1;
-  /** Seconds moved in the current direction at the current level. */
-  run: number;
 };
 
-export function initialStepper(): StepperState {
-  return { level: 0, dir: 0, run: 0 };
+/**
+ * The stepper for a step's time: it moves by the smallest unit the time uses
+ * (13s by 1s, 45s by 15s, 2 min by 1 min), or by a minute with no timer.
+ */
+export function initialStepper(value: number | null): StepperState {
+  const level = value ? STEPPER_LEVELS.findIndex((size) => value % size === 0) : 0;
+  return { level, dir: 0 };
 }
 
 function isReversing(state: StepperState, dir: -1 | 1): boolean {
@@ -71,8 +74,12 @@ function levelAfter(state: StepperState, reversing: boolean): number {
 
 /**
  * One press of − or +. Each change of direction drops to the next finer step
- * size; moving a whole coarser step in one direction climbs back up. The
- * value stays within 0 (Off, returned as null) and an hour.
+ * size; once a press in the same direction lands the time on a multiple of
+ * the next coarser size, presses move by that size (14s + 1s = 15s, then
+ * +5s). The value stays within 0 (Off, returned as null) and an hour.
+ *
+ * Every finer size divides the coarser ones, so the time always stays a
+ * multiple of the current step size.
  */
 export function pressStepper(
   state: StepperState,
@@ -80,20 +87,12 @@ export function pressStepper(
   dir: -1 | 1,
 ): { state: StepperState; value: number | null } {
   const reversing = isReversing(state, dir);
-  const level = levelAfter(state, reversing);
-  const size = STEPPER_LEVELS[level];
+  let level = levelAfter(state, reversing);
   const before = value ?? 0;
-  const next = Math.max(0, Math.min(STEP_TIMER_MAX_SECONDS, before + dir * size));
+  const next = Math.max(0, Math.min(STEP_TIMER_MAX_SECONDS, before + dir * STEPPER_LEVELS[level]));
   if (next === before) return { state, value };
-  let updated: StepperState = {
-    level,
-    dir,
-    run: (reversing ? 0 : state.run) + size,
-  };
-  if (updated.level > 0 && updated.run >= STEPPER_LEVELS[updated.level - 1]) {
-    updated = { ...updated, level: updated.level - 1, run: 0 };
-  }
-  return { state: updated, value: next || null };
+  if (!reversing && level > 0 && next % STEPPER_LEVELS[level - 1] === 0) level -= 1;
+  return { state: { level, dir }, value: next || null };
 }
 
 /** "−1 min", "+15s": what a press in `dir` would do next. */

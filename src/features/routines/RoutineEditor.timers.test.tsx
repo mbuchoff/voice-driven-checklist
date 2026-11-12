@@ -1,9 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react-native';
-
-import {
-  DEFAULT_DEVICE_PREFERENCES,
-  MemoryDevicePreferenceStore,
-} from '@/src/features/settings/preferences';
+import { fireEvent, screen, within } from '@testing-library/react-native';
 
 import {
   existing,
@@ -24,12 +19,8 @@ describe('RoutineEditor', () => {
       within(screen.getByTestId(`step-chips-${index}`)).getAllByRole('radio').map((chip) => chip.props.accessibilityLabel);
 
     it('shows an open step’s times under its words: No timer, then the times, then ⋯', async () => {
-      const preferences = new MemoryDevicePreferenceStore({
-        ...DEFAULT_DEVICE_PREFERENCES,
-        recentTimerSeconds: [90],
-      });
       const database = await setupDb();
-      await renderEditor({ initialRoutine: await existing(database) }, { database, preferences });
+      await renderEditor({ initialRoutine: await existing(database) }, { database, recentTimes: [90] });
 
       tapToEdit(1);
       layOutChips(1, [90, 30, 60, 120]);
@@ -50,14 +41,10 @@ describe('RoutineEditor', () => {
     });
 
     it('sets a timer from a chip, keeps the step open with its times, and remembers the time', async () => {
-      const preferences = new MemoryDevicePreferenceStore({
-        ...DEFAULT_DEVICE_PREFERENCES,
-        recentTimerSeconds: [90],
-      });
       const database = await setupDb();
-      await renderEditor({ initialRoutine: await existing(database) }, { database, preferences });
+      await renderEditor({ initialRoutine: await existing(database) }, { database, recentTimes: [300, 90] });
       tapToEdit(1);
-      layOutChips(1, [90, 30, 60, 120]);
+      layOutChips(1, [300, 90, 30, 60]);
 
       fireEvent.press(screen.getByTestId('step-chip-1-90'));
       expect(screen.getByTestId('hero-count')).toHaveTextContent('2 steps · 2 min timed');
@@ -68,7 +55,7 @@ describe('RoutineEditor', () => {
       // Tapping the chosen time again keeps it.
       fireEvent.press(screen.getByTestId('step-chip-1-90'));
       expect(screen.getByTestId('hero-count')).toHaveTextContent('2 steps · 2 min timed');
-      await expect(preferences.load()).resolves.toMatchObject({ recentTimerSeconds: [90] });
+      expect(screen.getByTestId('recent-times')).toHaveTextContent('90,300');
     });
 
     it('takes a timer off with No timer', async () => {
@@ -111,12 +98,8 @@ describe('RoutineEditor', () => {
     });
 
     it('keeps the step’s own time among its chips', async () => {
-      const preferences = new MemoryDevicePreferenceStore({
-        ...DEFAULT_DEVICE_PREFERENCES,
-        recentTimerSeconds: [600, 700, 800, 900],
-      });
       const database = await setupDb();
-      await renderEditor({ initialRoutine: await existing(database) }, { database, preferences });
+      await renderEditor({ initialRoutine: await existing(database) }, { database, recentTimes: [600, 700, 800, 900] });
 
       tapToEdit(0);
       layOutChips(0, [30, 600, 700, 800]);
@@ -126,12 +109,8 @@ describe('RoutineEditor', () => {
     });
 
     it('drops the oldest times so the chips stay on one line', async () => {
-      const preferences = new MemoryDevicePreferenceStore({
-        ...DEFAULT_DEVICE_PREFERENCES,
-        recentTimerSeconds: [1215, 1335, 1455, 1545],
-      });
       const database = await setupDb();
-      await renderEditor({ initialRoutine: await existing(database) }, { database, preferences });
+      await renderEditor({ initialRoutine: await existing(database) }, { database, recentTimes: [1215, 1335, 1455, 1545] });
 
       tapToEdit(1);
       // No timer (70 + 4), four 62 dp chips with three 4 dp gaps, and ⋯ (44 + 4)
@@ -160,9 +139,8 @@ describe('RoutineEditor', () => {
     });
 
     it('steps the timer in the panel, clears it with No timer, and remembers a changed time on Done', async () => {
-      const preferences = new MemoryDevicePreferenceStore();
       const database = await setupDb();
-      await renderEditor({ initialRoutine: await existing(database) }, { database, preferences });
+      await renderEditor({ initialRoutine: await existing(database) }, { database });
       tapToEdit(1);
       layOutChips(1, [30, 60, 120, 300]);
       fireEvent.press(screen.getByTestId('step-more-1'));
@@ -190,9 +168,7 @@ describe('RoutineEditor', () => {
       // same four times, so the phone doesn't lay their chips out again.
       expect(screen.getByTestId('step-text-1')).toBeOnTheScreen();
       expect(within(screen.getByTestId('step-chips-1')).getByRole('radio', { name: '2 minutes' })).toBeChecked();
-      await waitFor(async () => {
-        await expect(preferences.load()).resolves.toMatchObject({ recentTimerSeconds: [120] });
-      });
+      expect(screen.getByTestId('recent-times')).toHaveTextContent('120');
     });
 
     it('does nothing when the panel’s selected quick pick is tapped again', async () => {
@@ -206,16 +182,16 @@ describe('RoutineEditor', () => {
         fireEvent(screen.getByTestId(id), 'pressIn');
         fireEvent(screen.getByTestId(id), 'pressOut');
       };
+      // 30s moves by 15s; at 1 min it moves by a minute, and back by 15s.
       press('timer-plus');
-      press('timer-minus');
-      press('timer-minus');
+      press('timer-plus');
       expect(screen.getByTestId('timer-readout')).toHaveTextContent('1 min');
-      expect(screen.getByText('+5s')).toBeOnTheScreen();
+      expect(screen.getByText('−15s')).toBeOnTheScreen();
 
       fireEvent.press(screen.getByTestId('panel-chip-60'));
 
       expect(screen.getByTestId('timer-readout')).toHaveTextContent('1 min');
-      expect(screen.getByText('+5s')).toBeOnTheScreen();
+      expect(screen.getByText('−15s')).toBeOnTheScreen();
     });
 
     it('lets minus take a timer to Off', async () => {
@@ -225,10 +201,12 @@ describe('RoutineEditor', () => {
       layOutChips(0, [30, 60, 120, 300]);
       fireEvent.press(screen.getByTestId('step-more-0'));
 
-      fireEvent(screen.getByTestId('timer-minus'), 'pressIn');
-      fireEvent(screen.getByTestId('timer-minus'), 'pressOut');
-
-      expect(screen.getByTestId('timer-readout')).toHaveTextContent('Off');
+      // 30s moves by 15s.
+      for (const expected of ['15s', 'Off']) {
+        fireEvent(screen.getByTestId('timer-minus'), 'pressIn');
+        fireEvent(screen.getByTestId('timer-minus'), 'pressOut');
+        expect(screen.getByTestId('timer-readout')).toHaveTextContent(expected);
+      }
     });
   });
 });

@@ -180,7 +180,6 @@ describe('SettingsContent', () => {
       theme: 'dark',
       sound: 'ping',
       routineReorderHintDismissed: false,
-      recentTimerSeconds: [],
     });
     pickBackupFileMock.mockResolvedValue(
       serializeBackup([
@@ -200,7 +199,6 @@ describe('SettingsContent', () => {
       theme: 'dark',
       sound: 'ping',
       routineReorderHintDismissed: false,
-      recentTimerSeconds: [],
     });
   });
 

@@ -99,8 +99,8 @@ const migrations: Migration[] = [
         CHECK (routine_reorder_hint_dismissed IN (0, 1));
     `);
   },
-  // Routines and steps (the glossary's terms), step timers, stored routine
-  // colors, and the timer lengths used most recently on this device.
+  // Routines and steps (the glossary's terms), step timers, and stored routine
+  // colors.
   async (db) => {
     await db.execAsync(`
       ALTER TABLE checklists RENAME TO routines;
@@ -114,8 +114,6 @@ const migrations: Migration[] = [
       ALTER TABLE steps ADD COLUMN timer_seconds INTEGER
         CHECK (timer_seconds IS NULL OR timer_seconds BETWEEN 1 AND 3600);
       ALTER TABLE routines ADD COLUMN color TEXT NOT NULL DEFAULT 'green-2';
-      ALTER TABLE device_preferences
-        ADD COLUMN recent_timer_seconds TEXT NOT NULL DEFAULT '[]';
     `);
     // Keep the color each card showed before colors were stored.
     const routines = await db.getAllAsync<{ id: string }>('SELECT id FROM routines');

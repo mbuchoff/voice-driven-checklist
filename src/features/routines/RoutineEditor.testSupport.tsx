@@ -1,4 +1,5 @@
 import { act, fireEvent, screen } from '@testing-library/react-native';
+import { Text } from 'react-native';
 import { type GestureType } from 'react-native-gesture-handler';
 
 import type { Database } from '@/src/db/database';
@@ -8,6 +9,7 @@ import { createTestDatabase } from '@/src/test/createTestDatabase';
 import { renderWithDatabase } from '@/src/test/renderWithDatabase';
 
 import { RoutineEditor, type EditorMode } from './RoutineEditor';
+import { useRecentTimes } from './recentTimes';
 import { createRoutine } from './repository';
 import type { RoutineColorKey } from './routineColors';
 import type { Routine } from './types';
@@ -105,7 +107,7 @@ export function primeRowLayouts(heights: number[], gap = 0) {
 
 export async function renderEditor(
   { initialRoutine, newColorKey = 'teal-1' }: { initialRoutine?: Routine; newColorKey?: RoutineColorKey } = {},
-  options: { database?: Database; preferences?: MemoryDevicePreferenceStore } = {},
+  options: { database?: Database; preferences?: MemoryDevicePreferenceStore; recentTimes?: number[] } = {},
 ) {
   const database = options.database ?? (await setupEditorDatabase());
   const callbacks = {
@@ -115,18 +117,30 @@ export async function renderEditor(
     onRun: jest.fn(),
   };
   const editor = () => (
-    <RoutineEditor
-      mode={initialRoutine
-        ? { kind: 'edit', routine: initialRoutine, onDeleted: callbacks.onDeleted, onRun: callbacks.onRun }
-        : { kind: 'new', colorKey: newColorKey }}
-      onSaved={callbacks.onSaved}
-      onCancel={callbacks.onCancel}
-    />
+    <>
+      <RecentTimesShown />
+      <RoutineEditor
+        mode={initialRoutine
+          ? { kind: 'edit', routine: initialRoutine, onDeleted: callbacks.onDeleted, onRun: callbacks.onRun }
+          : { kind: 'new', colorKey: newColorKey }}
+        onSaved={callbacks.onSaved}
+        onCancel={callbacks.onCancel}
+      />
+    </>
   );
-  const view = await renderWithDatabase(editor(), { database, preferences: options.preferences });
+  const view = await renderWithDatabase(editor(), {
+    database,
+    preferences: options.preferences,
+    recentTimes: options.recentTimes,
+  });
   // Jest's Reanimated stand-in reads an animated style when its view renders.
   const renderAgain = () => view.rerender(editor());
   return { database, ...callbacks, renderAgain };
+}
+
+/** The recent times, most recent first, for tests to read as `recent-times`. */
+function RecentTimesShown() {
+  return <Text testID="recent-times">{useRecentTimes().recent.join(',')}</Text>;
 }
 
 /** A saved routine to edit: two steps, the first timed. */

@@ -304,7 +304,7 @@ export function openTimerPanel(state: EditorState, id: string, recent: readonly 
     panel: {
       stepId: id,
       openedValue: step.timerSeconds,
-      stepper: initialStepper(),
+      stepper: initialStepper(step.timerSeconds),
       quickPicks: chipCandidates(step.timerSeconds, recent),
     },
   };
@@ -327,7 +327,7 @@ export function pickPanelTime(state: EditorState, seconds: number | null): Edito
   const panel = state.panel;
   const step = panel ? findStep(state, panel.stepId) : undefined;
   if (!panel || !step || seconds === step.timerSeconds) return state;
-  return { ...setStepTimer(state, panel.stepId, seconds), panel: { ...panel, stepper: initialStepper() } };
+  return { ...setStepTimer(state, panel.stepId, seconds), panel: { ...panel, stepper: initialStepper(seconds) } };
 }
 
 /**

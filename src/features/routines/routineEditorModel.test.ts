@@ -29,6 +29,7 @@ import {
   type EditorState,
 } from './routineEditorModel';
 import type { Routine } from './types';
+import { stepCaption } from './timers';
 
 /** The timer lengths used most recently. */
 const RECENT = [90, 30];
@@ -80,28 +81,29 @@ describe('routine editor model', () => {
       return { state: openTimerPanel(state, neck, RECENT), neck };
     }
     const timer = (state: EditorState, id: string) => realSteps(state).find((step) => step.localId === id)!.timerSeconds;
+    const captions = (state: EditorState) => [stepCaption(state.panel!.stepper, -1), stepCaption(state.panel!.stepper, 1)];
 
-    it('opens on a step with a fresh stepper and its quick picks', () => {
+    it('opens with its quick picks, stepping by the smallest unit the step’s time uses', () => {
       const { state } = panelOnNeckRolls();
       expect(state.panel).toMatchObject({ openedValue: 30, quickPicks: [30, 90, 60, 120] });
-      expect(state.panel?.stepper).toEqual({ level: 0, dir: 0, run: 0 });
+      expect(captions(state)).toEqual(['−15s', '+15s']);
     });
 
     it('steps the step’s time with − and +', () => {
       const { state, neck } = panelOnNeckRolls();
       const stepped = pressPanelStepper(pressPanelStepper(state, 1), 1);
-      expect(timer(stepped, neck)).toBe(150);
-      expect(stepped.panel?.stepper.dir).toBe(1);
+      expect(timer(stepped, neck)).toBe(60);
+      expect(captions(stepped)).toEqual(['−15s', '+1 min']);
     });
 
-    it('sets a quick pick and starts the stepper afresh, except for the one already set', () => {
+    it('sets a quick pick and starts the stepper afresh for it, except for the one already set', () => {
       const { state, neck } = panelOnNeckRolls();
-      // + makes it 90; then 120 is picked.
+      // + makes it 45; then 120 is picked.
       const stepped = pressPanelStepper(state, 1);
       const set = pickPanelTime(stepped, 120);
-      expect(set.panel?.stepper).toEqual({ level: 0, dir: 0, run: 0 });
+      expect(captions(set)).toEqual(['−1 min', '+1 min']);
       expect(timer(set, neck)).toBe(120);
-      expect(pickPanelTime(stepped, 90)).toBe(stepped);
+      expect(pickPanelTime(stepped, 45)).toBe(stepped);
     });
 
     it('closes back to typing with the step’s times again, remembering a changed time but not Off', () => {

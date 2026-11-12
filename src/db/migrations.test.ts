@@ -375,9 +375,6 @@ describe('database migrations', () => {
         routine_reorder_hint_dismissed: 1,
       });
       await expect(
-        db.getFirstAsync('SELECT recent_timer_seconds FROM device_preferences WHERE id = 1'),
-      ).resolves.toEqual({ recent_timer_seconds: '[]' });
-      await expect(
         db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'),
       ).resolves.toEqual({ user_version: 4 });
     });

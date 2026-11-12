@@ -29,7 +29,7 @@ describe('timer chips', () => {
 
 describe('timer panel stepper', () => {
   function presses(start: number | null, dirs: (1 | -1)[]) {
-    let state: StepperState = initialStepper();
+    let state: StepperState = initialStepper(start);
     let value = start;
     const values: (number | null)[] = [];
     for (const dir of dirs) {
@@ -39,34 +39,46 @@ describe('timer panel stepper', () => {
     return values;
   }
 
-  it('starts by moving a whole minute', () => {
+  it('starts by moving a whole minute when the step has no timer', () => {
     expect(presses(null, [1, 1])).toEqual([60, 120]);
-    expect(presses(90, [1])).toEqual([150]);
+  });
+
+  it('starts with the smallest unit the time uses', () => {
+    expect(presses(13, [1])).toEqual([14]);
+    expect(presses(50, [1])).toEqual([55]);
+    expect(presses(90, [1])).toEqual([105]);
+    expect(presses(120, [1])).toEqual([180]);
+  });
+
+  it('moves up to the next step size once the time reaches a multiple of it', () => {
+    expect(presses(13, [1, 1, 1, 1, 1, 1, 1, 1])).toEqual([14, 15, 20, 25, 30, 45, 60, 120]);
+    expect(presses(47, [-1, -1, -1, -1])).toEqual([46, 45, 40, 35]);
+  });
+
+  it('moves up only one step size per press', () => {
+    // 1 min is a multiple of 5s, 15s and 1 min; the next press moves 5s.
+    expect(presses(59, [1, 1])).toEqual([60, 65]);
   });
 
   it('drops to a finer step on each change of direction, down to one second', () => {
     expect(presses(null, [1, 1, -1, 1, -1])).toEqual([60, 120, 105, 110, 109]);
   });
 
-  it('climbs back to the coarser step after moving a whole coarser step one way', () => {
-    // 120 → 105 (15 s steps) → 90 → 75 → 60: four 15 s steps make a minute,
-    // so the next press moves a minute again.
-    expect(presses(null, [1, 1, -1, -1, -1, -1, -1])).toEqual([60, 120, 105, 90, 75, 60, null]);
-  });
-
   it('lets minus reach Off and stops there', () => {
-    expect(presses(30, [-1, -1])).toEqual([null, null]);
+    expect(presses(30, [-1, -1, -1])).toEqual([15, null, null]);
   });
 
   it('never goes past an hour', () => {
-    expect(presses(3590, [1, 1])).toEqual([3600, 3600]);
+    expect(presses(3599, [1, 1])).toEqual([3600, 3600]);
   });
 
   it('labels each button with the step it would take next', () => {
-    let state = initialStepper();
+    let state = initialStepper(null);
     expect([stepCaption(state, -1), stepCaption(state, 1)]).toEqual(['−1 min', '+1 min']);
     ({ state } = pressStepper(state, 60, 1));
     expect([stepCaption(state, -1), stepCaption(state, 1)]).toEqual(['−15s', '+1 min']);
     expect([stepWords(state, -1), stepWords(state, 1)]).toEqual(['15 seconds', '1 minute']);
+    state = initialStepper(13);
+    expect([stepCaption(state, -1), stepCaption(state, 1)]).toEqual(['−1s', '+1s']);
   });
 });

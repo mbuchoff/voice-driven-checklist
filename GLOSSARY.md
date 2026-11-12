@@ -26,3 +26,7 @@ A step that has a timer.
 **Countdown**:
 A step's timer running down during a run, starting the moment the run reaches that step.
 _Avoid_: Timer (for the running clock)
+
+**Recent time chips**:
+One-tap timer choices made from the timers used since the app started or the account last changed.
+_Avoid_: Suggestions, remembered times, session times
