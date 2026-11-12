@@ -150,7 +150,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const database = useDatabase();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { recent, remember: rememberTimerSeconds } = useRecentTimes();
+  const { recent, remember } = useRecentTimes();
   const [model, setModel] = useState<EditorState>(() => createEditorState(mode));
   const [baseline] = useState(() => editorSnapshot(model));
   // Every change goes through `update`, so this is always the latest model,
@@ -279,7 +279,7 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   // The times stay while the step is open; "No timer" isn't remembered.
   const pickChip = (id: string, seconds: number | null) => {
     update((state) => setStepTimer(state, id, seconds));
-    if (seconds) void rememberTimerSeconds(seconds);
+    if (seconds) remember(seconds);
   };
 
   // The timer panel's rules are the model's; the panel puts typing aside
@@ -295,13 +295,13 @@ export function RoutineEditor({ mode, onSaved, onCancel }: RoutineEditorProps) {
   const closePanel = () => {
     const stepId = modelRef.current.panel?.stepId;
     if (!stepId) return;
-    let remember: number | null = null;
+    let used: number | null = null;
     update((state) => {
       const closed = closeTimerPanel(state, recent);
-      remember = closed.remember;
+      used = closed.remember;
       return closed.state;
     });
-    if (remember) void rememberTimerSeconds(remember);
+    if (used) remember(used);
     focus.resumeTyping(stepId);
   };
 

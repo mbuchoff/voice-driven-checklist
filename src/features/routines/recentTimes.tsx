@@ -1,14 +1,16 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
 import { useAccount } from '@/src/features/account/AccountProvider';
-import type { AccountState } from '@/src/features/account/types';
+import { accountIdentity } from '@/src/features/account/identity';
 
-/** How many recently used timer lengths the chips draw on. */
-export const RECENT_TIME_LIMIT = 4;
+import { TIMER_CHIP_COUNT } from './timers';
 
-/** Using a timer length moves it to the front of the recent ones. */
+/**
+ * Using a timer length moves it to the front of the recent ones. A step
+ * offers at most TIMER_CHIP_COUNT times, so no more are kept.
+ */
 export function rememberTime(recent: readonly number[], seconds: number): number[] {
-  return [seconds, ...recent.filter((time) => time !== seconds)].slice(0, RECENT_TIME_LIMIT);
+  return [seconds, ...recent.filter((time) => time !== seconds)].slice(0, TIMER_CHIP_COUNT);
 }
 
 type RecentTimes = {
@@ -25,42 +27,38 @@ export function useRecentTimes(): RecentTimes {
   return context;
 }
 
-/** Who is using the app, or null while that isn't settled. */
-function accountKey(state: AccountState): string | null {
-  if (state.status === 'local') return 'local';
-  if (state.status === 'google') return `google:${state.identity.sub}`;
-  return null;
-}
-
 /**
  * Recent times live only in memory, so they start empty each time the app
- * starts. They are also forgotten when the account becomes a different one;
- * moments when the account isn't settled (loading, unselected) don't count
- * as a change.
+ * starts. They are also forgotten when the account becomes a different one.
+ * The account first settles from null (loading, not yet chosen); that isn't
+ * a change.
  */
 export function RecentTimesProvider({
   account,
   initialTimes = [],
   children,
 }: {
-  /** Identifies the current account; null while it isn't settled. */
+  /** The current account's identity (see accountIdentity); null before it first settles. */
   account: string | null;
   /** The times to start with; the app always starts with none. */
   initialTimes?: readonly number[];
   children: ReactNode;
 }) {
-  const [recent, setRecent] = useState<readonly number[]>(initialTimes);
-  const [owner, setOwner] = useState<string | null>(account);
-  if (account !== null && account !== owner) {
+  // The times and the account they belong to change together.
+  const [held, setHeld] = useState<{ owner: string | null; times: readonly number[] }>(
+    { owner: account, times: initialTimes },
+  );
+  if (account !== null && account !== held.owner) {
     // Adjusting state while rendering, so a different account never sees the old times.
-    setOwner(account);
-    if (owner !== null) setRecent([]);
+    setHeld({ owner: account, times: held.owner === null ? held.times : [] });
   }
 
+  const recent = held.times;
   const value = useMemo<RecentTimes>(
     () => ({
       recent,
-      remember: (seconds) => setRecent((current) => rememberTime(current, seconds)),
+      remember: (seconds) =>
+        setHeld((current) => ({ ...current, times: rememberTime(current.times, seconds) })),
     }),
     [recent],
   );
@@ -69,5 +67,5 @@ export function RecentTimesProvider({
 
 export function AppRecentTimesProvider({ children }: { children: ReactNode }) {
   const { state } = useAccount();
-  return <RecentTimesProvider account={accountKey(state)}>{children}</RecentTimesProvider>;
+  return <RecentTimesProvider account={accountIdentity(state)}>{children}</RecentTimesProvider>;
 }

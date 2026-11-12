@@ -89,13 +89,13 @@ describe('DevicePreferencesProvider', () => {
         theme: 'system',
         sound: 'chime',
         routineReorderHintDismissed: persisted,
-        }),
+      }),
       saveTheme: async () => undefined,
       saveSound: async () => undefined,
       dismissRoutineReorderHint: async () => {
         persisted = true;
       },
-      };
+    };
     render(
       <DevicePreferencesProvider store={store}>
         <PreferenceConsumer />

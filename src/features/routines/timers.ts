@@ -5,7 +5,11 @@ import { STEP_TIMER_MAX_SECONDS } from './validation';
 export const TIMER_CHIP_COUNT = 4;
 /** Fill in the chips until there are four. */
 export const TIMER_FILLERS = [30, 60, 120, 300];
-/** The panel's step sizes, coarsest first. */
+/**
+ * The panel's step sizes, coarsest first. Every finer size divides the
+ * coarser ones (and 3600), so the time always stays a multiple of the
+ * current step size and never needs snapping.
+ */
 export const STEPPER_LEVELS = [60, 15, 5, 1];
 
 /**
@@ -77,9 +81,6 @@ function levelAfter(state: StepperState, reversing: boolean): number {
  * size; once a press in the same direction lands the time on a multiple of
  * the next coarser size, presses move by that size (14s + 1s = 15s, then
  * +5s). The value stays within 0 (Off, returned as null) and an hour.
- *
- * Every finer size divides the coarser ones, so the time always stays a
- * multiple of the current step size.
  */
 export function pressStepper(
   state: StepperState,
@@ -87,12 +88,12 @@ export function pressStepper(
   dir: -1 | 1,
 ): { state: StepperState; value: number | null } {
   const reversing = isReversing(state, dir);
-  let level = levelAfter(state, reversing);
+  const pressed = levelAfter(state, reversing);
   const before = value ?? 0;
-  const next = Math.max(0, Math.min(STEP_TIMER_MAX_SECONDS, before + dir * STEPPER_LEVELS[level]));
+  const next = Math.max(0, Math.min(STEP_TIMER_MAX_SECONDS, before + dir * STEPPER_LEVELS[pressed]));
   if (next === before) return { state, value };
-  if (!reversing && level > 0 && next % STEPPER_LEVELS[level - 1] === 0) level -= 1;
-  return { state: { level, dir }, value: next || null };
+  const climbs = !reversing && pressed > 0 && next % STEPPER_LEVELS[pressed - 1] === 0;
+  return { state: { level: climbs ? pressed - 1 : pressed, dir }, value: next || null };
 }
 
 /** "−1 min", "+15s": what a press in `dir` would do next. */
